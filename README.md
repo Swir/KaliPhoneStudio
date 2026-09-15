@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**42% complete**
+**43% complete**
 
-`████████░░░░░░░░░░░░ 42%`
+`█████████░░░░░░░░░░░ 43%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.6-dev** — fail-closed A/B OTA payload inspection with SHA-256 integrity evidence. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.8-dev** — versioned, fail-closed host-tool lock contract for reproducible OTA extraction. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -36,13 +36,14 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Manifest/SHA-256 and partition-size validation.
 - Android boot image v2 inspection/repack foundation.
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
-- Fail-closed `payload.bin` envelope inspection: `CrAU` magic, payload version, manifest/signature sizes and metadata boundary checks before extraction.
-- Streaming SHA-256 evidence for both the complete payload and validated metadata envelope, binding later extraction work to exact inspected bytes.
+- Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
+- Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
+- Versioned `tools/extractor-locks.json` contract pinning extractor source and deterministic build command; no platform binary is authorized until its SHA-256 is explicitly recorded.
 - Kali ARM64 rootfs / Phosh and rescue-initramfs foundations.
 - Diagnostics and recovery-oriented boot-session evidence.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The OTA pipeline currently stops before partition extraction. A future extractor backend must be pinned and checksum-verifiable before its output can enter the stock `boot.img` preflight path.
+The repository intentionally ships no trusted extractor binary yet. The lock manifest is fail-closed: reproducible host builds must be produced and their platform SHA-256 values recorded before release tooling may authorize them.
 
 ## Safety model
 
