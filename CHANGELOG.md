@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.6-dev — OTA payload integrity evidence
+
+- Added streaming SHA-256 evidence for the complete `payload.bin` and its validated metadata envelope.
+- Payload reports now bind structural preflight results to exact bytes before a future extractor hand-off.
+- Added a post-hash size stability check to fail closed if the payload changes during inspection.
+- Added tests proving whole-payload hashes change with partition data while metadata hashes remain stable when metadata is unchanged.
+- Confirmed the preceding 0.6.5-dev GitHub Actions run completed successfully across Python 3.11/3.12/3.13/3.14.
+- Partition extraction remains deliberately unimplemented until its backend/source/checksum contract is pinned.
+
 ## 0.6.5-dev — fail-closed A/B OTA payload envelope inspection
 
 - Added device-independent `payload.bin` header inspection using the Android update_engine `CrAU` envelope.
