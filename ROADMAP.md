@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**43% complete**
+**44% complete**
 
-`█████████░░░░░░░░░░░ 43%`
+`█████████░░░░░░░░░░░ 44%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -28,6 +28,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Payload + metadata SHA-256 evidence before extractor hand-off
 - [x] Checksum-locked, source-pinned boot-only OTA extraction adapter
 - [x] Versioned fail-closed host-tool lock manifest and deterministic extractor build command
+- [x] Wire extractor execution to authoritative manifest platform/SHA-256 authorization
 - [ ] Reproducibly build/package the pinned extractor for each supported host and record verified platform SHA-256 locks
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
