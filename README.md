@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**43% complete**
+**44% complete**
 
-`█████████░░░░░░░░░░░ 43%`
+`█████████░░░░░░░░░░░ 44%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.8-dev** — versioned, fail-closed host-tool lock contract for reproducible OTA extraction. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.9-dev** — fail-closed, manifest-backed host extractor authorization. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -38,12 +38,13 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
 - Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
-- Versioned `tools/extractor-locks.json` contract pinning extractor source and deterministic build command; no platform binary is authorized until its SHA-256 is explicitly recorded.
+- Versioned `tools/extractor-locks.json` contract pinning extractor source and deterministic build command.
+- Extraction can now resolve authorization directly from that manifest: the requested host platform must exist and the local executable must match its exact SHA-256.
 - Kali ARM64 rootfs / Phosh and rescue-initramfs foundations.
 - Diagnostics and recovery-oriented boot-session evidence.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The repository intentionally ships no trusted extractor binary yet. The lock manifest is fail-closed: reproducible host builds must be produced and their platform SHA-256 values recorded before release tooling may authorize them.
+The repository intentionally authorizes **no extractor binary yet**. The artifacts map remains empty until reproducible host builds are produced, reviewed and their platform SHA-256 values are committed. Therefore release extraction currently fails closed instead of silently trusting a local/downloaded tool.
 
 ## Safety model
 
