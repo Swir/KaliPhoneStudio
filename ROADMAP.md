@@ -29,11 +29,11 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Checksum-locked, source-pinned boot-only OTA extraction adapter
 - [x] Versioned fail-closed host-tool lock manifest and deterministic extractor build command
 - [x] Wire extractor execution to authoritative manifest platform/SHA-256 authorization
-- [ ] Reproducibly build/package the pinned extractor for each supported host and record verified platform SHA-256 locks
+- [x] Pin extractor toolchain version and add dedicated exact-source reproducibility/source-lock CI
+- [ ] Confirm reproducible extractor CI green on Linux amd64 and Windows amd64, review emitted SHA-256 evidence, then authorize platform artifacts
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
-- [ ] Verify pinned-source reachability/immutability in a dedicated source-lock job
 
 ## Phase B — Common Kali Phone Userspace
 
