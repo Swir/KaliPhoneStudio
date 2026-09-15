@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**45% complete**
+**46% complete**
 
-`█████████░░░░░░░░░░░ 45%`
+`█████████░░░░░░░░░░░ 46%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -33,7 +33,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Linux amd64 pinned extractor builds reproducibly byte-for-byte and emits SHA-256 evidence
 - [x] Windows amd64 pinned extractor builds reproducibly byte-for-byte with explicit MinGW/liblzma CGO wiring
 - [x] Review reproducibility evidence and authorize exact Linux/Windows platform SHA-256 artifacts
-- [ ] Bind exact OTA identity evidence to extracted stock `boot.img` provenance record
+- [x] Bind exact OTA identity evidence to extracted stock `boot.img` provenance record
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
@@ -67,6 +67,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] LineageOS avicii source baseline locked to a full commit
 - [x] Host-side OTA ZIP, payload-envelope and integrity-evidence validation foundation
 - [x] Host-side checksum-locked boot extraction adapter (not hardware validation)
+- [x] Immutable exact-OTA → payload → stock-boot provenance schema (host-side; exact user OTA still pending)
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA
