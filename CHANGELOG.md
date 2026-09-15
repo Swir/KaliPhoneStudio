@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.7-dev — checksum-locked OTA boot extraction adapter
+
+- Added a device-independent adapter for extracting only `boot.img` from a preflighted Android A/B payload.
+- Pinned extractor source provenance to `ssut/payload-dumper-go` commit `05fe59e21c9f271fba38398c7c040993313ecd04` (upstream 2.0.2-era main).
+- The adapter never downloads or trusts an extractor implicitly: a local binary must match an explicit SHA-256 lock before execution.
+- Extraction runs without a shell, has a 10-minute timeout, requires an empty output directory, and rejects missing/invalid `boot.img` output.
+- Extracted stock boot images immediately pass the existing profile-driven Android boot header/partition-size preflight.
+- Added tests for valid extractor locks, hash mismatch, malformed SHA locks, and unpinned source commits.
+- Confirmed the complete preceding 0.6.6-dev GitHub Actions run succeeded across Python 3.11/3.12/3.13/3.14.
+- This does not claim AC2003 hardware compatibility; exact OTA and physical-device Beta gates remain open.
+
 ## 0.6.6-dev — OTA payload integrity evidence
 
 - Added streaming SHA-256 evidence for the complete `payload.bin` and its validated metadata envelope.

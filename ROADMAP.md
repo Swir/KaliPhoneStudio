@@ -18,7 +18,8 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 - [x] Full-commit source pin requirement for profile upstreams
 - [x] Fail-closed Android A/B payload envelope inspection
 - [x] Payload + metadata SHA-256 evidence before extractor hand-off
-- [ ] Pinned/checksum-verifiable OTA partition extraction backend
+- [x] Checksum-locked, source-pinned boot-only OTA extraction adapter
+- [ ] Reproducibly build/package the pinned extractor for each supported host and publish its lock manifest
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
@@ -52,6 +53,7 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 - [x] Profile firmware hints, recovery notes and hardware Beta contract recorded
 - [x] LineageOS avicii source baseline locked to a full commit
 - [x] Host-side OTA ZIP, payload-envelope and integrity-evidence validation foundation
+- [x] Host-side checksum-locked boot extraction adapter (not hardware validation)
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA
