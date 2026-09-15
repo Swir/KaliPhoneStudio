@@ -9,16 +9,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: pip install pytest
+      - run: python -m pip install pytest
       - name: Test repository sources
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: python -m pytest -q
-      - run: python -m compileall -q kaliphonestudio scripts
+      - name: Compile Python sources
+        run: python -m compileall -q kaliphonestudio scripts
