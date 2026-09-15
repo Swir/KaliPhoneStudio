@@ -1,10 +1,19 @@
 {
-  "project": "KaliPhoneStudio",
-  "version": "0.6.0-dev",
-  "architecture": "multi-device profile registry",
-  "active_device_profiles": ["oneplus/avicii"],
-  "tests": "15 passed locally after migration",
-  "python_compile": "PASS",
-  "beta_release": "BLOCKED until physical-device Beta Release Gate passes",
-  "primary_hardware_blocker": "OnePlus Nord AC2003 exact stock firmware/boot image and real temporary-boot evidence"
+  "version": "0.6.1-dev",
+  "stage": "multi-device core hardening",
+  "repository_source_of_truth": true,
+  "host_ci": "pending",
+  "profile_contract": "implemented",
+  "profile_runtime_registry": "implemented",
+  "destructive_write_policy": "inactive-slot-only for declared A/B partitions",
+  "first_profile": "oneplus/avicii",
+  "hardware_verified": false,
+  "beta_gate": "BLOCKED",
+  "beta_blockers": [
+    "physical AC2003 identity/firmware baseline",
+    "matching stock boot.img",
+    "temporary boot on physical AC2003",
+    "Kali early userspace/rootfs proof",
+    "rescue, charging/storage and recovery verification"
+  ]
 }
