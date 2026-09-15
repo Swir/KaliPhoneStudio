@@ -48,11 +48,20 @@ def test_rejects_unpinned_source_commit(tmp_path: Path):
         verify_extractor(_direct_lock(tool, digest, source_commit="main"))
 
 
-def test_repository_manifest_authorizes_no_unverified_binary(tmp_path: Path):
+def test_repository_manifest_authorizes_reviewed_platform_hashes(tmp_path: Path):
+    tool = tmp_path / "payload-dumper-go.exe"
+    tool.write_bytes(b"not the reviewed binary")
+    lock = lock_from_manifest(tool, REPO_LOCK, "windows-amd64")
+    assert lock.sha256 == "35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5"
+    with pytest.raises(ExtractionError, match="mismatch"):
+        verify_extractor(lock)
+
+
+def test_repository_manifest_rejects_unknown_platform(tmp_path: Path):
     tool = tmp_path / "payload-dumper-go"
     tool.write_bytes(b"anything")
     with pytest.raises(ExtractionError, match="not authorized"):
-        lock_from_manifest(tool, REPO_LOCK, "windows-amd64")
+        lock_from_manifest(tool, REPO_LOCK, "unknown-amd64")
 
 
 def test_manifest_platform_hash_is_authoritative(tmp_path: Path):
