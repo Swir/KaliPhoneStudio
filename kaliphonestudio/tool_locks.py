@@ -9,6 +9,7 @@ from typing import Mapping
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+(?:\.[0-9]+)?$")
 
 
 class ToolLockError(ValueError):
@@ -26,6 +27,8 @@ class ToolLockManifest:
     extractor: str
     source_url: str
     source_commit: str
+    toolchain: str
+    toolchain_version: str
     build_command: tuple[str, ...]
     artifacts: Mapping[str, ToolArtifact]
 
@@ -55,6 +58,14 @@ def load_tool_lock(path: Path) -> ToolLockManifest:
         raise ToolLockError("extractor source must be an HTTPS GitHub URL")
     if not isinstance(source_commit, str) or not _COMMIT_RE.fullmatch(source_commit):
         raise ToolLockError("extractor source must be pinned to a full commit")
+
+    toolchain = build.get("toolchain")
+    toolchain_version = build.get("toolchain_version")
+    if toolchain != "go":
+        raise ToolLockError("unsupported extractor toolchain")
+    if not isinstance(toolchain_version, str) or not _VERSION_RE.fullmatch(toolchain_version):
+        raise ToolLockError("pinned toolchain version is required")
+
     command = build.get("command")
     if not isinstance(command, list) or not command or not all(isinstance(x, str) and x for x in command):
         raise ToolLockError("reproducible build command is required")
@@ -75,6 +86,8 @@ def load_tool_lock(path: Path) -> ToolLockManifest:
         extractor=extractor,
         source_url=source_url,
         source_commit=source_commit,
+        toolchain=toolchain,
+        toolchain_version=toolchain_version,
         build_command=tuple(command),
         artifacts=artifacts,
     )
