@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.8-dev — versioned reproducible host-tool lock contract
+
+- Added `tools/extractor-locks.json` schema v1 for pinned extractor source provenance and deterministic build instructions.
+- Added a fail-closed Python lock-manifest loader with strict full-commit and SHA-256 validation.
+- Platform artifacts are deliberately unauthorized until an exact binary SHA-256 is recorded; the initial artifacts map is empty rather than trusting an unverified download.
+- Added tests for source pinning, platform lookup, malformed artifact hashes and the repository's fail-closed default.
+- Updated README and ROADMAP completion bars to 43%; progress remains weighted toward physical-device and release evidence.
+- Python CI remains 3.11/3.12/3.13/3.14. This milestone does not claim AC2003 hardware compatibility.
+
 ## 0.6.7-dev — checksum-locked OTA boot extraction adapter
 
 - Added a device-independent adapter for extracting only `boot.img` from a preflighted Android A/B payload.
