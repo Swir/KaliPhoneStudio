@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.13-dev — cross-platform reproducible extractor authorization
+
+- Verified GitHub Actions `extractor-repro` run `35018283145` completed successfully on both Linux amd64 and Windows amd64.
+- Reviewed the uploaded SHA-256 evidence after each platform built the exact pinned source twice and passed byte-for-byte equality.
+- Authorized Linux amd64 extractor SHA-256 `a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0`.
+- Authorized Windows amd64 extractor SHA-256 `35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5`.
+- Updated repository tests so supported platforms must resolve to those exact hashes while unknown platforms still fail closed.
+- Advanced README/ROADMAP progress to 45% for completing the cross-platform extractor authorization milestone; no AC2003 hardware milestone is claimed.
+- Next high-impact host milestone is binding exact OTA identity/integrity evidence to the extracted stock `boot.img` provenance record.
+
 ## 0.6.12-dev — Windows extractor CGO toolchain repair
 
 - Inspected the completed repaired `extractor-repro` run: Linux amd64 now builds twice byte-for-byte and emits SHA-256 evidence successfully.
