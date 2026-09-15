@@ -9,7 +9,14 @@
     "toolchain": "go",
     "toolchain_version": "1.27.0",
     "command": ["go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", "payload-dumper-go", "."],
-    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Release use requires a platform entry with the SHA-256 of the produced binary; an empty artifacts map is fail-closed and intentionally authorizes no binary."
+    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Platform hashes below were accepted only after GitHub Actions extractor-repro run 35018283145 built each target twice and proved byte-for-byte equality."
   },
-  "artifacts": {}
+  "artifacts": {
+    "linux-amd64": {
+      "sha256": "a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0"
+    },
+    "windows-amd64": {
+      "sha256": "35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5"
+    }
+  }
 }
