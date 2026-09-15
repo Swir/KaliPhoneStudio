@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.11-dev — extractor native-dependency reproducibility repair
+
+- Inspected the first real `extractor-repro` run instead of treating ordinary Python CI success as extractor success.
+- Confirmed both Linux amd64 and Windows amd64 jobs failed at the build step because the pinned upstream `go-xz` dependency requires native `lzma.h` headers.
+- Added explicit Linux `liblzma-dev` provisioning and Windows MSYS2 `mingw-w64-x86_64-xz` provisioning before the pinned Go build.
+- Kept CGO explicitly enabled and retained the exact source commit, Go 1.27.0 lock, deterministic build flags and double-build byte comparison.
+- No platform binary hash is authorized until the repaired workflow actually passes and its evidence is reviewed.
+- README and ROADMAP remain at 44%; fixing host build prerequisites does not claim physical AC2003 progress.
+
 ## 0.6.10-dev — pinned-toolchain extractor reproducibility CI
 
 - Pinned the extractor build toolchain to Go 1.27.0, matching the exact pinned upstream commit's `go.mod` requirement.
