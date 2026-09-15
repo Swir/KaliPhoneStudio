@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.9-dev — manifest-backed extractor authorization
+
+- Wired OTA extractor authorization directly to the versioned `tools/extractor-locks.json` contract instead of relying on caller-supplied hashes for release-oriented execution.
+- Added `lock_from_manifest()` so the requested host platform must have an explicit artifact entry before an extractor can be authorized.
+- Local binaries must still match the exact manifest SHA-256; source URL and full source commit are propagated into the runtime lock.
+- The repository artifact map intentionally remains empty, so no unverified extractor binary is currently authorized.
+- Added tests for fail-closed repository defaults, authoritative platform hash resolution and tampered-binary rejection.
+- README and ROADMAP progress bars advanced conservatively to 44%; no physical AC2003 hardware milestone is claimed.
+- Python CI remains 3.11/3.12/3.13/3.14.
+
 ## 0.6.8-dev — versioned reproducible host-tool lock contract
 
 - Added `tools/extractor-locks.json` schema v1 for pinned extractor source provenance and deterministic build instructions.
@@ -12,7 +22,7 @@
 ## 0.6.7-dev — checksum-locked OTA boot extraction adapter
 
 - Added a device-independent adapter for extracting only `boot.img` from a preflighted Android A/B payload.
-- Pinned extractor source provenance to `ssut/payload-dumper-go` commit `05fe59e21c9f271fba38398c7c040993313ecd04` (upstream 2.0.2-era main).
+- Pinned extractor source provenance to `ssut/payload-dumper-go` commit `05fe59e21c9f271fba38398c7c040993313ecd04`.
 - The adapter never downloads or trusts an extractor implicitly: a local binary must match an explicit SHA-256 lock before execution.
 - Extraction runs without a shell, has a 10-minute timeout, requires an empty output directory, and rejects missing/invalid `boot.img` output.
 - Extracted stock boot images immediately pass the existing profile-driven Android boot header/partition-size preflight.
@@ -23,29 +33,25 @@
 ## 0.6.6-dev — OTA payload integrity evidence
 
 - Added streaming SHA-256 evidence for the complete `payload.bin` and its validated metadata envelope.
-- Payload reports now bind structural preflight results to exact bytes before a future extractor hand-off.
+- Payload reports now bind structural preflight results to exact bytes before extractor hand-off.
 - Added a post-hash size stability check to fail closed if the payload changes during inspection.
 - Added tests proving whole-payload hashes change with partition data while metadata hashes remain stable when metadata is unchanged.
 - Confirmed the preceding 0.6.5-dev GitHub Actions run completed successfully across Python 3.11/3.12/3.13/3.14.
-- Partition extraction remains deliberately unimplemented until its backend/source/checksum contract is pinned.
 
 ## 0.6.5-dev — fail-closed A/B OTA payload envelope inspection
 
 - Added device-independent `payload.bin` header inspection using the Android update_engine `CrAU` envelope.
-- Validates payload major version, manifest/signature sizes, metadata boundaries and truncation before any future partition extraction is allowed.
+- Validates payload major version, manifest/signature sizes, metadata boundaries and truncation before partition extraction.
 - Added strict host-side limits for manifest and metadata-signature allocation risk.
 - Added CI tests for valid v1/v2 payloads plus bad magic, unsupported versions and metadata-past-EOF failures.
-- Confirmed the preceding 0.6.4-dev GitHub Actions run completed successfully across the configured Python matrix.
-- Partition extraction remains deliberately unimplemented until a pinned, checksum-verifiable backend contract is added.
 
 ## 0.6.4-dev — versioned device-profile safety contract
 
 - Added profile schema version 1 and fail-closed validation in the runtime registry.
-- Every device profile must now declare firmware identity hints, pinned upstream source commits, recovery notes and host/hardware test contracts.
+- Every device profile must declare firmware identity hints, pinned upstream source commits, recovery notes and host/hardware test contracts.
 - Added CI tests that reject unpinned source refs and incomplete recovery/hardware contracts.
 - Upgraded `oneplus/avicii` to schema v1 and pinned its LineageOS device-tree baseline to commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`.
 - Recorded AC2003 firmware hints and explicit Beta hardware obligations as profile data rather than global core assumptions.
-- Python CI remains 3.11/3.12/3.13/3.14; the pre-milestone 3.14 matrix completed successfully.
 
 ## 0.6.3-dev — safe OTA inspection foundation
 
