@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.12-dev — Windows extractor CGO toolchain repair
+
+- Inspected the completed repaired `extractor-repro` run: Linux amd64 now builds twice byte-for-byte and emits SHA-256 evidence successfully.
+- Isolated the remaining Windows failure: installing the MSYS2 xz package alone did not make `lzma.h` visible to Go CGO under the Git-for-Windows bash build shell.
+- Windows CI now installs both `mingw-w64-x86_64-gcc` and `mingw-w64-x86_64-xz`, explicitly pins `CC`/`CXX`, and supplies deterministic MinGW include/library paths to CGO.
+- Added a fail-fast Windows native-toolchain visibility check for `lzma.h` and GCC before either reproducibility build starts.
+- Kept exact extractor source commit, Go 1.27.0, double-build comparison and fail-closed artifact authorization unchanged.
+- Progress remains 44% because this is host build hardening, not physical-device validation.
+
 ## 0.6.11-dev — extractor native-dependency reproducibility repair
 
 - Inspected the first real `extractor-repro` run instead of treating ordinary Python CI success as extractor success.
