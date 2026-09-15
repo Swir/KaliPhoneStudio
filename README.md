@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.10-dev** — pinned-toolchain reproducible extractor verification. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.11-dev** — extractor reproducibility CI dependency hardening. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -39,13 +39,14 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
 - Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
-- Dedicated reproducibility CI builds the exact pinned extractor source twice on Linux amd64 and Windows amd64, requires byte-for-byte identical output, and emits SHA-256 evidence.
+- Dedicated reproducibility CI builds the exact pinned extractor source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
+- Reproducibility CI now provisions the extractor's native liblzma dependency explicitly after the first run proved both host builds fail closed without `lzma.h`.
 - Extraction resolves authorization directly from the manifest: the requested host platform must exist and the local executable must match its exact SHA-256.
 - Kali ARM64 rootfs / Phosh and rescue-initramfs foundations.
 - Diagnostics and recovery-oriented boot-session evidence.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The extractor source is pinned to `ssut/payload-dumper-go` commit `05fe59e21c9f271fba38398c7c040993313ecd04`; its `go.mod` requires Go 1.27.0, so the lock now pins **Go 1.27.0** as well. The repository intentionally authorizes **no extractor binary yet**. Platform SHA-256 values are committed only after reproducibility evidence is green and reviewed; until then release extraction fails closed.
+The extractor source is pinned to `ssut/payload-dumper-go` commit `05fe59e21c9f271fba38398c7c040993313ecd04`; its `go.mod` requires Go 1.27.0, so the lock pins **Go 1.27.0** as well. The repository intentionally authorizes **no extractor binary yet**. Platform SHA-256 values are committed only after reproducibility evidence is green and reviewed; until then release extraction fails closed.
 
 ## Safety model
 
