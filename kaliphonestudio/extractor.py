@@ -1,8 +1,8 @@
 """Fail-closed adapter for externally built OTA partition extractors.
 
-The adapter never downloads tools. A caller must provide a local extractor binary
-and its expected SHA-256. Source provenance is pinned separately so release/build
-pipelines can reproduce the executable before allowing extraction.
+The adapter never downloads tools. Release-oriented callers should construct an
+ExtractorLock from the repository's versioned tool-lock manifest so a local
+binary is authorized only for the declared host platform and exact SHA-256.
 """
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ import subprocess
 from .boot_image import BootImageReport, inspect_boot_image, require_candidate_compatible
 from .payload import PayloadHeaderReport, inspect_payload
 from .profiles import DeviceProfile
+from .tool_locks import ToolLockError, load_tool_lock
 
-PAYLOAD_DUMPER_GO_SOURCE = "https://github.com/ssut/payload-dumper-go"
-PAYLOAD_DUMPER_GO_COMMIT = "05fe59e21c9f271fba38398c7c040993313ecd04"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class ExtractionError(RuntimeError):
@@ -29,8 +29,9 @@ class ExtractionError(RuntimeError):
 class ExtractorLock:
     executable: Path
     sha256: str
-    source_url: str = PAYLOAD_DUMPER_GO_SOURCE
-    source_commit: str = PAYLOAD_DUMPER_GO_COMMIT
+    source_url: str
+    source_commit: str
+    platform: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,13 +49,36 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def lock_from_manifest(executable: Path, manifest_path: Path, platform: str) -> ExtractorLock:
+    """Authorize *executable* only if the manifest has an exact platform lock.
+
+    An empty artifacts map therefore remains deliberately unusable. This keeps
+    release extraction fail-closed until a reproducibly built host binary has
+    been reviewed and its SHA-256 committed to the repository.
+    """
+    try:
+        manifest = load_tool_lock(manifest_path)
+        artifact = manifest.require_artifact(platform)
+    except ToolLockError as exc:
+        raise ExtractionError(f"extractor is not authorized: {exc}") from exc
+    return ExtractorLock(
+        executable=executable,
+        sha256=artifact.sha256,
+        source_url=manifest.source_url,
+        source_commit=manifest.source_commit,
+        platform=platform,
+    )
+
+
 def verify_extractor(lock: ExtractorLock) -> str:
     if not lock.executable.is_file():
         raise ExtractionError("extractor executable does not exist")
     expected = lock.sha256.lower()
     if not _SHA256_RE.fullmatch(expected):
         raise ExtractionError("extractor lock requires a lowercase/hex SHA-256")
-    if not re.fullmatch(r"[0-9a-f]{40}", lock.source_commit):
+    if not isinstance(lock.source_url, str) or not lock.source_url.startswith("https://github.com/"):
+        raise ExtractionError("extractor source must be an HTTPS GitHub URL")
+    if not _COMMIT_RE.fullmatch(lock.source_commit):
         raise ExtractionError("extractor source must be pinned to a full commit")
     actual = _hash_file(lock.executable)
     if actual != expected:
