@@ -1,41 +1,36 @@
 # KaliPhoneStudio Roadmap
 
-The roadmap separates **device-independent studio work** from **per-phone bring-up**. A feature is checked only when it is implemented and verified at the stated level; hardware items require physical-device evidence.
+The roadmap separates **device-independent studio work** from **per-phone bring-up**. Hardware items require physical-device evidence.
 
 ## Phase A — Multi-device Studio Core
 
-- [x] Rename project/application to **KaliPhoneStudio**
-- [x] Move Python package to `kaliphonestudio`
-- [x] Device-profile registry under `devices/<vendor>/<codename>/profile.json`
-- [x] Profile-based ADB identity matching
-- [x] Verified serial registry tied to `profile_id`
+- [x] KaliPhoneStudio package/application migration
+- [x] Device-profile runtime registry
+- [x] Profile-based identity and verified serial binding
 - [x] Profile-specific destructive confirmation token
-- [x] ADB/Fastboot discovery and diagnostics
-- [x] Preflight checks
-- [x] Engineering CLI
 - [x] Manifest + SHA-256 validation
-- [x] A/B slot-aware flash planning
-- [x] Dry-run / guarded real-flash path
+- [x] A/B slot-aware guarded flash planning
 - [x] Temporary `fastboot boot` path
 - [x] Transaction / boot-session journals
-- [x] Windows EXE build path
-- [x] Automated Python tests
+- [x] Automated Python tests on 3.11, 3.12, 3.13 and 3.14
+- [x] Versioned profile schema contract
+- [x] CI-required profile recovery/test contract
+- [x] Full-commit source pin requirement for profile upstreams
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
-- [ ] Profile schema validation and versioning
-- [ ] Device profile test contract required by CI
+- [ ] Verify pinned-source reachability/immutability in a dedicated source-lock job
 
 ## Phase B — Common Kali Phone Userspace
 
-- [x] Kali rolling ARM64 rootfs builder
+- [x] Kali rolling ARM64 rootfs builder foundation
 - [x] Phosh phone UI stage
 - [x] Safe minimal rescue initramfs foundation
 - [x] SSH disabled by default
 - [ ] Reproducible rootfs artifact in CI
 - [ ] Generic first-boot provisioning independent of device name
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
-- [ ] Update/rollback metadata format for future supported phones
+- [ ] Update/rollback metadata format
 
 ## Device #1 — OnePlus Nord AC2003 (`oneplus/avicii`)
 
@@ -45,16 +40,17 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 - [x] Boot header v2 / 4096-byte page recorded
 - [x] `lito` / `sm7250` baseline recorded
 - [x] DTB-in-boot + separate DTBO recorded
-- [x] A/B partition layout recorded
-- [x] Boot/DTBO/recovery size limits recorded
+- [x] A/B partition layout and size limits recorded
 - [x] Native boot-v2 parser/repacker
 - [x] Candidate stock-vs-custom invariant gate
 - [x] ARM64 kernel + LZ4 ramdisk candidate checks
 - [x] USB ACM rescue/probe tooling prepared
 - [x] Kali/systemd kernel config validation prepared
+- [x] Profile firmware hints, recovery notes and hardware Beta contract recorded
+- [x] LineageOS avicii source baseline locked to a full commit
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
-- [ ] Obtain matching stock `boot.img`
+- [ ] Obtain matching stock `boot.img` from exact OTA
 - [ ] Validate parser/repacker against that exact stock image
 - [ ] Pin final first-boot kernel commit
 - [ ] Build kernel + DTB/DTBO candidate
@@ -64,39 +60,21 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 ### Essential hardware
 
 - [ ] UFS/internal storage verified
-- [ ] Display verified
-- [ ] Touchscreen verified
-- [ ] Hardware buttons verified
-- [ ] USB gadget/host verified
-- [ ] Charging and battery reporting verified
-- [ ] Thermal management verified
+- [ ] Display and touchscreen verified
+- [ ] Hardware buttons and USB verified
+- [ ] Charging/battery and thermal safety verified
 - [ ] Suspend/resume verified
 
-### Connectivity
+### Connectivity / phone hardware
 
-- [ ] Wi-Fi
-- [ ] Bluetooth
-- [ ] Modem/SIM
-- [ ] Mobile data
-- [ ] SMS
-- [ ] Calls where practical
+- [ ] Wi-Fi / Bluetooth
+- [ ] Modem, SIM, mobile data, SMS/calls
 - [ ] GNSS/GPS
-
-### Phone UX / secondary hardware
-
-- [x] Phosh userspace profile prepared
-- [x] On-screen keyboard package path prepared
-- [ ] Rotation/IIO
-- [ ] AC2003 scaling tuning
-- [ ] Audio
-- [ ] Cameras
-- [ ] Fingerprint
-- [ ] NFC
-- [ ] Remaining sensors
+- [ ] Audio / cameras / fingerprint / NFC / sensors
 
 ### Recovery / release
 
-- [ ] Validate OxygenOS recovery path on the exact AC2003 baseline
+- [ ] Validate OxygenOS recovery path on exact AC2003 baseline
 - [ ] Test boot failure rollback
 - [ ] Release manifest + checksums
 - [ ] Pass all requirements in `BETA_RELEASE_GATE.md`
@@ -106,9 +84,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 ## Device #2 and beyond
 
 - [ ] Define candidate-selection criteria for next phone
-- [ ] Add second independent profile proving the architecture is truly multi-device
-- [ ] Require profile-specific tests and recovery notes before enabling destructive actions
-- [ ] Extend boot-image backends for header/layout families not covered by the AC2003 path
+- [ ] Add second independent profile proving architecture is truly multi-device
+- [ ] Require schema, source locks, profile-specific tests and recovery notes before destructive actions
+- [ ] Extend boot-image backends for other header/layout families
 
 ## Release rule
 

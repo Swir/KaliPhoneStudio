@@ -1,10 +1,13 @@
-"""Device profile registry for KaliPhoneStudio."""
+"""Device profile registry and schema contract for KaliPhoneStudio."""
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
+
+
+PROFILE_SCHEMA_VERSION = 1
 
 
 class ProfileError(ValueError):
@@ -37,16 +40,25 @@ class DeviceProfile:
 
 
 REQUIRED = {
-    "profile_id", "vendor", "display_name", "codename", "model",
-    "confirmation_text", "arch", "soc", "board", "boot",
-    "partition_limits", "ab_device", "avb_enabled", "source_baseline",
+    "schema_version", "profile_id", "vendor", "display_name", "codename", "model",
+    "confirmation_text", "arch", "soc", "board", "boot", "partition_limits",
+    "ab_device", "avb_enabled", "firmware_hints", "sources", "recovery_notes",
+    "test_contract",
 }
+
+
+def _nonempty_strings(value: Any, field: str) -> list[str]:
+    if not isinstance(value, list) or not value or any(not isinstance(x, str) or not x.strip() for x in value):
+        raise ProfileError(f"{field} must be a non-empty list of non-empty strings")
+    return value
 
 
 def validate_profile(data: dict[str, Any]) -> None:
     missing = sorted(REQUIRED - data.keys())
     if missing:
         raise ProfileError(f"missing profile fields: {', '.join(missing)}")
+    if data["schema_version"] != PROFILE_SCHEMA_VERSION:
+        raise ProfileError(f"unsupported schema_version: {data['schema_version']!r}")
     pid = data["profile_id"]
     if not isinstance(pid, str) or pid.count("/") != 1 or pid.startswith("/") or pid.endswith("/"):
         raise ProfileError("profile_id must be vendor/codename")
@@ -58,10 +70,33 @@ def validate_profile(data: dict[str, Any]) -> None:
     limits = data["partition_limits"]
     if not isinstance(limits, dict) or not limits or any(not isinstance(v, int) or v <= 0 for v in limits.values()):
         raise ProfileError("partition_limits must contain positive integer byte limits")
+    _nonempty_strings(data["firmware_hints"], "firmware_hints")
+    _nonempty_strings(data["recovery_notes"], "recovery_notes")
+
+    sources = data["sources"]
+    if not isinstance(sources, list) or not sources:
+        raise ProfileError("sources must contain at least one pinned upstream source")
+    for source in sources:
+        if not isinstance(source, dict) or not all(isinstance(source.get(k), str) and source[k].strip() for k in ("name", "url", "commit")):
+            raise ProfileError("each source requires name, url and commit")
+        commit = source["commit"].lower()
+        if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+            raise ProfileError("source commit must be a full 40-character git SHA")
+
+    contract = data["test_contract"]
+    if not isinstance(contract, dict):
+        raise ProfileError("test_contract must be an object")
+    for key in ("host", "hardware_beta"):
+        _nonempty_strings(contract.get(key), f"test_contract.{key}")
 
 
 def load_profile(path: Path) -> DeviceProfile:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ProfileError(f"cannot load profile {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ProfileError("profile root must be an object")
     validate_profile(data)
     return DeviceProfile(path=path, data=data)
 
