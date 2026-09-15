@@ -86,12 +86,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends liblzma-dev
 
-      - name: Install Windows liblzma build dependency
+      - name: Install Windows CGO and liblzma build dependencies
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-xz'
+          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-xz'
           'C:\msys64\mingw64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          'CC=C:\msys64\mingw64\bin\gcc.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CXX=C:\msys64\mingw64\bin\g++.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_CFLAGS=-IC:/msys64/mingw64/include' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_LDFLAGS=-LC:/msys64/mingw64/lib' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify Windows native toolchain visibility
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\msys64\mingw64\include\lzma.h')) { throw 'lzma.h is not installed' }
+          & $env:CC --version
+          if ($LASTEXITCODE -ne 0) { throw 'MinGW GCC is not executable' }
 
       - name: Build twice from pinned source
         shell: bash
