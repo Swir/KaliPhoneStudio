@@ -1,9 +1,9 @@
 {
-  "version": "0.6.12-dev",
-  "stage": "Windows extractor CGO toolchain wiring repair",
+  "version": "0.6.13-dev",
+  "stage": "cross-platform reproducible extractor artifacts authorized",
   "repository_source_of_truth": true,
-  "project_progress_percent": 44,
-  "host_ci": "pending-for-0.6.12-dev",
+  "project_progress_percent": 45,
+  "host_ci": "pending-for-0.6.13-dev",
   "python_ci": ["3.11", "3.12", "3.13", "3.14"],
   "profile_schema_version": 1,
   "profile_contract": "implemented-and-ci-enforced",
@@ -18,8 +18,12 @@
   "extractor_source_commit": "05fe59e21c9f271fba38398c7c040993313ecd04",
   "extractor_toolchain": "go-1.27.0",
   "extractor_lock_manifest": "schema-v1-fail-closed; source commit, toolchain version and platform SHA-256 authorization",
-  "extractor_repro_ci": "Linux amd64 reproducibility proof passed; Windows failure traced to Git Bash/CGO not seeing MSYS2 headers/toolchain; workflow now installs MinGW GCC+xz and pins CC/CXX/include/lib paths explicitly",
-  "extractor_artifacts_authorized": false,
+  "extractor_repro_ci": "GitHub Actions run 35018283145 passed Linux amd64 and Windows amd64 double-build byte-for-byte reproducibility",
+  "extractor_artifacts_authorized": true,
+  "extractor_artifact_sha256": {
+    "linux-amd64": "a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0",
+    "windows-amd64": "35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5"
+  },
   "destructive_write_policy": "inactive-slot-only for declared A/B partitions",
   "first_profile": "oneplus/avicii",
   "hardware_verified": false,
