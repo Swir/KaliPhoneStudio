@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.11-dev** — extractor reproducibility CI dependency hardening. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.12-dev** — cross-platform extractor reproducibility hardening. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -40,7 +40,7 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated reproducibility CI builds the exact pinned extractor source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
-- Reproducibility CI now provisions the extractor's native liblzma dependency explicitly after the first run proved both host builds fail closed without `lzma.h`.
+- Linux amd64 reproducibility now passes. Windows native CGO wiring explicitly installs MinGW GCC + xz, pins compiler/include/library paths, and verifies `lzma.h` visibility before building.
 - Extraction resolves authorization directly from the manifest: the requested host platform must exist and the local executable must match its exact SHA-256.
 - Kali ARM64 rootfs / Phosh and rescue-initramfs foundations.
 - Diagnostics and recovery-oriented boot-session evidence.
