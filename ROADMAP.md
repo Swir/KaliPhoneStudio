@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**42% complete**
+**43% complete**
 
-`████████░░░░░░░░░░░░ 42%`
+`█████████░░░░░░░░░░░ 43%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -27,7 +27,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Fail-closed Android A/B payload envelope inspection
 - [x] Payload + metadata SHA-256 evidence before extractor hand-off
 - [x] Checksum-locked, source-pinned boot-only OTA extraction adapter
-- [ ] Reproducibly build/package the pinned extractor for each supported host and publish its lock manifest
+- [x] Versioned fail-closed host-tool lock manifest and deterministic extractor build command
+- [ ] Reproducibly build/package the pinned extractor for each supported host and record verified platform SHA-256 locks
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
