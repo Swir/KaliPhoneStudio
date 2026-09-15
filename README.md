@@ -2,7 +2,7 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux as the primary phone operating system/userspace**, without Android as the user-facing OS layer.
 
-> Current status: **0.6.5-dev** — fail-closed A/B OTA payload envelope inspection. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.6-dev** — fail-closed A/B OTA payload inspection with SHA-256 integrity evidence. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -29,6 +29,7 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Android boot image v2 inspection/repack foundation.
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
 - Fail-closed `payload.bin` envelope inspection: `CrAU` magic, payload version, manifest/signature sizes and metadata boundary checks before extraction.
+- Streaming SHA-256 evidence for both the complete payload and validated metadata envelope, binding later extraction work to exact inspected bytes.
 - Kali ARM64 rootfs / Phosh and rescue-initramfs foundations.
 - Diagnostics and recovery-oriented boot-session evidence.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
