@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "extractor": "payload-dumper-go",
+  "source": {
+    "url": "https://github.com/ssut/payload-dumper-go",
+    "commit": "05fe59e21c9f271fba38398c7c040993313ecd04"
+  },
+  "build": {
+    "toolchain": "go",
+    "command": ["go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", "payload-dumper-go", "."],
+    "notes": "Build from the exact pinned source commit. Release use requires a platform entry with the SHA-256 of the produced binary; an empty artifacts map is fail-closed and intentionally authorizes no binary."
+  },
+  "artifacts": {}
+}
