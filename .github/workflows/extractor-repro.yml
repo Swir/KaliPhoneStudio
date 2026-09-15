@@ -79,9 +79,25 @@ jobs:
           if match.group(1) != expected:
               raise SystemExit(f"toolchain lock {expected} != upstream go.mod {match.group(1)}")
 
+      - name: Install Linux liblzma build dependency
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends liblzma-dev
+
+      - name: Install Windows liblzma build dependency
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-xz'
+          'C:\msys64\mingw64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Build twice from pinned source
         shell: bash
         working-directory: upstream-extractor
+        env:
+          CGO_ENABLED: "1"
         run: |
           go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-a .
           go clean -cache
