@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.14-dev — exact OTA to stock boot provenance
+
+- Investigated the 0.6.13 Python CI regression: the old test still expected an empty extractor artifact map after Linux/Windows hashes had intentionally been authorized; all four Python jobs failed on that stale assertion.
+- Replaced the stale assertion with checks that reviewed platform hashes resolve exactly, tampered local binaries fail SHA-256 verification, and unknown platforms remain fail-closed.
+- Added immutable schema-v1 stock-boot provenance records binding `profile_id`, complete OTA SHA-256/size and firmware metadata, payload SHA-256/metadata SHA-256/size, and extracted `boot.img` SHA-256/size/header version.
+- Provenance creation rejects mismatched OTA-vs-inspected payload sizes, missing firmware metadata, malformed hashes and attempts to overwrite existing evidence with different bytes.
+- Added focused provenance contract tests.
+- Advanced README/ROADMAP progress to 46% for the completed host-side provenance contract; the exact user's OxygenOS OTA and all physical AC2003 Beta evidence remain pending.
+
 ## 0.6.13-dev — cross-platform reproducible extractor authorization
 
 - Verified GitHub Actions `extractor-repro` run `35018283145` completed successfully on both Linux amd64 and Windows amd64.
@@ -56,7 +65,7 @@
 - Platform artifacts are deliberately unauthorized until an exact binary SHA-256 is recorded; the initial artifacts map is empty rather than trusting an unverified download.
 - Added tests for source pinning, platform lookup, malformed artifact hashes and the repository's fail-closed default.
 - Updated README and ROADMAP completion bars to 43%; progress remains weighted toward physical-device and release evidence.
-- Python CI remains 3.11/3.12/3.13/3.14. This milestone does not claim AC2003 hardware compatibility.
+- Python CI remains 3.11/3.12/3.13/3.14.
 
 ## 0.6.7-dev — checksum-locked OTA boot extraction adapter
 
