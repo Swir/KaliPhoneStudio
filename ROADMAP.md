@@ -30,7 +30,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Versioned fail-closed host-tool lock manifest and deterministic extractor build command
 - [x] Wire extractor execution to authoritative manifest platform/SHA-256 authorization
 - [x] Pin extractor toolchain version and add dedicated exact-source reproducibility/source-lock CI
-- [ ] Confirm reproducible extractor CI green on Linux amd64 and Windows amd64, review emitted SHA-256 evidence, then authorize platform artifacts
+- [x] Diagnose first cross-platform extractor CI failure as missing native liblzma headers and provision the dependency explicitly
+- [ ] Confirm repaired reproducible extractor CI green on Linux amd64 and Windows amd64, review emitted SHA-256 evidence, then authorize platform artifacts
 - [ ] Make every boot-image builder fully profile-driven
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
