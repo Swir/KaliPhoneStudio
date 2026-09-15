@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "tools" / "extractor-locks.json"
 
 
-def test_repository_extractor_lock_is_pinned_and_fail_closed():
+def test_repository_extractor_lock_is_pinned_and_authorized():
     lock = load_tool_lock(LOCK)
     assert lock.extractor == "payload-dumper-go"
     assert len(lock.source_commit) == 40
@@ -18,9 +18,11 @@ def test_repository_extractor_lock_is_pinned_and_fail_closed():
     assert "-trimpath" in lock.build_command
     assert "-buildvcs=false" in lock.build_command
     assert "-ldflags=-buildid=" in lock.build_command
-    assert lock.artifacts == {}
+    assert set(lock.artifacts) == {"linux-amd64", "windows-amd64"}
+    assert lock.require_artifact("linux-amd64").sha256 == "a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0"
+    assert lock.require_artifact("windows-amd64").sha256 == "35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5"
     with pytest.raises(ToolLockError, match="no locked extractor artifact"):
-        lock.require_artifact("windows-amd64")
+        lock.require_artifact("darwin-amd64")
 
 
 def test_rejects_unpinned_source(tmp_path):
