@@ -1,12 +1,20 @@
 from pathlib import Path
 import json
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_project_version_exists():
+def project_version() -> str:
     text = (ROOT / "kaliphonestudio" / "__init__.py").read_text(encoding="utf-8")
-    assert "0.6.0-dev" in text
+    match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
+    assert match, "kaliphonestudio.__version__ must be declared"
+    return match.group(1)
+
+
+def test_project_version_is_consistent_with_build_status():
+    status = json.loads((ROOT / "BUILD_STATUS.json").read_text(encoding="utf-8"))
+    assert project_version() == status["version"]
 
 
 def test_first_device_profile_contract():
