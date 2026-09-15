@@ -13,7 +13,11 @@ def test_repository_extractor_lock_is_pinned_and_fail_closed():
     lock = load_tool_lock(LOCK)
     assert lock.extractor == "payload-dumper-go"
     assert len(lock.source_commit) == 40
+    assert lock.toolchain == "go"
+    assert lock.toolchain_version == "1.27.0"
     assert "-trimpath" in lock.build_command
+    assert "-buildvcs=false" in lock.build_command
+    assert "-ldflags=-buildid=" in lock.build_command
     assert lock.artifacts == {}
     with pytest.raises(ToolLockError, match="no locked extractor artifact"):
         lock.require_artifact("windows-amd64")
@@ -25,6 +29,24 @@ def test_rejects_unpinned_source(tmp_path):
     path = tmp_path / "lock.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(ToolLockError, match="full commit"):
+        load_tool_lock(path)
+
+
+def test_rejects_missing_toolchain_version(tmp_path):
+    data = json.loads(LOCK.read_text(encoding="utf-8"))
+    data["build"].pop("toolchain_version")
+    path = tmp_path / "lock.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ToolLockError, match="toolchain version"):
+        load_tool_lock(path)
+
+
+def test_rejects_unversioned_toolchain(tmp_path):
+    data = json.loads(LOCK.read_text(encoding="utf-8"))
+    data["build"]["toolchain_version"] = "latest"
+    path = tmp_path / "lock.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ToolLockError, match="toolchain version"):
         load_tool_lock(path)
 
 
