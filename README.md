@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**45% complete**
+**46% complete**
 
-`█████████░░░░░░░░░░░ 45%`
+`█████████░░░░░░░░░░░ 46%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.13-dev** — Linux/Windows extractor reproducibility is proven and the exact resulting SHA-256 values are authorized. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.14-dev** — exact OTA identity/integrity evidence can now be bound to extracted stock `boot.img` in an immutable provenance record. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -38,6 +38,7 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
 - Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
+- Immutable schema-v1 stock-boot provenance records bind `profile_id`, exact OTA SHA-256 and firmware metadata, payload SHA-256/metadata SHA-256, and extracted `boot.img` SHA-256/size/header version; mismatched payload size and evidence overwrite attempts fail closed.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated reproducibility CI builds the exact pinned extractor source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
 - Linux amd64 and Windows amd64 reproducibility both pass in GitHub Actions run `35018283145`.
