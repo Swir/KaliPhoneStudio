@@ -1,0 +1,110 @@
+name: extractor-repro
+
+on:
+  push:
+    paths:
+      - "tools/extractor-locks.json"
+      - ".github/workflows/extractor-repro.yml"
+      - "kaliphonestudio/tool_locks.py"
+      - "tests/test_tool_locks.py"
+  pull_request:
+    paths:
+      - "tools/extractor-locks.json"
+      - ".github/workflows/extractor-repro.yml"
+      - "kaliphonestudio/tool_locks.py"
+      - "tests/test_tool_locks.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-extractor:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+          - os: windows-latest
+            platform: windows-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout KaliPhoneStudio
+        uses: actions/checkout@v5
+
+      - name: Read authoritative lock
+        id: lock
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path("tools/extractor-locks.json").read_text(encoding="utf-8"))
+          source = data["source"]
+          build = data["build"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              print(f"repository={source['url'].removeprefix('https://github.com/')}", file=f)
+              print(f"commit={source['commit']}", file=f)
+              print(f"go_version={build['toolchain_version']}", file=f)
+
+      - name: Checkout exact extractor source commit
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.lock.outputs.repository }}
+          ref: ${{ steps.lock.outputs.commit }}
+          path: upstream-extractor
+          persist-credentials: false
+
+      - name: Verify exact source commit
+        shell: bash
+        working-directory: upstream-extractor
+        run: test "$(git rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
+
+      - name: Setup pinned Go toolchain
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: upstream-extractor/go.sum
+
+      - name: Verify upstream Go requirement matches lock
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          text = Path("upstream-extractor/go.mod").read_text(encoding="utf-8")
+          match = re.search(r"(?m)^go\s+([^\s]+)$", text)
+          if not match:
+              raise SystemExit("upstream go.mod has no Go version")
+          expected = "${{ steps.lock.outputs.go_version }}"
+          if match.group(1) != expected:
+              raise SystemExit(f"toolchain lock {expected} != upstream go.mod {match.group(1)}")
+
+      - name: Build twice from pinned source
+        shell: bash
+        working-directory: upstream-extractor
+        run: |
+          go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-a .
+          go clean -cache
+          go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-b .
+
+      - name: Prove byte-for-byte reproducibility and report SHA-256
+        shell: python
+        run: |
+          import hashlib
+          from pathlib import Path
+          a = Path("extractor-a").read_bytes()
+          b = Path("extractor-b").read_bytes()
+          if a != b:
+              raise SystemExit("pinned extractor builds are not byte-for-byte reproducible")
+          digest = hashlib.sha256(a).hexdigest()
+          print("${{ matrix.platform }} SHA-256:", digest)
+          Path("extractor-${{ matrix.platform }}.sha256").write_text(
+              f"{digest}  payload-dumper-go\n", encoding="ascii"
+          )
+
+      - name: Upload reproducibility evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractor-repro-${{ matrix.platform }}
+          path: extractor-${{ matrix.platform }}.sha256
+          if-no-files-found: error
