@@ -7,8 +7,9 @@
   },
   "build": {
     "toolchain": "go",
+    "toolchain_version": "1.27.0",
     "command": ["go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", "payload-dumper-go", "."],
-    "notes": "Build from the exact pinned source commit. Release use requires a platform entry with the SHA-256 of the produced binary; an empty artifacts map is fail-closed and intentionally authorizes no binary."
+    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Release use requires a platform entry with the SHA-256 of the produced binary; an empty artifacts map is fail-closed and intentionally authorizes no binary."
   },
   "artifacts": {}
 }
