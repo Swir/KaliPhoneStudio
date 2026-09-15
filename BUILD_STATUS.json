@@ -3,7 +3,7 @@
   "stage": "exact OTA to stock boot provenance contract implemented",
   "repository_source_of_truth": true,
   "project_progress_percent": 46,
-  "host_ci": "pending-for-0.6.14-dev",
+  "host_ci": "PASS; tests run 35034683619 green after provenance implementation",
   "python_ci": ["3.11", "3.12", "3.13", "3.14"],
   "profile_schema_version": 1,
   "profile_contract": "implemented-and-ci-enforced",
