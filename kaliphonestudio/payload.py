@@ -1,11 +1,13 @@
 """Fail-closed Android A/B OTA payload header inspection.
 
-Host-side only: this module validates payload structure and metadata boundaries.
-It never extracts partitions, boots, or flashes a device.
+Host-side only: this module validates payload structure and metadata boundaries and
+records cryptographic evidence. It never extracts partitions, boots, or flashes a
+device.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import struct
 
@@ -14,6 +16,7 @@ _HEADER_V1 = struct.Struct(">4sQQ")
 _HEADER_V2 = struct.Struct(">4sQQI")
 _MAX_MANIFEST_SIZE = 64 * 1024 * 1024
 _MAX_METADATA_SIGNATURE_SIZE = 16 * 1024 * 1024
+_HASH_CHUNK_SIZE = 1024 * 1024
 
 
 class PayloadFormatError(ValueError):
@@ -30,10 +33,29 @@ class PayloadHeaderReport:
     header_size: int
     metadata_size: int
     data_offset: int
+    payload_sha256: str
+    metadata_sha256: str
+
+
+def _sha256_range(path: Path, length: int | None = None) -> str:
+    digest = hashlib.sha256()
+    remaining = length
+    with path.open("rb") as fh:
+        while remaining is None or remaining > 0:
+            wanted = _HASH_CHUNK_SIZE if remaining is None else min(_HASH_CHUNK_SIZE, remaining)
+            chunk = fh.read(wanted)
+            if not chunk:
+                break
+            digest.update(chunk)
+            if remaining is not None:
+                remaining -= len(chunk)
+    if remaining not in (None, 0):
+        raise PayloadFormatError("payload changed or truncated while hashing")
+    return digest.hexdigest()
 
 
 def inspect_payload(path: Path) -> PayloadHeaderReport:
-    """Validate the update_engine payload envelope without parsing protobuf data."""
+    """Validate the update_engine payload envelope and record SHA-256 evidence."""
     if not path.is_file():
         raise PayloadFormatError(f"payload does not exist: {path}")
     file_size = path.stat().st_size
@@ -64,6 +86,13 @@ def inspect_payload(path: Path) -> PayloadHeaderReport:
     if metadata_size > file_size:
         raise PayloadFormatError("declared payload metadata exceeds file size")
 
+    # Hash only after structural validation. Both digests are suitable for journals
+    # and later extractor hand-off; neither implies signature authenticity.
+    metadata_sha256 = _sha256_range(path, metadata_size)
+    payload_sha256 = _sha256_range(path)
+    if path.stat().st_size != file_size:
+        raise PayloadFormatError("payload size changed during inspection")
+
     return PayloadHeaderReport(
         path=path,
         file_size=file_size,
@@ -73,4 +102,6 @@ def inspect_payload(path: Path) -> PayloadHeaderReport:
         header_size=header_size,
         metadata_size=metadata_size,
         data_offset=metadata_size,
+        payload_sha256=payload_sha256,
+        metadata_sha256=metadata_sha256,
     )
