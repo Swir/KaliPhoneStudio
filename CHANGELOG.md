@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.5-dev — fail-closed A/B OTA payload envelope inspection
+
+- Added device-independent `payload.bin` header inspection using the Android update_engine `CrAU` envelope.
+- Validates payload major version, manifest/signature sizes, metadata boundaries and truncation before any future partition extraction is allowed.
+- Added strict host-side limits for manifest and metadata-signature allocation risk.
+- Added CI tests for valid v1/v2 payloads plus bad magic, unsupported versions and metadata-past-EOF failures.
+- Confirmed the preceding 0.6.4-dev GitHub Actions run completed successfully across the configured Python matrix.
+- Partition extraction remains deliberately unimplemented until a pinned, checksum-verifiable backend contract is added.
+
 ## 0.6.4-dev — versioned device-profile safety contract
 
 - Added profile schema version 1 and fail-closed validation in the runtime registry.
