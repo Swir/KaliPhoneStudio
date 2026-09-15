@@ -1,0 +1,10 @@
+{
+  "project": "KaliPhoneStudio",
+  "version": "0.6.0-dev",
+  "architecture": "multi-device profile registry",
+  "active_device_profiles": ["oneplus/avicii"],
+  "tests": "15 passed locally after migration",
+  "python_compile": "PASS",
+  "beta_release": "BLOCKED until physical-device Beta Release Gate passes",
+  "primary_hardware_blocker": "OnePlus Nord AC2003 exact stock firmware/boot image and real temporary-boot evidence"
+}
