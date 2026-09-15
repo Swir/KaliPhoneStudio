@@ -2,6 +2,14 @@
 
 The roadmap separates **device-independent studio work** from **per-phone bring-up**. Hardware items require physical-device evidence.
 
+## Overall project progress
+
+**42% complete**
+
+`████████░░░░░░░░░░░░ 42%`
+
+This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
+
 ## Phase A — Multi-device Studio Core
 
 - [x] KaliPhoneStudio package/application migration
