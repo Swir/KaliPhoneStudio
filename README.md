@@ -2,6 +2,14 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux as the primary phone operating system/userspace**, without Android as the user-facing OS layer.
 
+## Project progress
+
+**42% complete**
+
+`████████░░░░░░░░░░░░ 42%`
+
+Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
+
 > Current status: **0.6.6-dev** — fail-closed A/B OTA payload inspection with SHA-256 integrity evidence. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
