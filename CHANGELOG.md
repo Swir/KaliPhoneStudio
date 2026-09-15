@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.10-dev — pinned-toolchain extractor reproducibility CI
+
+- Pinned the extractor build toolchain to Go 1.27.0, matching the exact pinned upstream commit's `go.mod` requirement.
+- Extended the fail-closed host-tool lock parser so an unversioned or unsupported build toolchain is rejected.
+- Added a dedicated `extractor-repro` workflow for Linux amd64 and Windows amd64.
+- The workflow checks out the exact locked upstream commit, verifies `HEAD`, installs the exact locked Go version, verifies the upstream `go.mod` requirement, builds twice with deterministic flags, and fails unless both binaries are byte-for-byte identical.
+- Successful jobs emit per-platform SHA-256 evidence as workflow artifacts; hashes are not automatically trusted or committed.
+- Added tests for exact toolchain pinning and rejection of missing/`latest` toolchain versions.
+- Kept README and ROADMAP at a conservative 44%; this host-side hardening does not claim physical AC2003 progress.
+- No extractor binary is authorized until the new reproducibility evidence is green and reviewed.
+
 ## 0.6.9-dev — manifest-backed extractor authorization
 
 - Wired OTA extractor authorization directly to the versioned `tools/extractor-locks.json` contract instead of relying on caller-supplied hashes for release-oriented execution.
