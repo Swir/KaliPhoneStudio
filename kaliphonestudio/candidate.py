@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
+import re
 
 from .boot_authorization import TemporaryBootAuthorization
 from .rootfs import (
@@ -14,6 +15,9 @@ from .rootfs import (
     RootfsSourceLock,
     verify_rootfs_artifact,
 )
+
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,8 @@ class FirstBootCandidateManifest:
     rootfs_evidence_sha256: str
     rootfs_artifact_sha256: str
     rootfs_artifact_size: int
+    rootfs_package_manifest_sha256: str
+    rootfs_package_count: int
     rootfs_source_lock_sha256: str
     repository_snapshot_sha256: str
 
@@ -35,6 +41,11 @@ class FirstBootCandidateManifest:
 
     def manifest_sha256(self) -> str:
         return sha256(self.canonical_json().encode("utf-8")).hexdigest()
+
+
+def _require_boot_hash(value: str, label: str) -> None:
+    if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
+        raise RootfsError(f"temporary-boot authorization contains invalid {label}")
 
 
 def create_first_boot_candidate_manifest(
@@ -56,8 +67,12 @@ def create_first_boot_candidate_manifest(
         raise RootfsError("first-boot candidate requires a verified device binding")
     if not boot.reproducible or not boot.structurally_verified:
         raise RootfsError("first-boot candidate requires fully verified boot authorization")
-    if boot.image_size <= 0 or len(boot.image_sha256) != 64:
+    if boot.image_size <= 0:
         raise RootfsError("temporary-boot authorization contains invalid image evidence")
+    _require_boot_hash(boot.plan_sha256, "plan SHA-256")
+    _require_boot_hash(boot.stock_boot_sha256, "stock boot SHA-256")
+    _require_boot_hash(boot.stock_ota_sha256, "stock OTA SHA-256")
+    _require_boot_hash(boot.image_sha256, "image SHA-256")
 
     verify_rootfs_artifact(
         rootfs_lock,
@@ -66,7 +81,7 @@ def create_first_boot_candidate_manifest(
         artifact=rootfs_artifact,
     )
     return FirstBootCandidateManifest(
-        schema_version=1,
+        schema_version=2,
         profile_id=boot.profile_id,
         device_serial=boot.device_serial,
         boot_authorization_sha256=boot.authorization_sha256(),
@@ -75,6 +90,8 @@ def create_first_boot_candidate_manifest(
         rootfs_evidence_sha256=rootfs_evidence.evidence_sha256(),
         rootfs_artifact_sha256=rootfs_evidence.artifact_sha256,
         rootfs_artifact_size=rootfs_evidence.artifact_size,
+        rootfs_package_manifest_sha256=rootfs_evidence.package_manifest_sha256,
+        rootfs_package_count=rootfs_evidence.package_count,
         rootfs_source_lock_sha256=rootfs_lock.lock_sha256(),
         repository_snapshot_sha256=repository_snapshot.evidence_sha256(),
     )

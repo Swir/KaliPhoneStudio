@@ -1,0 +1,185 @@
+name: rootfs-repro
+
+on:
+  pull_request:
+    paths:
+      - "tools/rootfs-source-lock.json"
+      - "kaliphonestudio/rootfs.py"
+      - "scripts/capture_kali_snapshot.py"
+      - "scripts/run_locked_rootfs_build.py"
+      - "scripts/verify_rootfs_pair.py"
+      - ".github/workflows/rootfs-repro.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/rootfs-source-lock.json"
+      - "kaliphonestudio/rootfs.py"
+      - "scripts/capture_kali_snapshot.py"
+      - "scripts/run_locked_rootfs_build.py"
+      - "scripts/verify_rootfs_pair.py"
+      - ".github/workflows/rootfs-repro.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-snapshot-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      source_url: ${{ steps.lock.outputs.source_url }}
+      source_commit: ${{ steps.lock.outputs.source_commit }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install verification dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg
+          python -m pip install pytest
+
+      - name: Load fail-closed rootfs lock
+        id: lock
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.rootfs import load_rootfs_source_lock
+
+          lock = load_rootfs_source_lock(Path("tools/rootfs-source-lock.json"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"source_url={lock.source_url}", file=out)
+              print(f"source_commit={lock.source_commit}", file=out)
+              print(f"mirror={lock.mirror}", file=out)
+              print(f"suite={lock.suite}", file=out)
+              print(f"keyring_url={lock.archive_keyring_url}", file=out)
+              print(f"key_fingerprint={lock.archive_key_fingerprint}", file=out)
+          print(f"rootfs source lock sha256={lock.lock_sha256()}")
+          PY
+
+      - name: Capture GPG-verified Kali repository snapshot
+        shell: bash
+        env:
+          MIRROR: ${{ steps.lock.outputs.mirror }}
+          SUITE: ${{ steps.lock.outputs.suite }}
+          KEYRING_URL: ${{ steps.lock.outputs.keyring_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "$KEYRING_URL" -o evidence/kali-archive-keyring.gpg
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "$MIRROR/dists/$SUITE/InRelease" -o evidence/InRelease
+          python scripts/capture_kali_snapshot.py \
+            --lock tools/rootfs-source-lock.json \
+            --inrelease evidence/InRelease \
+            --keyring evidence/kali-archive-keyring.gpg \
+            --out evidence/repository-snapshot.json
+
+      - name: Run rootfs contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_rootfs.py tests/test_candidate.py
+
+      - name: Upload signed repository snapshot evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: kali-repository-snapshot
+          path: |
+            evidence/InRelease
+            evidence/repository-snapshot.json
+          if-no-files-found: error
+          retention-days: 7
+
+  reproducible-rootfs:
+    if: github.event_name != 'pull_request'
+    needs: signed-snapshot-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install pinned-builder host prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binfmt-support ca-certificates curl debootstrap git qemu-user-static xz-utils
+
+      - name: Download exact signed repository snapshot
+        uses: actions/download-artifact@v5
+        with:
+          name: kali-repository-snapshot
+          path: evidence
+
+      - name: Prepare two independent exact-source checkouts
+        shell: bash
+        env:
+          SOURCE_URL: ${{ needs.signed-snapshot-contract.outputs.source_url }}
+          SOURCE_COMMIT: ${{ needs.signed-snapshot-contract.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          for checkout in builder-a builder-b; do
+            git init --quiet "$checkout"
+            git -C "$checkout" remote add origin "$SOURCE_URL"
+            git -C "$checkout" fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+            test "$(git -C "$checkout" rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+            git -C "$checkout" checkout --quiet --detach "$SOURCE_COMMIT"
+            test "$(git -C "$checkout" rev-parse HEAD)" = "$SOURCE_COMMIT"
+          done
+
+      - name: Build rootfs A from locked source and snapshot
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/run_locked_rootfs_build.py \
+            --lock tools/rootfs-source-lock.json \
+            --checkout builder-a \
+            --out artifacts/rootfs-a.tar.xz \
+            --sudo
+
+      - name: Build rootfs B independently
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/run_locked_rootfs_build.py \
+            --lock tools/rootfs-source-lock.json \
+            --checkout builder-b \
+            --out artifacts/rootfs-b.tar.xz \
+            --sudo
+
+      - name: Require byte-identical rootfs and package evidence
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/verify_rootfs_pair.py \
+            --lock tools/rootfs-source-lock.json \
+            --snapshot evidence/repository-snapshot.json \
+            --first artifacts/rootfs-a.tar.xz \
+            --second artifacts/rootfs-b.tar.xz \
+            --out evidence/rootfs-artifact.json \
+            --package-manifest-out evidence/packages.tsv
+          sha256sum artifacts/rootfs-a.tar.xz > evidence/rootfs.sha256
+
+      - name: Upload verified reproducible rootfs and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: kali-arm64-rootfs-reproducible
+          path: |
+            artifacts/rootfs-a.tar.xz
+            evidence/repository-snapshot.json
+            evidence/rootfs-artifact.json
+            evidence/rootfs.sha256
+            evidence/packages.tsv
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3

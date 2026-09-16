@@ -47,9 +47,14 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 
 - [x] Pin official Kali/NetHunter ARM64 rootfs builder source to an exact upstream commit
 - [x] Define fail-closed rootfs source/repository/reproducibility evidence contract
+- [x] Require HTTPS Kali mirror + locked current Kali archive signing-key fingerprint
+- [x] Verify Kali `InRelease` with `gpgv` and capture exact ARM64 package-index paths/sizes/SHA-256 values
+- [x] Extract a normalized installed package/version/architecture manifest directly from each rootfs archive
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
 - [x] Bind verified rootfs evidence and temporary-boot authorization into a canonical first-boot candidate manifest contract
-- [ ] Build a real reproducible ARM64 rootfs artifact in CI from pinned source + repository evidence
+- [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
+- [ ] Obtain the first green real double-build run and review/archive its evidence
+- [ ] Mark a concrete ARM64 rootfs artifact reproducible only after that run passes
 - [ ] Promote first-boot evidence into a release-candidate manifest only after hardware gates exist
 - [ ] Generic first-boot provisioning independent of device name
 - [ ] Phosh phone UI stage on the verified common rootfs
