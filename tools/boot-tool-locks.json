@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "mkbootimg": {
+    "repository": "https://github.com/LineageOS/android_system_tools_mkbootimg",
+    "commit": "808ecd09666ffe0ff5800f02af693abce56eb395",
+    "entrypoint": "mkbootimg.py",
+    "supported_header_versions": [0, 1, 2],
+    "invocation_policy": "python-entrypoint-from-exact-commit-only"
+  },
+  "unpack_bootimg": {
+    "repository": "https://github.com/LineageOS/android_system_tools_mkbootimg",
+    "commit": "808ecd09666ffe0ff5800f02af693abce56eb395",
+    "entrypoint": "unpack_bootimg.py",
+    "supported_header_versions": [0, 1, 2, 3, 4],
+    "invocation_policy": "python-entrypoint-from-exact-commit-only"
+  }
+}
