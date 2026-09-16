@@ -1,8 +1,8 @@
 """Offline, profile-driven evidence for a captured ``fastboot getvar all`` baseline.
 
-This module deliberately does not invoke fastboot.  It only validates a transcript
+This module deliberately does not invoke fastboot. It validates a transcript
 captured by an operator and binds it to an exact device profile and firmware
-baseline.  Importing evidence is not a Beta hardware-success claim.
+baseline. Importing evidence is not a Beta hardware-success claim.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .profiles import DeviceProfile
+from .provenance import StockBootProvenance
 from .safety import SafetyError, VerifiedDevice
 
 
@@ -85,7 +86,7 @@ def parse_fastboot_getvar_all(payload: bytes) -> dict[str, str]:
     """Parse a saved fastboot transcript and reject ambiguous evidence.
 
     The parser accepts the ordinary ``(bootloader) key: value`` form as well as
-    bare ``key: value`` lines.  Noise emitted by the host fastboot client is
+    bare ``key: value`` lines. Noise emitted by the host fastboot client is
     ignored, while explicit command failures and conflicting duplicate variables
     fail closed.
     """
@@ -247,6 +248,33 @@ def require_device_matches_baseline(
         raise SafetyError("fastboot baseline/device profile mismatch")
     if not baseline.serialno or baseline.serialno != device.serial:
         raise SafetyError("verified device serial does not match fastboot baseline")
+
+
+def require_baseline_matches_stock_provenance(
+    profile: DeviceProfile,
+    baseline: FastbootBaselineEvidence,
+    provenance: StockBootProvenance,
+) -> None:
+    """Bind the captured physical baseline to the exact OTA stock provenance.
+
+    Android OTA metadata's ``post-build`` value is the authoritative build
+    fingerprint used here. ``post-build-incremental`` is checked when present.
+    This prevents a valid boot image from a different firmware baseline from being
+    authorized for the captured phone.
+    """
+    if baseline.schema_version != 1:
+        raise FastbootBaselineError("unsupported fastboot baseline schema")
+    if baseline.profile_id != profile.profile_id or provenance.profile_id != profile.profile_id:
+        raise FastbootBaselineError("fastboot baseline/stock provenance profile mismatch")
+    metadata = provenance.firmware_metadata
+    post_build = metadata.get("post-build")
+    if not post_build:
+        raise FastbootBaselineError("stock provenance is missing OTA post-build fingerprint")
+    if post_build != baseline.firmware_fingerprint:
+        raise FastbootBaselineError("fastboot firmware fingerprint does not match exact OTA provenance")
+    incremental = metadata.get("post-build-incremental")
+    if incremental is not None and incremental != baseline.firmware_build:
+        raise FastbootBaselineError("fastboot firmware build does not match exact OTA provenance")
 
 
 def write_fastboot_baseline_evidence(
