@@ -130,3 +130,23 @@ def bind_kernel_candidate_evidence(
         image_size=image.image_size,
         arm64_magic_verified=True,
     )
+
+
+def write_kernel_candidate_evidence(evidence: KernelCandidateEvidence, destination: Path) -> str:
+    """Atomically write canonical kernel evidence and return its SHA-256."""
+    if evidence.schema_version != 1:
+        raise KernelContractError("unsupported kernel candidate evidence schema")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and (not destination.is_file() or destination.is_symlink()):
+        raise KernelContractError("kernel evidence destination must be a regular file path")
+    payload = evidence.canonical_json()
+    temporary = destination.with_name(destination.name + ".tmp")
+    if temporary.exists():
+        raise KernelContractError("refusing to overwrite stale kernel evidence temporary file")
+    try:
+        temporary.write_text(payload, encoding="utf-8", newline="\n")
+        temporary.replace(destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return evidence.evidence_sha256()
