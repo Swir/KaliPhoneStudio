@@ -1,0 +1,92 @@
+name: ramdisk-format
+
+on:
+  push:
+    paths:
+      - "kaliphonestudio/initramfs.py"
+      - "kaliphonestudio/initramfs_binding.py"
+      - "kaliphonestudio/lz4_legacy.py"
+      - "kaliphonestudio/profiles.py"
+      - "devices/**/profile.json"
+      - "scripts/build_rescue_initramfs.py"
+      - "tools/ramdisk-format-locks.json"
+      - "tests/test_initramfs.py"
+      - "tests/test_initramfs_binding.py"
+      - "tests/test_lz4_legacy.py"
+      - ".github/workflows/ramdisk-format.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/initramfs.py"
+      - "kaliphonestudio/initramfs_binding.py"
+      - "kaliphonestudio/lz4_legacy.py"
+      - "kaliphonestudio/profiles.py"
+      - "devices/**/profile.json"
+      - "scripts/build_rescue_initramfs.py"
+      - "tools/ramdisk-format-locks.json"
+      - "tests/test_initramfs.py"
+      - "tests/test_initramfs_binding.py"
+      - "tests/test_lz4_legacy.py"
+      - ".github/workflows/ramdisk-format.yml"
+
+jobs:
+  lz4-legacy-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install independent LZ4 and cpio readers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends lz4 cpio
+      - name: Prepare equivalent rescue staging trees
+        run: |
+          set -euo pipefail
+          for tree in a b; do
+            mkdir -p "staging-${tree}/etc"
+            cat > "staging-${tree}/init" <<'EOF'
+          #!/bin/sh
+          echo KaliPhoneStudio rescue
+          EOF
+            chmod 0755 "staging-${tree}/init"
+            printf '%s\n' 'ssh=disabled' 'network=disabled' > "staging-${tree}/etc/rescue.conf"
+            chmod 0644 "staging-${tree}/etc/rescue.conf"
+          done
+          touch -d '@100' staging-a/init
+          touch -d '@200' staging-b/init
+      - name: Build profile-driven LZ4 rescue artifacts twice
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python scripts/build_rescue_initramfs.py \
+            --profile-id oneplus/avicii \
+            --staging staging-a \
+            --out build/a.cpio.lz4 \
+            --evidence build/a.json
+          python scripts/build_rescue_initramfs.py \
+            --profile-id oneplus/avicii \
+            --staging staging-b \
+            --out build/b.cpio.lz4 \
+            --evidence build/b.json
+          cmp build/a.cpio.lz4 build/b.cpio.lz4
+          cmp build/a.json build/b.json
+      - name: Verify legacy magic and external lz4 compatibility
+        run: |
+          set -euo pipefail
+          magic="$(od -An -tx1 -N4 build/a.cpio.lz4 | tr -d ' \n')"
+          test "$magic" = "02214c18"
+          lz4 -d build/a.cpio.lz4 build/a.cpio
+          cpio -it < build/a.cpio > build/cpio.list
+          grep -Fx 'init' build/cpio.list
+          grep -Fx 'etc/rescue.conf' build/cpio.list
+      - name: Focused Python format tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pip install pytest
+          python -m pytest -q \
+            tests/test_lz4_legacy.py \
+            tests/test_initramfs.py \
+            tests/test_initramfs_binding.py \
+            tests/test_profile_schema.py
