@@ -3,7 +3,7 @@
   "stage": "profile-driven offline Fastboot baseline evidence and exact-OTA firmware binding implemented; real ARM64 rootfs double-build still running",
   "repository_source_of_truth": true,
   "project_progress_percent": 50,
-  "host_ci": "main tests run 35108325121 PASS for 0.6.21-dev; 0.6.22-dev branch tests are pending final verification; rescue-payload-repro run 35108325101 PASS on main; rootfs-repro run 35108325109 has a green signed-snapshot contract while the real reproducible-rootfs job is still running and is not credited yet",
+  "host_ci": "0.6.22-dev exact-head push tests run 35112024576 PASS; PR #15 checks tests 35112168226, rootfs-source-lock 35112168530 and ramdisk-format 35112168553 PASS; Python 3.11/3.12/3.13/3.14 test+compile matrix is green; rescue-payload-repro main run 35108325101 PASS; rootfs-repro main run 35108325109 has a green signed-snapshot contract while the real reproducible-rootfs job is still running and is not credited yet",
   "python_ci": ["3.11", "3.12", "3.13", "3.14"],
   "profile_schema_version": 2,
   "profile_contract": "implemented-and-ci-enforced; strictly typed boot contract, safe A/B identifiers, profile_id/path binding, HTTPS full-commit source requirements and profile-driven read-only Fastboot probe semantics",
