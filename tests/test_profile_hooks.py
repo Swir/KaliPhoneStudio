@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
@@ -13,7 +13,7 @@ from kaliphonestudio.profile_hooks import (
     execute_profile_hooks,
     validate_profile_hooks_contract,
 )
-from kaliphonestudio.profiles import DeviceProfile, ProfileError, get_profile
+from kaliphonestudio.profiles import DeviceProfile, ProfileError, get_profile, load_profile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +45,16 @@ def test_hooks_contract_rejects_unknown_stage_duplicates_and_unsafe_ids() -> Non
         validate_profile_hooks_contract({"build": ["common/x", "common/x"]})
     with pytest.raises(ProfileError):
         validate_profile_hooks_contract({"build": ["../../evil"]})
+
+
+def test_profile_loader_enforces_hook_contract(tmp_path: Path) -> None:
+    base = get_profile(DEVICES_ROOT, "oneplus/avicii")
+    data = dict(base.data)
+    data["hooks"] = {"flash": ["unsafe/stage"]}
+    profile_path = tmp_path / "profile.json"
+    profile_path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ProfileError, match="unsupported stages"):
+        load_profile(profile_path)
 
 
 def test_undeclared_profile_has_no_hooks() -> None:
@@ -112,7 +122,7 @@ def test_duplicate_registration_fails_closed() -> None:
         registry.register("common/x", "build", callback)
 
 
-def test_failed_or_malformed_hook_cannot_produce_accepted_evidence(tmp_path: Path) -> None:
+def test_failed_hook_cannot_produce_accepted_evidence(tmp_path: Path) -> None:
     profile = _profile_with_hooks(tmp_path, {"verify": ["common/check"]})
     registry = ProfileHookRegistry()
     registry.register(
