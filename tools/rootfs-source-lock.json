@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": {
     "url": "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-rootfs.git",
     "commit": "20238a2f2d547d7989a4dec287d4f5ef528ed701",
@@ -9,16 +9,20 @@
     "suite": "kali-rolling",
     "architecture": "arm64",
     "variant": "minimal",
-    "mirror": "http://http.kali.org/kali",
+    "mirror": "https://http.kali.org/kali",
     "command": [
       "./build-fs.sh",
       "--minimal",
       "--arch",
       "arm64",
       "--mirror",
-      "http://http.kali.org/kali"
+      "https://http.kali.org/kali"
     ],
     "repository_evidence_required": true,
     "double_build_required": true
+  },
+  "repository_trust": {
+    "archive_keyring_url": "https://archive.kali.org/archive-keyring.gpg",
+    "archive_key_fingerprint": "827C8569F2518CC677FECA1AED65462EC8D5E4C5"
   }
 }
