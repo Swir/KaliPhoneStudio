@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**49% complete**
+**50% complete**
 
-`██████████░░░░░░░░░░ 49%`
+`██████████░░░░░░░░░░ 50%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -64,8 +64,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Deterministic Linux-kernel-compatible LZ4 legacy ramdisk stage with pinned AOSP/LZ4 format references
 - [x] Independent post-compression LZ4 decode + canonical `newc` structural verification before rescue evidence is accepted
 - [x] Profile-driven rescue compression selection and exact rescue-evidence → boot-plan ramdisk binding
-- [ ] Add a reviewed/source-locked static ARM64 rescue payload (`/init` + minimum required tools) without redistributing unlicensed blobs
-- [ ] Produce a concrete safe minimal rescue initramfs artifact and prove its device rescue/logging path
+- [x] Add a source-locked static ARM64 rescue payload (`/init` + minimum required tools) with exact BusyBox 1.38.0 source hash, two independent byte-identical cross-builds, verified applet inventory and network/SSH disabled by default
+- [ ] Produce a concrete safe minimal rescue initramfs artifact and prove its device rescue/logging path (host candidate generation is green; physical proof still required)
 - [ ] SSH disabled by default
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
 - [ ] Update/rollback metadata format
