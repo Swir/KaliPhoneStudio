@@ -10,18 +10,19 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.36-dev
+## Current development line — 0.6.37-dev
 
 - [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
 - [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
 - [x] Add offline CLI/JSON profile inspection (`--list-profiles`, `--profile-id`, `--json`) with explicit `hardware_verified=false` and `beta_gate_credit=false` semantics.
 - [x] Add generic fail-closed profile hooks for explicitly registered host `build`/`verify`/`recovery` stages; no profile-driven shell/module auto-execution and recovery requires extra authorization.
 - [x] Bind rootfs A/B canonicalization audit records and raw-input hashes to the strict accepted artifact, exact signed repository snapshot and source lock.
+- [x] Bind that rootfs transformation provenance to the exact schema-v8 first-boot manifest digest so release preparation cannot detach raw A/B build history from the candidate.
 - [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
 - [x] Exact-source kernel runner applies profile-required `CONFIG_*` policy, fixed build identity/time values and canonical path remapping before strict comparison.
 - [x] Record the latest real kernel authority failure rather than granting partial credit: final `.config` is byte-identical and Image size matches, but Image bytes differ.
 - [x] Add bounded streaming kernel Image divergence diagnostics that report exact differing-byte/range counts and offsets without relaxing strict equality.
-- [ ] Use the next real A/B kernel run diagnostics to identify and remove the remaining Image nondeterminism, then obtain strict byte-identical evidence.
+- [ ] Use the active real A/B kernel run diagnostics to identify and remove any remaining Image nondeterminism, then obtain strict byte-identical evidence.
 - [ ] Accept a concrete reproducible Kali ARM64 rootfs only after the active post-fix real A/B build passes strict byte equality, package-evidence equality and canonicalization-provenance review.
 
 ## Phase A — Multi-device Studio Core
@@ -86,7 +87,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 
 - [x] First-boot candidate manifest binds firmware baseline, temporary-boot authorization, boot plan, kernel source/config/Image, compiler evidence, DTB/DTBO and rootfs evidence.
 - [x] Schema v8 additionally binds exact executed A/B kernel build records, canonical recipe/environment and execution-binding digest.
-- [x] Rootfs canonicalization provenance can be bound to the strict reproducible rootfs artifact, source lock and signed repository snapshot.
+- [x] Rootfs canonicalization provenance is bound to the strict reproducible rootfs artifact, source lock and signed repository snapshot.
+- [x] Schema-v1 first-boot rootfs provenance evidence binds the exact first-boot manifest digest to the canonicalization policy/binding, both A/B audit evidence digests and both raw rootfs input hashes/sizes.
 - [ ] Promote host candidate evidence to a release-candidate manifest only after required physical gates exist.
 
 ## Phase B — Common Kali Phone Userspace
@@ -105,6 +107,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Device-independent canonicalization normalizes tar mtimes, machine identity/fake-clock state, generated password hash state and the regenerable ldconfig auxiliary cache before strict comparison.
 - [x] Canonicalization emits per-build non-release audit evidence and never substitutes for strict byte equality.
 - [x] Canonicalization binding ties both A/B audit records/raw hashes to exact source/snapshot and the strict accepted canonical artifact.
+- [x] Candidate-level provenance link prevents accepted canonicalization evidence from being substituted or detached from the first-boot manifest.
 - [ ] Produce and review the first byte-identical ARM64 rootfs artifact.
 - [ ] Generic first-boot provisioning independent of device name.
 - [ ] Phosh stage on the verified common rootfs.

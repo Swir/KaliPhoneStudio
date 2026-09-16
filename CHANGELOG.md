@@ -2,6 +2,25 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.37-dev — candidate-level rootfs canonicalization provenance
+
+- Added `FirstBootRootfsProvenanceEvidence`, a fail-closed host-side link from the exact schema-v8 first-boot manifest digest to the strict rootfs evidence and accepted canonicalization binding.
+- The link carries the reviewed canonicalization-policy digest, both A/B canonicalization evidence digests, both raw rootfs input SHA-256/size pairs, canonical artifact SHA-256/size, package-manifest evidence, source lock and signed repository snapshot.
+- Cross-checks reject candidate artifact/package/source/snapshot substitution, detached or mutated A/B transformation records, unknown policy digests, non-strict bindings and any host evidence attempting to claim Beta credit.
+- Added atomic non-overwriting evidence output and regression coverage across Python 3.11/3.12/3.13/3.14.
+- Tightened `BETA_RELEASE_GATE.md`: a future release candidate must keep canonicalization/raw-build provenance cryptographically attached to the exact first-boot manifest; this does not satisfy any physical-device gate.
+- Synchronized README, ROADMAP, BUILD_STATUS and package version. Project completion remains 52% because this is provenance hardening only.
+
+## 0.6.36-dev — actionable kernel Image divergence diagnostics and profile-hook status
+
+- Added bounded streaming kernel `Image` A/B diagnostics that report exact differing-byte count, contiguous differing ranges, first/last differing offsets and SHA-256/size without loading full Images into memory.
+- Diagnostics reject symlinks, same-file inputs and invalid bounds, cap reported ranges while preserving exact total counts, and always carry `beta_gate_credit=false` / `hardware_verified=false`.
+- Wired diagnostics into the real strict kernel workflow only after equality failure; strict byte-identical acceptance remains unchanged.
+- Recorded real authority run `35157574186` as a strict failure: identical final `.config` and equal Image size, but unequal Image SHA-256 values.
+- Reconciled the already-merged fail-closed profile-hook registry into README/ROADMAP/BUILD_STATUS and marked generic profile hooks implemented.
+- PR #37 passed the full branch test workflow and was merged as `58a0d24c830ce43dcfded984658279e55224d70f`; post-merge main tests run `35161227859` passed and a fresh real kernel authority run `35161227840` started.
+- Project completion remains 52%; no hardware or Beta gate is credited.
+
 ## 0.6.35-dev — restored application entrypoint and safe offline profile studio
 
 - Restored the missing `kaliphonestudio.app` module consumed by `main.py`; the normal desktop entrypoint is no longer an import-time dead end.

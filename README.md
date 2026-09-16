@@ -10,7 +10,7 @@
 
 Progress is deliberately weighted toward **real device bring-up, hardware validation, recovery and release readiness**. Host-side CI, reproducibility and safety infrastructure are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> Current development line: **0.6.36-dev**. The safe offline profile studio is in place and the core now has an explicit, fail-closed **profile hook registry** for profile-specific host build/verify/recovery stages without arbitrary shell/module auto-execution. The latest real kernel A/B authority run built both exact-source candidates successfully with the same final `.config` and Image size, but the Image bytes were different, so kernel reproducibility remains **unaccepted**. Bounded non-release byte-range diagnostics are now wired into the next strict run. The Kali ARM64 rootfs A/B authority run is still in progress. **No concrete kernel/rootfs artifact or AC2003 hardware feature receives Beta credit until its strict evidence and physical gate pass.**
+> Current development line: **0.6.37-dev**. The safe offline profile studio and fail-closed profile hook registry are in place. Candidate-level rootfs provenance now binds the exact schema-v8 first-boot manifest digest to the strict rootfs evidence, reviewed canonicalization policy/binding, both A/B canonicalization records and both raw rootfs input hashes/sizes, preventing transformation provenance from being detached during release preparation. A fresh real kernel A/B authority run is exercising the fixed build identity/path-remap policy plus bounded divergence diagnostics, while the real Kali ARM64 rootfs A/B authority run remains in progress. **No concrete kernel/rootfs artifact or AC2003 hardware feature receives Beta credit until strict artifact evidence and the physical gate pass.**
 
 ## Source of truth and architecture
 
@@ -77,7 +77,7 @@ Profile JSON inspection explicitly reports `hardware_verified=false` and `beta_g
 - Source-locked FDT/Android DT table references and structural DTB/DTBO verification bound to the approved boot plan.
 - First-boot candidate schema v8 binds exact firmware, boot plan, kernel execution/compiler provenance, DTB/DTBO and rootfs evidence without claiming hardware success.
 
-Real kernel authority run `35157574186` is a **strict failure**, not a partial pass. Both exact-source builds finished with identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `b1af9baccb4ddbcbfff4b82e433c2c87e70c660d2b3d4770a5d5954c05ac6fab` differed from Image B SHA-256 `e0e434f3ed7c063121913dcb160aec3b6ec193261cfe3cb90824d4958b08db23`. Kernel reproducibility therefore remains false. The next real run records exact differing byte counts, contiguous ranges and first/last offsets while preserving the same strict acceptance rule.
+Real kernel authority run `35157574186` was a **strict failure**, not a partial pass. Both exact-source builds finished with identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `b1af9baccb4ddbcbfff4b82e433c2c87e70c660d2b3d4770a5d5954c05ac6fab` differed from Image B SHA-256 `e0e434f3ed7c063121913dcb160aec3b6ec193261cfe3cb90824d4958b08db23`. Kernel reproducibility therefore remains false. Fresh authority run `35161227840` is now exercising the fixed reproducibility environment; if strict equality still fails, schema-v1 diagnostics record exact differing byte counts, contiguous ranges and first/last offsets without relaxing acceptance.
 
 ### Kali ARM64 rootfs
 
@@ -89,7 +89,8 @@ Real kernel authority run `35157574186` is a **strict failure**, not a partial p
 - Diagnostic schema v2 prioritizes content/type/add/remove/order before metadata and compares normalized package manifests.
 - A reviewed deterministic canonicalization stage removes only the volatile state proven by prior real A/B diagnostics before strict comparison.
 - Canonicalization provenance is bound end-to-end: both A/B audit records and raw-input hashes are tied to the exact signed repository snapshot, source lock and strict accepted canonical artifact.
-- `rootfs_reproducible_artifact` remains **false** until the current real post-fix A/B run passes strict equality and evidence review.
+- Candidate-level schema-v1 rootfs provenance evidence additionally binds the exact first-boot manifest digest to that canonicalization binding/policy, both transformation-evidence digests and both raw input hashes/sizes; all of it remains `beta_gate_credit=false` and `hardware_verified=false`.
+- `rootfs_reproducible_artifact` remains **false** until the current real post-fix A/B run `35158577624` passes strict equality and evidence review.
 
 ### Rescue / recovery foundations
 
@@ -123,7 +124,7 @@ The first public Beta remains **BLOCKED** until the exact physical AC2003 provid
 
 - real Fastboot identification and exact OxygenOS build/fingerprint;
 - matching stock `boot.img` from the exact OTA;
-- reviewed reproducible kernel + DTB/DTBO + rootfs candidate;
+- reviewed reproducible kernel + DTB/DTBO + rootfs candidate, including candidate-level rootfs canonicalization provenance binding;
 - successful physical temporary `fastboot boot`;
 - usable rescue/logging path;
 - kernel reaching Kali early userspace/rootfs;
