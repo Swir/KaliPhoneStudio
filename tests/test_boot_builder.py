@@ -3,7 +3,7 @@ import copy
 
 import pytest
 
-from kaliphonestudio.boot_builder import create_boot_build_plan
+from kaliphonestudio.boot_builder import create_boot_build_plan, verify_boot_build_plan, write_boot_build_plan
 from kaliphonestudio.boot_image import BootImageError
 from kaliphonestudio.profiles import DeviceProfile, get_profile
 from kaliphonestudio.provenance import StockBootProvenance
@@ -30,15 +30,19 @@ def inputs(tmp_path):
     return paths
 
 
-def test_plan_is_deterministic_and_profile_driven(tmp_path):
+def make_plan(tmp_path):
     p = inputs(tmp_path)
-    one = create_boot_build_plan(PROFILE, provenance(), kernel=p["kernel"], ramdisk=p["ramdisk"], dtb=p["dtb"], dtbo=p["dtbo"])
+    return create_boot_build_plan(PROFILE, provenance(), kernel=p["kernel"], ramdisk=p["ramdisk"], dtb=p["dtb"], dtbo=p["dtbo"]), p
+
+
+def test_plan_is_deterministic_and_profile_driven(tmp_path):
+    plan, p = make_plan(tmp_path)
     two = create_boot_build_plan(PROFILE, provenance(), kernel=p["kernel"], ramdisk=p["ramdisk"], dtb=p["dtb"], dtbo=p["dtbo"])
-    assert one == two
-    assert one.plan_sha256() == two.plan_sha256()
-    assert one.header_version == PROFILE.data["boot"]["header_version"]
-    assert one.page_size == PROFILE.data["boot"]["page_size"]
-    assert [x.name for x in one.inputs] == ["kernel", "ramdisk", "dtb", "dtbo"]
+    assert plan == two
+    assert plan.plan_sha256() == two.plan_sha256()
+    assert plan.header_version == PROFILE.data["boot"]["header_version"]
+    assert plan.page_size == PROFILE.data["boot"]["page_size"]
+    assert [x.name for x in plan.inputs] == ["kernel", "ramdisk", "dtb", "dtbo"]
 
 
 def test_plan_binds_stock_provenance_to_profile(tmp_path):
@@ -68,3 +72,41 @@ def test_plan_rejects_unexpected_dtb_for_other_profile(tmp_path):
     other = DeviceProfile(path=PROFILE.path, data=data)
     with pytest.raises(BootImageError, match="does not permit"):
         create_boot_build_plan(other, provenance(), kernel=p["kernel"], ramdisk=p["ramdisk"], dtb=p["dtb"], dtbo=p["dtbo"])
+
+
+def test_plan_revalidation_accepts_unchanged_inputs(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    verify_boot_build_plan(plan, PROFILE, provenance(), input_dir=tmp_path)
+
+
+def test_plan_revalidation_detects_input_drift(tmp_path):
+    plan, p = make_plan(tmp_path)
+    p["kernel"].write_bytes(b"tampered-kernel")
+    with pytest.raises(BootImageError, match="changed: kernel"):
+        verify_boot_build_plan(plan, PROFILE, provenance(), input_dir=tmp_path)
+
+
+def test_plan_revalidation_detects_stock_provenance_drift(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    changed = provenance()
+    object.__setattr__(changed, "boot_sha256", "e" * 64)
+    with pytest.raises(BootImageError, match="provenance changed"):
+        verify_boot_build_plan(plan, PROFILE, changed, input_dir=tmp_path)
+
+
+def test_plan_revalidation_detects_profile_policy_drift(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    data = copy.deepcopy(PROFILE.data)
+    data["boot"]["page_size"] *= 2
+    changed = DeviceProfile(path=PROFILE.path, data=data)
+    with pytest.raises(BootImageError, match="layout contract changed"):
+        verify_boot_build_plan(plan, changed, provenance(), input_dir=tmp_path)
+
+
+def test_plan_persistence_is_canonical_and_hash_bound(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    destination = tmp_path / "evidence" / "boot-plan.json"
+    digest = write_boot_build_plan(plan, destination)
+    assert destination.read_text(encoding="utf-8") == plan.canonical_json()
+    assert digest == plan.plan_sha256()
+    assert not destination.with_name("boot-plan.json.tmp").exists()
