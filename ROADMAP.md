@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**46% complete**
+**47% complete**
 
-`█████████░░░░░░░░░░░ 46%`
+`█████████░░░░░░░░░░░ 47%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -34,7 +34,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Windows amd64 pinned extractor builds reproducibly byte-for-byte with explicit MinGW/liblzma CGO wiring
 - [x] Review reproducibility evidence and authorize exact Linux/Windows platform SHA-256 artifacts
 - [x] Bind exact OTA identity evidence to extracted stock `boot.img` provenance record
-- [ ] Make every boot-image builder fully profile-driven
+- [x] Make boot-image build planning fully profile-driven and bind all inputs to exact stock provenance/SHA-256
+- [ ] Deterministic boot-v2 image assembly from the validated build plan
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
 

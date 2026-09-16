@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**46% complete**
+**47% complete**
 
-`█████████░░░░░░░░░░░ 46%`
+`█████████░░░░░░░░░░░ 47%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.14-dev** — exact OTA identity/integrity evidence can now be bound to extracted stock `boot.img` in an immutable provenance record. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.15-dev** — deterministic boot build plans now bind exact stock OTA/boot provenance to profile-declared kernel, ramdisk, DTB/DTBO layout and SHA-256 inputs. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -38,17 +38,15 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
 - Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
-- Immutable schema-v1 stock-boot provenance records bind `profile_id`, exact OTA SHA-256 and firmware metadata, payload SHA-256/metadata SHA-256, and extracted `boot.img` SHA-256/size/header version; mismatched payload size and evidence overwrite attempts fail closed.
+- Immutable schema-v1 stock-boot provenance records bind `profile_id`, exact OTA SHA-256 and firmware metadata, payload SHA-256/metadata SHA-256, and extracted `boot.img` SHA-256/size/header version.
+- Deterministic schema-v1 boot build plans bind that exact stock provenance to profile-driven header/page/compression/cmdline policy and SHA-256 of kernel, ramdisk, DTB and DTBO inputs; missing or unexpected profile-required components fail closed.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated reproducibility CI builds the exact pinned extractor source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
 - Linux amd64 and Windows amd64 reproducibility both pass in GitHub Actions run `35018283145`.
 - Authorized extractor SHA-256: Linux amd64 `a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0`; Windows amd64 `35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5`.
-- Extraction resolves authorization directly from the manifest: the requested host platform must exist and the local executable must match its exact SHA-256.
 - Kali ARM64 rootfs / Phosh and rescue-initramfs foundations.
 - Diagnostics and recovery-oriented boot-session evidence.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
-
-The extractor source remains pinned to `ssut/payload-dumper-go` commit `05fe59e21c9f271fba38398c7c040993313ecd04`; its `go.mod` requires Go 1.27.0, so the lock pins **Go 1.27.0** as well. Authorization is platform-specific and fail-closed: any other platform or any binary whose bytes differ from the committed hash is rejected.
 
 ## Safety model
 
