@@ -7,9 +7,11 @@ import pytest
 from kaliphonestudio.initramfs import (
     InitramfsError,
     build_reproducible_initramfs,
+    inspect_initramfs_artifact,
     verify_initramfs_artifact,
     write_initramfs_evidence,
 )
+from kaliphonestudio.lz4_legacy import LEGACY_MAGIC_BYTES, decompress_legacy
 
 
 def _stage(root: Path) -> Path:
@@ -53,7 +55,35 @@ def test_initramfs_is_byte_identical_across_independent_staging_trees(tmp_path):
     raw = gzip.decompress(first_out.read_bytes())
     assert raw.startswith(b"070701")
     assert b"TRAILER!!!\x00" in raw
+    inspection = inspect_initramfs_artifact(first, first_out)
+    assert inspection.entry_count == first.entry_count
+    assert inspection.entry_manifest_sha256 == first.entry_manifest_sha256
     verify_initramfs_artifact(first, first_out)
+
+
+def test_lz4_initramfs_is_byte_identical_and_structurally_verified(tmp_path):
+    first_stage = _stage(tmp_path / "stage-a")
+    second_stage = _stage(tmp_path / "stage-b")
+    os.utime(first_stage / "init", (10, 20))
+    os.utime(second_stage / "init", (30, 40))
+
+    first_out = tmp_path / "a.cpio.lz4"
+    second_out = tmp_path / "b.cpio.lz4"
+    first = build_reproducible_initramfs(first_stage, first_out, compression="lz4")
+    second = build_reproducible_initramfs(second_stage, second_out, compression="lz4")
+
+    assert first.compression == "lz4-legacy-literal-v1"
+    assert first.artifact_sha256 == second.artifact_sha256
+    assert first.entry_manifest_sha256 == second.entry_manifest_sha256
+    assert first_out.read_bytes() == second_out.read_bytes()
+    assert first_out.read_bytes().startswith(LEGACY_MAGIC_BYTES)
+    raw, stream = decompress_legacy(first_out.read_bytes())
+    assert stream.block_count >= 1
+    assert raw.startswith(b"070701")
+    assert b"TRAILER!!!\x00" in raw
+    inspection = inspect_initramfs_artifact(first, first_out)
+    assert inspection.compression == "lz4-legacy-literal-v1"
+    assert inspection.init_sha256 == first.init_sha256
 
 
 def test_initramfs_evidence_is_canonical_and_detects_post_build_drift(tmp_path):
@@ -90,6 +120,16 @@ def test_initramfs_rejects_setuid_or_setgid_content(tmp_path):
 
     with pytest.raises(InitramfsError, match="setuid/setgid"):
         build_reproducible_initramfs(stage, tmp_path / "bad.cpio.gz")
+
+
+def test_initramfs_rejects_world_writable_regular_file(tmp_path):
+    stage = _stage(tmp_path / "stage")
+    unsafe = stage / "etc" / "unsafe.conf"
+    unsafe.write_text("unsafe=yes\n", encoding="utf-8")
+    unsafe.chmod(0o666)
+
+    with pytest.raises(InitramfsError, match="world-writable"):
+        build_reproducible_initramfs(stage, tmp_path / "bad.cpio.lz4", compression="lz4")
 
 
 def test_initramfs_refuses_existing_output(tmp_path):
