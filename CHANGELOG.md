@@ -2,6 +2,28 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.35-dev — restored application entrypoint and safe offline profile studio
+
+- Restored the missing `kaliphonestudio.app` module consumed by `main.py`; the normal desktop entrypoint is no longer an import-time dead end.
+- Added a device-independent offline profile catalog backed by the same schema-validated `devices/<vendor>/<codename>/profile.json` registry used by the core.
+- Added a PySide6 offline profile selector that exposes device identity, boot/kernel policy, pinned upstream sources, host/hardware test contracts and recovery notes without invoking `adb`, `fastboot` or any write/flash path.
+- Added CLI/JSON profile inspection with `--list-profiles`, `--profile-id` and `--json`; machine-readable profile inspection explicitly reports `hardware_verified=false` and `beta_gate_credit=false`.
+- Kept PySide6 lazy-loaded so CLI/imports and the minimal Python CI matrix remain usable when Qt is not installed.
+- Added regression coverage for profile discovery, deterministic JSON output, fail-closed unknown profiles and Qt-free application import.
+- The first PR run correctly exposed a repository-contract mismatch between `__version__` and `BUILD_STATUS.json` (275 tests passed, one failed); the mismatch was fixed in the same iteration and the final PR #34 Python 3.11/3.12/3.13/3.14 matrix passed before merge.
+- PR #34 was merged as `17b3d6ef64c3efcf9e90f49caa54cc8de839b237`; post-merge main test run `35159240894` also passed.
+- Project completion remains 52%; this host-side usability milestone grants no physical AC2003/Beta credit.
+
+## 0.6.34-dev — rootfs canonicalization provenance binding
+
+- Closed the provenance gap between reviewed rootfs canonicalization and strict reproducibility evidence.
+- Both independent A/B canonicalization audit records are now bound to their raw input SHA-256/size, the exact rootfs source lock, the GPG-verified repository snapshot and the strict accepted canonical artifact.
+- Added an explicit versioned canonicalization-policy digest so future policy changes cannot silently inherit older evidence.
+- Added fail-closed schema parsing/accounting and cross-record consistency checks for canonicalization evidence.
+- Wired the binding into the real `rootfs-repro` workflow only after strict byte/package equality succeeds; the binding is uploaded alongside accepted non-release rootfs evidence.
+- Strict acceptance is unchanged: canonicalization audit/binding evidence can never substitute for byte-identical A/B output or matching package evidence and always grants no hardware/Beta credit.
+- Merged as `763763b886a9d272d82db115e1db8d9c49e4ae04` via PR #33.
+
 ## 0.6.33-dev — rootfs volatile-state canonicalization and kernel path remapping
 
 - Reviewed the latest real Kali ARM64 A/B failure instead of guessing: both builds had identical normalized 269-package manifests, no type/order/add/remove drift, exactly five changed payload files and 4817 metadata differences, all mtime-only.
