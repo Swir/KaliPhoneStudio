@@ -6,14 +6,17 @@ on:
       - "tools/rootfs-source-lock.json"
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_canonical.py"
+      - "kaliphonestudio/rootfs_canonical_binding.py"
       - "kaliphonestudio/rootfs_repro_diagnostics.py"
       - "scripts/capture_kali_snapshot.py"
       - "scripts/verify_live_kali_snapshot.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
+      - "scripts/bind_rootfs_canonicalization.py"
       - "scripts/diagnose_rootfs_repro.py"
       - "tests/test_rootfs_builder.py"
       - "tests/test_rootfs_canonical.py"
+      - "tests/test_rootfs_canonical_binding.py"
       - "tests/test_rootfs_repro_diagnostics.py"
       - "tests/test_rootfs_repro_diagnostics_v2.py"
       - ".github/workflows/rootfs-repro.yml"
@@ -23,14 +26,17 @@ on:
       - "tools/rootfs-source-lock.json"
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_canonical.py"
+      - "kaliphonestudio/rootfs_canonical_binding.py"
       - "kaliphonestudio/rootfs_repro_diagnostics.py"
       - "scripts/capture_kali_snapshot.py"
       - "scripts/verify_live_kali_snapshot.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
+      - "scripts/bind_rootfs_canonicalization.py"
       - "scripts/diagnose_rootfs_repro.py"
       - "tests/test_rootfs_builder.py"
       - "tests/test_rootfs_canonical.py"
+      - "tests/test_rootfs_canonical_binding.py"
       - "tests/test_rootfs_repro_diagnostics.py"
       - "tests/test_rootfs_repro_diagnostics_v2.py"
       - ".github/workflows/rootfs-repro.yml"
@@ -105,11 +111,13 @@ jobs:
           python -m py_compile
           kaliphonestudio/rootfs.py
           kaliphonestudio/rootfs_canonical.py
+          kaliphonestudio/rootfs_canonical_binding.py
           kaliphonestudio/rootfs_repro_diagnostics.py
           scripts/capture_kali_snapshot.py
           scripts/verify_live_kali_snapshot.py
           scripts/run_locked_rootfs_build.py
           scripts/verify_rootfs_pair.py
+          scripts/bind_rootfs_canonicalization.py
           scripts/diagnose_rootfs_repro.py
 
       - name: Run rootfs contract tests
@@ -120,6 +128,7 @@ jobs:
           tests/test_rootfs.py
           tests/test_rootfs_builder.py
           tests/test_rootfs_canonical.py
+          tests/test_rootfs_canonical_binding.py
           tests/test_rootfs_repro_diagnostics.py
           tests/test_rootfs_repro_diagnostics_v2.py
           tests/test_candidate.py
@@ -264,6 +273,20 @@ jobs:
           fi
           exit 0
 
+      - name: Bind canonicalization provenance to the accepted strict rootfs
+        if: steps.strict_verify.outputs.exit_code == '0'
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/bind_rootfs_canonicalization.py \
+            --lock tools/rootfs-source-lock.json \
+            --snapshot evidence/repository-snapshot.json \
+            --rootfs-evidence evidence/rootfs-artifact.json \
+            --artifact artifacts/rootfs-a.tar.xz \
+            --canonical-a evidence/rootfs-canonical-a.json \
+            --canonical-b evidence/rootfs-canonical-b.json \
+            --out evidence/rootfs-canonicalization-binding.json
+
       - name: Diagnose strict rootfs divergence without relaxing acceptance
         if: steps.strict_verify.outputs.exit_code != '0'
         env:
@@ -304,6 +327,7 @@ jobs:
             evidence/repository-snapshot.json
             evidence/rootfs-canonical-a.json
             evidence/rootfs-canonical-b.json
+            evidence/rootfs-canonicalization-binding.json
             evidence/rootfs-artifact.json
             evidence/rootfs.sha256
             evidence/packages.tsv
