@@ -92,6 +92,8 @@ def _validate_locale(value: object) -> str:
 def _validate_timezone(value: object) -> str:
     if not isinstance(value, str) or not value or len(value) > 160:
         raise RootfsError("first-boot timezone has invalid syntax")
+    if "//" in value or value.endswith("/"):
+        raise RootfsError("first-boot timezone must use a canonical zoneinfo path")
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise RootfsError("first-boot timezone must be a safe relative zoneinfo name")
