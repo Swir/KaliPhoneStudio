@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.24-dev — source-locked DTB/DTBO structural evidence and first-boot binding
+
+- Added a device-independent `kaliphonestudio/device_tree.py` evidence layer for flattened DTB bundles and Android DT table images; no AC2003-specific parser logic was introduced into the common core.
+- DTB verification now checks FDT magic/version, total size, reservation/structure/string block bounds and alignment, safe zero padding and concatenated-tree structure before accepting artifact SHA-256/size/tree-count evidence.
+- DTBO verification now checks the Android DT table header/entry layout, version/page-size contract, bounded non-overlapping entry ranges, every embedded FDT, zero-only entry/trailing padding and the selected profile's DTBO partition limit.
+- Pinned exact upstream format references in `tools/device-tree-format-locks.json`: AOSP `platform/external/dtc@295e585a34339f6280e561278288e4490d9390f7` and `platform/system/libufdt@1ebea487f96b2a4d1a4e1a28ea338591c36a4f8b`.
+- Added dedicated `device-tree-format-lock` CI to fetch those exact commits and verify the authoritative FDT/DT-table definitions before focused device-tree/candidate tests run.
+- Added `DeviceTreeCandidateEvidence`, requiring exact profile and `BootBuildPlan` identity plus byte-for-byte SHA-256/size equality for profile-required DTB and DTBO inputs; post-plan artifact drift therefore fails closed.
+- Upgraded first-boot candidate manifests to schema v5 so the device-tree format-lock digest, structural-evidence digest, exact DTB/DTBO hashes/sizes and tree/entry counts travel with exact firmware, boot, kernel and rootfs evidence.
+- Added `scripts/verify_device_tree_candidate.py` for the same offline fail-closed verification without invoking ADB/Fastboot or writing a phone.
+- Added focused negative coverage for malformed FDT/DT table data, invalid page size, source-lock contract, profile/plan mismatch, post-plan DTB drift, first-boot plan-digest drift and DTBO substitution. The full Python 3.11/3.12/3.13/3.14 matrix passed after correcting the first deliberately exposed fixture-alignment regression.
+- Advanced the conservative completion indicator to 52%. This is a host-side evidence milestone only: final physical AC2003 kernel/DTB/DTBO, temporary boot, early userspace, storage/charging, rescue and recovery remain unverified, so Beta stays blocked.
+
 ## 0.6.23-dev — exact profile-driven kernel provenance and first-boot binding
 
 - Added a device-independent kernel evidence layer with canonical `KernelBuildPlan`, exact-checkout, generated-config and ARM64 `Image` evidence contracts. Host-side kernel evidence does not imply hardware success.

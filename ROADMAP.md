@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**51% complete**
+**52% complete**
 
-`██████████▏░░░░░░░░░ 51%`
+`██████████▍░░░░░░░░░ 52%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -49,6 +49,10 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Device-independent kernel evidence model for exact checkout, final `.config` and ARM64 `Image`
 - [x] Bind kernel source/config/Image evidence to the exact kernel SHA-256/size in the approved boot build plan
 - [x] Carry kernel provenance and exact Image evidence into the canonical first-boot candidate manifest
+- [x] Pin exact upstream FDT and Android DT table format references
+- [x] Device-independent structural DTB/DTBO validation with bounded parsing, partition limits and exact boot-plan SHA-256/size binding
+- [x] Carry DTB/DTBO evidence and format-lock digest into schema-v5 first-boot candidate manifests
+- [x] Offline profile-driven DTB/DTBO evidence verifier that never accesses a phone
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
 
@@ -60,7 +64,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Verify Kali `InRelease` with `gpgv` and capture exact ARM64 package-index paths/sizes/SHA-256 values
 - [x] Extract a normalized installed package/version/architecture manifest directly from each rootfs archive
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
-- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact kernel evidence and package manifest into a canonical first-boot candidate manifest contract
+- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact kernel/device-tree evidence and package manifest into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
 - [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [ ] Obtain the first green real double-build run and review/archive its evidence
@@ -101,6 +105,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Host-side AC2003 Fastboot baseline contract prepared (`product`, `serialno`, A/B slot/count, lock/security, bootloader/baseband); no physical transcript claimed
 - [x] Public LineageOS `android_kernel_oneplus_sm7250` bring-up baseline pinned to exact commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` and kernel `4.19.300`
 - [x] Host-side exact kernel checkout/config/Image evidence and boot-plan binding implemented
+- [x] Host-side DTB/DTBO structural evidence, exact boot-plan binding and partition-bound checks implemented
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA

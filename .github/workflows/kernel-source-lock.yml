@@ -7,11 +7,15 @@ on:
       - "kaliphonestudio/profiles.py"
       - "kaliphonestudio/kernel_contract.py"
       - "kaliphonestudio/kernel_bundle.py"
+      - "kaliphonestudio/device_tree.py"
       - "kaliphonestudio/candidate.py"
+      - "tools/device-tree-format-locks.json"
       - "scripts/verify_kernel_candidate.py"
+      - "scripts/verify_device_tree_candidate.py"
       - "tests/test_profile_schema.py"
       - "tests/test_kernel_contract.py"
       - "tests/test_kernel_bundle.py"
+      - "tests/test_device_tree.py"
       - "tests/test_candidate.py"
       - ".github/workflows/kernel-source-lock.yml"
   pull_request:
@@ -20,11 +24,15 @@ on:
       - "kaliphonestudio/profiles.py"
       - "kaliphonestudio/kernel_contract.py"
       - "kaliphonestudio/kernel_bundle.py"
+      - "kaliphonestudio/device_tree.py"
       - "kaliphonestudio/candidate.py"
+      - "tools/device-tree-format-locks.json"
       - "scripts/verify_kernel_candidate.py"
+      - "scripts/verify_device_tree_candidate.py"
       - "tests/test_profile_schema.py"
       - "tests/test_kernel_contract.py"
       - "tests/test_kernel_bundle.py"
+      - "tests/test_device_tree.py"
       - "tests/test_candidate.py"
       - ".github/workflows/kernel-source-lock.yml"
   workflow_dispatch:
@@ -95,6 +103,7 @@ jobs:
           git -C upstream-kernel fetch --quiet --depth=1 --filter=blob:none origin "$SOURCE_COMMIT"
           test "$(git -C upstream-kernel rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
           git -C upstream-kernel checkout --quiet --detach "$SOURCE_COMMIT"
+          test -d upstream-kernel/.git
           test "$(git -C upstream-kernel rev-parse HEAD)" = "$SOURCE_COMMIT"
 
       - name: Verify source version and profile-selected config material
@@ -125,3 +134,74 @@ jobs:
           tests/test_kernel_contract.py
           tests/test_kernel_bundle.py
           tests/test_candidate.py
+
+  verify-device-tree-format-locks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
+      - name: Load exact DTB and DTBO format locks
+        id: dtlocks
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.device_tree import load_device_tree_format_locks
+
+          data, digest = load_device_tree_format_locks(Path("tools/device-tree-format-locks.json"))
+          refs = {item["kind"]: item for item in data["references"]}
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              for kind in ("dtb", "dtbo"):
+                  print(f"{kind}_url={refs[kind]['url']}", file=out)
+                  print(f"{kind}_commit={refs[kind]['commit']}", file=out)
+                  print(f"{kind}_path={refs[kind]['path']}", file=out)
+          print(f"device-tree format lock sha256={digest}")
+          PY
+
+      - name: Fetch exact FDT format reference
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.dtlocks.outputs.dtb_url }}
+          SOURCE_COMMIT: ${{ steps.dtlocks.outputs.dtb_commit }}
+          SOURCE_PATH: ${{ steps.dtlocks.outputs.dtb_path }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream-dtb
+          git -C upstream-dtb remote add origin "$SOURCE_URL"
+          git -C upstream-dtb fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream-dtb rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream-dtb checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C upstream-dtb rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test -f "upstream-dtb/$SOURCE_PATH"
+          grep -q 'FDT_MAGIC' "upstream-dtb/$SOURCE_PATH"
+
+      - name: Fetch exact Android DT table reference
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.dtlocks.outputs.dtbo_url }}
+          SOURCE_COMMIT: ${{ steps.dtlocks.outputs.dtbo_commit }}
+          SOURCE_PATH: ${{ steps.dtlocks.outputs.dtbo_path }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream-dtbo
+          git -C upstream-dtbo remote add origin "$SOURCE_URL"
+          git -C upstream-dtbo fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream-dtbo rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream-dtbo checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C upstream-dtbo rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test -f "upstream-dtbo/$SOURCE_PATH"
+          grep -q 'DT_TABLE_MAGIC' "upstream-dtbo/$SOURCE_PATH"
+
+      - name: Run focused device-tree and first-boot binding tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_device_tree.py tests/test_candidate.py

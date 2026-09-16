@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**51% complete**
+**52% complete**
 
-`██████████▏░░░░░░░░░ 51%`
+`██████████▍░░░░░░░░░ 52%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.23-dev** — the host boot chain, exact-firmware authorization and first profile-driven kernel evidence chain are in place. `oneplus/avicii` now pins an exact public kernel baseline and a strict kernel build contract; KaliPhoneStudio can bind the exact source commit, expected kernel version, selected defconfig/fragments, generated final `.config`, ARM64 `Image` hash/size and the exact kernel bytes carried by the approved boot build plan into first-boot candidate evidence. This is **host-side provenance and preflight only**: it does not claim that the kernel boots on a physical AC2003. The real ARM64 rootfs double-build is still not counted reproducible until its active workflow finishes successfully and its evidence is reviewed. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.24-dev** — the host boot chain, exact-firmware authorization, profile-driven kernel evidence and structural DTB/DTBO evidence chains are in place. Device-tree verification is device-independent: profile policy decides whether in-boot DTB and separate DTBO are required, while the common core validates FDT/Android DT table structure, partition bounds and exact SHA-256/size equality with the approved boot plan. First-boot candidate schema v5 now binds those artifacts together with exact kernel, boot and rootfs evidence. This is **host-side provenance and preflight only**: it does not claim that the final kernel/DTB/DTBO candidate boots on a physical AC2003. The real ARM64 rootfs double-build is still not counted reproducible until its active workflow finishes successfully and its evidence is reviewed. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ A schema-v2 profile must provide unambiguous identity, a destructive-action conf
 |---|---|---|---|
 | OnePlus Nord AC2003 | `oneplus/avicii` | Bring-up; physical first boot pending | **Not released** |
 
-The avicii engineering board baseline is pinned to LineageOS `android_device_oneplus_avicii` commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`. That source records Android boot header v2, 4096-byte pages, in-boot DTB, separate DTBO and LZ4 ramdisk policy. Its kernel dependency is now independently pinned in the device profile to LineageOS `android_kernel_oneplus_sm7250` commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`) as a reviewed bring-up baseline. These are source references, **not** proof that Kali hardware functions work and not yet the final hardware-verified first-boot kernel.
+The avicii engineering board baseline is pinned to LineageOS `android_device_oneplus_avicii` commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`. That source records Android boot header v2, 4096-byte pages, in-boot DTB, separate DTBO and LZ4 ramdisk policy. Its kernel dependency is independently pinned in the device profile to LineageOS `android_kernel_oneplus_sm7250` commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`) as a reviewed bring-up baseline. DTB parsing semantics are pinned to AOSP `platform/external/dtc` commit `295e585a34339f6280e561278288e4490d9390f7`; Android DT table semantics are pinned to AOSP `platform/system/libufdt` commit `1ebea487f96b2a4d1a4e1a28ea338591c36a4f8b`. These are source references, **not** proof that Kali hardware functions work and not yet the final hardware-verified first-boot kernel/device-tree set.
 
 ## Implemented host-side foundations
 
@@ -55,7 +55,11 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Generated final `.config` evidence must satisfy every profile-required `CONFIG_*` state and is bound by SHA-256/size.
 - ARM64 kernel preflight verifies Linux `Image` magic, SHA-256 and size, then re-hashes the image when source/config/image evidence is bundled to prevent post-verification drift.
 - `KernelCandidateEvidence` binds plan, source commit/version, config evidence and exact `Image`; the first-boot candidate additionally requires that the kernel SHA-256/size equal the kernel input in the approved `BootBuildPlan`.
-- First-boot candidate manifest schema v4 carries Fastboot baseline/exact firmware identity, temporary-boot authorization, boot-plan digest, exact kernel evidence and rootfs/package evidence in one canonical host-side contract.
+- `tools/device-tree-format-locks.json` pins exact upstream FDT and Android DT table format references; the dedicated CI fetches those exact commits and verifies the expected authoritative format definitions are still present.
+- Device-independent DTB verification parses big-endian FDT v17 headers, validates block offsets/ranges/alignment, supports safe zero-padded concatenated DTB bundles and emits canonical SHA-256/size/tree-count evidence.
+- Device-independent DTBO verification parses the Android DT table header/entries, validates page/table metadata, non-overlapping payload ranges, every embedded FDT and zero-only padding, then enforces the selected profile's DTBO partition limit.
+- `DeviceTreeCandidateEvidence` rejects profile/plan drift and requires exact DTB/DTBO SHA-256 and size equality with the approved `BootBuildPlan`; `scripts/verify_device_tree_candidate.py` provides the same fail-closed flow offline without touching a phone.
+- First-boot candidate manifest schema v5 carries Fastboot baseline/exact firmware identity, temporary-boot authorization, boot-plan digest, exact kernel evidence, exact structural DTB/DTBO evidence and rootfs/package evidence in one canonical host-side contract.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated extractor reproducibility CI builds the exact pinned source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
 - Linux amd64 and Windows amd64 extractor reproducibility passed in GitHub Actions run `35018283145`.
@@ -80,7 +84,7 @@ The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio root
 
 ## Safety model
 
-KaliPhoneStudio prefers **temporary boot first** and **inactive slot second**. It does not bypass physical bootloader-unlock confirmation. Persistent writes require an identified supported profile, verified identity, explicit confirmation and validated artifacts. Before temporary-boot authorization, the device serial and exact captured firmware baseline must agree with the stock OTA provenance used to build the image. Kernel evidence must additionally match the exact kernel carried by the approved boot plan. No hardware feature is marked working without evidence from that exact phone/firmware baseline.
+KaliPhoneStudio prefers **temporary boot first** and **inactive slot second**. It does not bypass physical bootloader-unlock confirmation. Persistent writes require an identified supported profile, verified identity, explicit confirmation and validated artifacts. Before temporary-boot authorization, the device serial and exact captured firmware baseline must agree with the stock OTA provenance used to build the image. Kernel and device-tree evidence must additionally match the exact kernel/DTB/DTBO bytes carried by the approved boot plan. No hardware feature is marked working without evidence from that exact phone/firmware baseline.
 
 ## AC2003 Beta blockers
 
@@ -106,6 +110,12 @@ The read-only Fastboot baseline workflow is documented in `docs/FASTBOOT_BASELIN
 
 ```powershell
 python scripts/import_fastboot_baseline.py --profile-id oneplus/avicii --transcript fastboot-getvar-all.txt --firmware-build "EXACT_BUILD" --firmware-fingerprint "EXACT_FINGERPRINT" --out evidence/fastboot-baseline.json
+```
+
+DTB/DTBO validation is also offline and profile-driven. It requires the already approved canonical boot-plan JSON and produces separate canonical evidence without invoking Fastboot:
+
+```powershell
+python scripts/verify_device_tree_candidate.py --profile-id oneplus/avicii --boot-plan build/boot-plan.json --dtb build/dtb --dtbo build/dtbo.img --out evidence/device-tree.json
 ```
 
 See `ROADMAP.md`, `BUILD_STATUS.json`, `CHANGELOG.md` and `BETA_RELEASE_GATE.md` for the source-of-truth development state.

@@ -10,6 +10,7 @@ from kaliphonestudio.candidate import (
     create_first_boot_candidate_manifest,
     write_first_boot_candidate_manifest,
 )
+from kaliphonestudio.device_tree import DeviceTreeCandidateEvidence
 from kaliphonestudio.kernel_bundle import KernelCandidateEvidence
 from kaliphonestudio.rootfs import (
     RootfsError,
@@ -98,6 +99,27 @@ def boot_plan(kernel=None):
     )
 
 
+def device_tree_evidence(plan, **changes):
+    dtb = next(item for item in plan.inputs if item.name == "dtb")
+    dtbo = next(item for item in plan.inputs if item.name == "dtbo")
+    values = {
+        "schema_version": 1,
+        "profile_id": plan.profile_id,
+        "boot_plan_sha256": plan.plan_sha256(),
+        "format_lock_sha256": "e" * 64,
+        "dtb_evidence_sha256": "f" * 64,
+        "dtb_sha256": dtb.sha256,
+        "dtb_size": dtb.size,
+        "dtb_tree_count": 2,
+        "dtbo_evidence_sha256": "1" * 64,
+        "dtbo_sha256": dtbo.sha256,
+        "dtbo_size": dtbo.size,
+        "dtbo_entry_count": 3,
+    }
+    values.update(changes)
+    return DeviceTreeCandidateEvidence(**values)
+
+
 def boot_authorization(plan=None, **changes):
     plan = plan or boot_plan()
     values = {
@@ -119,15 +141,28 @@ def boot_authorization(plan=None, **changes):
     return TemporaryBootAuthorization(**values)
 
 
-def test_candidate_binds_boot_kernel_firmware_and_rootfs_evidence(tmp_path):
+def make_candidate(tmp_path, *, kernel=None, plan=None, boot=None, trees=None):
     lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
-    kernel = kernel_evidence()
-    plan = boot_plan(kernel)
-    boot = boot_authorization(plan)
+    kernel = kernel or kernel_evidence()
+    plan = plan or boot_plan(kernel)
+    boot = boot or boot_authorization(plan)
+    trees = trees or device_tree_evidence(plan)
     manifest = create_first_boot_candidate_manifest(
-        boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+        boot,
+        plan,
+        kernel,
+        lock,
+        snapshot,
+        evidence,
+        device_tree_evidence=trees,
+        rootfs_artifact=rootfs,
     )
-    assert manifest.schema_version == 4
+    return manifest, lock, snapshot, evidence, rootfs, kernel, plan, boot, trees
+
+
+def test_candidate_binds_boot_kernel_device_tree_firmware_and_rootfs_evidence(tmp_path):
+    manifest, _lock, _snapshot, evidence, _rootfs, kernel, plan, boot, trees = make_candidate(tmp_path)
+    assert manifest.schema_version == 5
     assert manifest.profile_id == "oneplus/avicii"
     assert manifest.device_serial == "SERIAL123"
     assert manifest.fastboot_baseline_sha256 == "0" * 64
@@ -139,6 +174,11 @@ def test_candidate_binds_boot_kernel_firmware_and_rootfs_evidence(tmp_path):
     assert manifest.kernel_source_commit == kernel.source_commit
     assert manifest.kernel_config_sha256 == kernel.config_sha256
     assert manifest.kernel_image_sha256 == kernel.image_sha256
+    assert manifest.device_tree_evidence_sha256 == trees.evidence_sha256()
+    assert manifest.dtb_sha256 == "c" * 64
+    assert manifest.dtbo_sha256 == "d" * 64
+    assert manifest.dtb_tree_count == 2
+    assert manifest.dtbo_entry_count == 3
     assert manifest.rootfs_evidence_sha256 == evidence.evidence_sha256()
     assert manifest.rootfs_package_manifest_sha256 == evidence.package_manifest_sha256
     assert manifest.rootfs_package_count == 1
@@ -155,7 +195,8 @@ def test_candidate_rejects_unverified_boot_authorization(tmp_path):
     boot = boot_authorization(plan, structurally_verified=False)
     with pytest.raises(RootfsError, match="fully verified boot authorization"):
         create_first_boot_candidate_manifest(
-            boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+            boot, plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=device_tree_evidence(plan), rootfs_artifact=rootfs
         )
 
 
@@ -166,7 +207,8 @@ def test_candidate_rejects_missing_device_binding(tmp_path):
     boot = boot_authorization(plan, device_serial="")
     with pytest.raises(RootfsError, match="verified device binding"):
         create_first_boot_candidate_manifest(
-            boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+            boot, plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=device_tree_evidence(plan), rootfs_artifact=rootfs
         )
 
 
@@ -177,13 +219,15 @@ def test_candidate_rejects_malformed_boot_or_baseline_hash(tmp_path):
     boot = boot_authorization(plan, image_sha256="not-a-hash")
     with pytest.raises(RootfsError, match="image SHA-256"):
         create_first_boot_candidate_manifest(
-            boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+            boot, plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=device_tree_evidence(plan), rootfs_artifact=rootfs
         )
 
     boot = boot_authorization(plan, fastboot_baseline_sha256="not-a-hash")
     with pytest.raises(RootfsError, match="fastboot baseline SHA-256"):
         create_first_boot_candidate_manifest(
-            boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+            boot, plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=device_tree_evidence(plan), rootfs_artifact=rootfs
         )
 
 
@@ -199,6 +243,7 @@ def test_candidate_rejects_missing_firmware_identity(tmp_path):
             lock,
             snapshot,
             evidence,
+            device_tree_evidence=device_tree_evidence(plan),
             rootfs_artifact=rootfs,
         )
 
@@ -210,7 +255,8 @@ def test_candidate_rejects_kernel_not_bound_to_boot_plan(tmp_path):
     boot = boot_authorization(plan)
     with pytest.raises(RootfsError, match="does not match the kernel embedded"):
         create_first_boot_candidate_manifest(
-            boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+            boot, plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=device_tree_evidence(plan), rootfs_artifact=rootfs
         )
 
 
@@ -221,7 +267,32 @@ def test_candidate_rejects_boot_plan_not_bound_to_authorization(tmp_path):
     boot = boot_authorization(plan, plan_sha256="f" * 64)
     with pytest.raises(RootfsError, match="plan digest"):
         create_first_boot_candidate_manifest(
-            boot, plan, kernel, lock, snapshot, evidence, rootfs_artifact=rootfs
+            boot, plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=device_tree_evidence(plan), rootfs_artifact=rootfs
+        )
+
+
+def test_candidate_rejects_device_tree_plan_digest_drift(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    kernel = kernel_evidence()
+    plan = boot_plan(kernel)
+    trees = device_tree_evidence(plan, boot_plan_sha256="0" * 64)
+    with pytest.raises(RootfsError, match="device-tree evidence does not match boot build plan digest"):
+        create_first_boot_candidate_manifest(
+            boot_authorization(plan), plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=trees, rootfs_artifact=rootfs
+        )
+
+
+def test_candidate_rejects_dtbo_not_bound_to_boot_plan(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    kernel = kernel_evidence()
+    plan = boot_plan(kernel)
+    trees = device_tree_evidence(plan, dtbo_sha256="0" * 64)
+    with pytest.raises(RootfsError, match="DTBO evidence does not match"):
+        create_first_boot_candidate_manifest(
+            boot_authorization(plan), plan, kernel, lock, snapshot, evidence,
+            device_tree_evidence=trees, rootfs_artifact=rootfs
         )
 
 
@@ -238,5 +309,6 @@ def test_candidate_rejects_rootfs_drift_after_reproducibility_proof(tmp_path):
             lock,
             snapshot,
             evidence,
+            device_tree_evidence=device_tree_evidence(plan),
             rootfs_artifact=rootfs,
         )
