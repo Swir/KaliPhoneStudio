@@ -52,7 +52,9 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Pin the Android Clang kernel compiler to an immutable AOSP commit/subtree/object set and verify it against live Gitiles metadata
 - [x] Bind the kernel plan to the exact checkout build configuration selecting the locked Clang revision; reject toolchain/path drift fail-closed
 - [x] Define canonical compiler candidate evidence that requires immutable source evidence, exact kernel-plan/build-config selection and verified materialized clang bytes/banner to agree on one toolchain lock
-- [x] Carry compiler source/selection/materialized-byte evidence together with kernel provenance/reproducibility into schema-v7 first-boot candidate manifests
+- [x] Add a device-independent source-locked kernel execution runner with canonical build recipe and deterministic reproducibility environment
+- [x] Bind strict kernel reproducibility evidence to the exact two executed build-run records and reject source/toolchain/recipe/environment/artifact drift
+- [x] Carry exact executed-kernel provenance together with compiler/reproducibility evidence into schema-v8 first-boot candidate manifests
 - [x] Pin exact upstream FDT and Android DT table format references
 - [x] Device-independent structural DTB/DTBO validation with bounded parsing, partition limits and exact boot-plan SHA-256/size binding
 - [x] Carry DTB/DTBO evidence and format-lock digest into first-boot candidate manifests
@@ -68,11 +70,12 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Verify Kali `InRelease` with `gpgv` and capture exact ARM64 package-index paths/sizes/SHA-256 values
 - [x] Extract a normalized installed package/version/architecture manifest directly from each rootfs archive
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
-- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact kernel/compiler/device-tree evidence and package manifest into a canonical first-boot candidate manifest contract
+- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact executed-kernel/compiler/device-tree evidence and package manifest into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
 - [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [x] Add bounded canonical rootfs divergence diagnostics for strict CI failures; compare member sets/order/metadata/content hashes without extraction, mark the report `beta_gate_credit=false`, and keep the strict job failed
-- [ ] Obtain the first green real double-build run and review/archive its evidence (latest completed strict run failed; the next diagnostics-enabled run is still executing)
+- [x] Bind both rootfs builds to one GPG-verified rolling-repository start state and execute A/B concurrently to remove signed-snapshot race ambiguity
+- [ ] Obtain the first green real double-build run and review/archive its evidence (run `35142328320` is still executing the concurrent A/B build; no credit yet)
 - [ ] Mark a concrete ARM64 rootfs artifact reproducible only after that run passes
 - [ ] Promote first-boot evidence into a release-candidate manifest only after hardware gates exist
 - [ ] Generic first-boot provisioning independent of device name
@@ -113,9 +116,10 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Host-side kernel reproducibility evidence contract implemented; no concrete final hardware kernel is credited yet
 - [x] AOSP Android Clang `r416183b` source identity locked to exact commit/tree/blob metadata and bound to the kernel checkout's declared compiler path
 - [x] Host-side compiler evidence bundle requires source lock, build-config selection and materialized clang SHA-256/banner before a first-boot candidate can be emitted
+- [x] Host-side executed-build evidence binds both kernel A/B runs to one plan/source/toolchain/recipe/environment before strict reproducibility can reach a first-boot candidate
 - [x] Host-side DTB/DTBO structural evidence, exact boot-plan binding and partition-bound checks implemented
-- [ ] Materialize and review the exact locked compiler payload used for a concrete kernel build
-- [ ] Produce and review a concrete double-build kernel artifact using that locked compiler
+- [ ] Review the concrete locked compiler payload and exact A/B outputs from real run `35146536390`
+- [ ] Accept a concrete double-build kernel artifact only after run `35146536390` passes strict byte equality and its evidence is reviewed
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA
