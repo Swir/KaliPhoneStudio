@@ -84,7 +84,13 @@ def preflight_rootfs_host(
     binfmt_path: Path = Path("/proc/sys/fs/binfmt_misc/qemu-aarch64"),
     keyring_path: Path = Path("/usr/share/keyrings/kali-archive-keyring.gpg"),
 ) -> BinfmtStatus:
-    """Verify the host can safely enter an ARM64 chroot before the expensive build starts."""
+    """Verify the host can safely enter an ARM64 chroot before the expensive build starts.
+
+    Registration itself is deliberately backend-agnostic: Debian/Ubuntu may use
+    systemd-binfmt or binfmt-support depending on the QEMU package generation.
+    The security contract cares about the kernel-visible handler that will
+    actually execute the foreign binaries, not which package registered it.
+    """
     validate_rootfs_source_lock(lock)
     _require_commands(
         (
@@ -93,7 +99,6 @@ def preflight_rootfs_host(
             "gpg",
             "gpgv",
             "qemu-aarch64",
-            "update-binfmts",
             "xz",
         )
     )
