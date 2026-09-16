@@ -35,6 +35,8 @@ MAX_JOBS = 16
 DEFAULT_STEP_TIMEOUT_SECONDS = 45 * 60
 _POLICY_FRAGMENT_NAME = ".kaliphonestudio-required.config"
 _CONFIG_NAME_RE = re.compile(r"^CONFIG_[A-Z0-9_]+$")
+_CANONICAL_SOURCE_PREFIX = "/usr/src/kaliphonestudio-kernel"
+_CANONICAL_OUTPUT_PREFIX = "/usr/src/kaliphonestudio-kernel-build"
 _REPRO_ENV = {
     "KBUILD_BUILD_USER": "kaliphonestudio",
     "KBUILD_BUILD_HOST": "repro-builder",
@@ -44,6 +46,11 @@ _REPRO_ENV = {
     "TZ": "UTC",
     "LC_ALL": "C",
     "LANG": "C",
+    # These values are evidence-bearing policy identifiers. Actual host paths are
+    # translated to these canonical roots through compiler prefix-map flags below.
+    "KPS_CANONICAL_SOURCE_PREFIX": _CANONICAL_SOURCE_PREFIX,
+    "KPS_CANONICAL_OUTPUT_PREFIX": _CANONICAL_OUTPUT_PREFIX,
+    "KPS_PATH_REMAP_POLICY": "clang-fdebug-prefix-map+fmacro-prefix-map-v1",
 }
 
 
@@ -194,13 +201,7 @@ def _merge_script(checkout: Path) -> Path:
 
 
 def _required_config_fragment_payload(plan: KernelBuildPlan) -> str:
-    """Render the plan's required CONFIG states as a deterministic Kconfig fragment.
-
-    Required configs used to be verification-only. Applying the exact same profile-bound
-    policy before ``olddefconfig`` makes the build construction match the policy already
-    committed into ``KernelBuildPlan.plan_sha256()``. This is intentionally generic and
-    does not contain any device name or phone-specific conditional.
-    """
+    """Render the plan's required CONFIG states as a deterministic Kconfig fragment."""
     lines: list[str] = []
     seen: set[str] = set()
     for name, state in plan.required_configs:
@@ -232,6 +233,29 @@ def _write_required_config_fragment(plan: KernelBuildPlan, output: Path) -> Path
     return destination
 
 
+def _path_remap_flags(checkout: Path, output: Path) -> str:
+    """Map per-run absolute roots out of compiler debug and macro payloads.
+
+    The first real A/B kernel build produced an identical final .config and equal
+    Image sizes but different Image bytes. The selected defconfig enables
+    CONFIG_DEBUG_INFO, and A/B intentionally use different absolute source/output
+    roots. Clang's debug/macro prefix maps remove those host-local path identities
+    while preserving source-relative paths and all executable semantics.
+    """
+    mappings = (
+        (checkout, _CANONICAL_SOURCE_PREFIX),
+        (output, _CANONICAL_OUTPUT_PREFIX),
+    )
+    flags: list[str] = []
+    for source, canonical in mappings:
+        raw = str(source)
+        if not raw.startswith("/") or not canonical.startswith("/"):
+            raise KernelContractError("kernel reproducibility path map requires absolute paths")
+        flags.append(f"-fdebug-prefix-map={raw}={canonical}")
+        flags.append(f"-fmacro-prefix-map={raw}={canonical}")
+    return " ".join(flags)
+
+
 def _make_argv(
     checkout: Path,
     output: Path,
@@ -242,6 +266,14 @@ def _make_argv(
 ) -> list[str]:
     argv = ["make", "-C", str(checkout), f"O={output}"]
     argv.extend(f"{key}={value}" for key, value in recipe.make_flags)
+    path_flags = _path_remap_flags(checkout, output)
+    argv.extend(
+        [
+            "KBUILD_ABS_SRCTREE=0",
+            f"KCFLAGS={path_flags}",
+            f"KAFLAGS={path_flags}",
+        ]
+    )
     if parallel:
         argv.append(f"-j{recipe.jobs}")
     argv.append(target)
@@ -303,8 +335,8 @@ def execute_kernel_build(
 
     After upstream defconfig/fragments are loaded, the runner applies a generated,
     deterministic fragment containing the profile's exact ``required_configs``.
-    The source checkout is never mutated. This ensures compatibility/security
-    policy is both *constructed* and independently verified in the final `.config`.
+    The source checkout is never mutated. Compiler macro/debug paths are remapped
+    from independent A/B host directories to fixed virtual roots before building.
     """
     if not isinstance(step_timeout_seconds, int) or isinstance(step_timeout_seconds, bool) or step_timeout_seconds < 60:
         raise KernelContractError("kernel build step timeout must be an integer >= 60 seconds")
