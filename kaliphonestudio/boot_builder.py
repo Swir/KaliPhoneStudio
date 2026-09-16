@@ -1,8 +1,8 @@
 """Deterministic, profile-driven boot build planning.
 
-This module prepares an auditable host-side build plan only. It never flashes or
-boots a phone. A plan is accepted only when the stock image provenance belongs
-to the selected profile and matches that profile's boot-layout contract.
+This module prepares and verifies auditable host-side build plans only. It never
+flashes or boots a phone. Plans bind stock provenance and every build input by
+SHA-256; they must be revalidated immediately before an assembler is invoked.
 """
 from __future__ import annotations
 
@@ -100,3 +100,55 @@ def create_boot_build_plan(
         kernel_cmdline=contract.kernel_cmdline,
         inputs=tuple(inputs),
     )
+
+
+def verify_boot_build_plan(
+    plan: BootBuildPlan,
+    profile: DeviceProfile,
+    provenance: StockBootProvenance,
+    *,
+    input_dir: Path,
+) -> None:
+    """Fail closed if profile, stock evidence, or any planned input has drifted.
+
+    This is the mandatory pre-assembly TOCTOU guard: callers should invoke it as
+    close as possible to the actual image assembly operation.
+    """
+    if plan.schema_version != 1:
+        raise BootImageError("unsupported boot build plan schema")
+    contract = boot_build_contract(profile)
+    if plan.profile_id != profile.profile_id or provenance.profile_id != profile.profile_id:
+        raise BootImageError("boot build plan/profile provenance mismatch")
+    if plan.stock_boot_sha256 != provenance.boot_sha256 or plan.stock_ota_sha256 != provenance.ota_sha256:
+        raise BootImageError("stock provenance changed after boot build planning")
+    if plan.header_version != contract.header_version or plan.page_size != contract.page_size:
+        raise BootImageError("boot layout contract changed after planning")
+    if plan.ramdisk_compression != contract.ramdisk_compression or plan.kernel_cmdline != contract.kernel_cmdline:
+        raise BootImageError("boot policy changed after planning")
+
+    expected_names = ["kernel", "ramdisk"]
+    if contract.include_dtb:
+        expected_names.append("dtb")
+    if contract.separate_dtbo:
+        expected_names.append("dtbo")
+    if [item.name for item in plan.inputs] != expected_names:
+        raise BootImageError("boot build plan input set/order does not match profile")
+
+    for planned in plan.inputs:
+        # Paths are deliberately reduced to basenames in plans; reject traversal
+        # or aliases before resolving them against the controlled input directory.
+        if Path(planned.path).name != planned.path or planned.path in {"", ".", ".."}:
+            raise BootImageError(f"unsafe planned input path: {planned.name}")
+        current = _input(planned.name, input_dir / planned.path)
+        if current.size != planned.size or current.sha256 != planned.sha256:
+            raise BootImageError(f"planned build input changed: {planned.name}")
+
+
+def write_boot_build_plan(plan: BootBuildPlan, destination: Path) -> str:
+    """Atomically persist canonical plan JSON and return its SHA-256."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = plan.canonical_json()
+    temporary = destination.with_name(destination.name + ".tmp")
+    temporary.write_text(payload, encoding="utf-8", newline="\n")
+    temporary.replace(destination)
+    return sha256(payload.encode("utf-8")).hexdigest()
