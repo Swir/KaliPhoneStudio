@@ -17,6 +17,7 @@ from kaliphonestudio.rootfs import (  # noqa: E402
     load_rootfs_source_lock,
     package_manifest_from_rootfs,
 )
+from kaliphonestudio.rootfs_host import preflight_rootfs_host  # noqa: E402
 
 
 def _git_output(checkout: Path, *args: str) -> str:
@@ -52,6 +53,30 @@ def _find_rootfs_artifact(checkout: Path, architecture: str) -> Path:
     return candidates[0]
 
 
+def _assert_tracked_checkout_clean(checkout: Path) -> None:
+    dirty = _git_output(checkout, "status", "--porcelain", "--untracked-files=no")
+    if dirty:
+        raise RootfsError("rootfs builder checkout has modified tracked files")
+
+
+def _create_dependency_guard(checkout: Path, lock_sha256: str) -> Path:
+    """Create the upstream dependency sentinel only after KPS preflight succeeded.
+
+    The pinned 2026.2 builder checks for qemu-user/qemu-user-binfmt and would
+    replace qemu-user-static on Ubuntu 24.04. Its ARM64 chroot path, however,
+    needs a persistent static interpreter. We therefore skip *only* the upstream
+    package mutator after KaliPhoneStudio independently verified the host.
+    """
+    marker = checkout / ".dep_check"
+    if marker.exists() or marker.is_symlink():
+        raise RootfsError("refusing prevalidated build: dependency guard already exists")
+    marker.write_text(
+        f"kaliphonestudio-prevalidated-static-qemu\nsource_lock_sha256={lock_sha256}\n",
+        encoding="utf-8",
+    )
+    return marker
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description="Execute the pinned rootfs builder from an exact checkout without a shell."
@@ -60,6 +85,14 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--checkout", type=Path, required=True)
     result.add_argument("--out", type=Path, required=True)
     result.add_argument("--sudo", action="store_true", help="prefix the locked builder argv with sudo --")
+    result.add_argument(
+        "--host-deps-prevalidated",
+        action="store_true",
+        help=(
+            "after fail-closed static-QEMU/keyring/binfmt preflight, create the pinned "
+            "builder's dependency sentinel so it cannot replace the verified QEMU runtime"
+        ),
+    )
     result.add_argument("--timeout", type=int, default=5400)
     return result
 
@@ -68,6 +101,9 @@ def main() -> int:
     args = parser().parse_args()
     if args.timeout <= 0:
         raise RootfsError("rootfs build timeout must be positive")
+    if args.host_deps_prevalidated and not args.sudo:
+        raise RootfsError("prevalidated cross-architecture rootfs builds require --sudo")
+
     lock = load_rootfs_source_lock(args.lock)
     checkout = args.checkout.resolve()
     if not checkout.is_dir():
@@ -77,6 +113,12 @@ def main() -> int:
         raise RootfsError(f"rootfs builder checkout is not the locked commit: {head}")
     if not (checkout / "build-fs.sh").is_file():
         raise RootfsError("locked rootfs builder entrypoint is missing")
+    _assert_tracked_checkout_clean(checkout)
+
+    dependency_guard: Path | None = None
+    if args.host_deps_prevalidated:
+        preflight_rootfs_host(lock)
+        dependency_guard = _create_dependency_guard(checkout, lock.lock_sha256())
 
     argv = list(lock.command)
     if args.sudo:
@@ -91,6 +133,12 @@ def main() -> int:
         )
     except (subprocess.SubprocessError, OSError) as exc:
         raise RootfsError(f"locked rootfs builder failed: {exc}") from exc
+    finally:
+        if dependency_guard is not None:
+            try:
+                dependency_guard.unlink(missing_ok=True)
+            except OSError as exc:
+                raise RootfsError(f"cannot remove rootfs dependency guard: {exc}") from exc
 
     artifact = _find_rootfs_artifact(checkout, lock.architecture)
     _, package_count = package_manifest_from_rootfs(artifact)
