@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.18-dev** — the verified host boot chain is in place and the rootfs path now has signed Kali repository-snapshot evidence plus a real two-build ARM64 reproducibility workflow. A rootfs is **not** accepted merely because the workflow exists: both independent builds must be byte-identical, their normalized installed-package manifest must match, and the evidence must bind the exact source commit and signed repository state. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.19-dev** — the verified host boot chain is in place, the rootfs path uses a GPG-verified Kali repository snapshot and exact-source double-build workflow, and a device-independent deterministic rescue-initramfs artifact contract is now implemented. The first post-merge real rootfs build exposed an Ubuntu/QEMU packaging conflict; KaliPhoneStudio now fail-closes on the host emulator state, preserves `qemu-aarch64-static`, revalidates the signed repository state immediately before each build, and supplies the reviewed Kali keyring to debootstrap. The repaired real double-build is being validated on `main`; it is **not** counted as reproducible until that run passes and its evidence is reviewed. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -53,7 +53,10 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Rootfs lock schema v2 forces the Kali mirror to HTTPS and pins the current Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5`.
 - `scripts/capture_kali_snapshot.py` requires a successful `gpgv` validation of `InRelease` by that fingerprint, then records the exact `InRelease` SHA-256 and ARM64 package-index paths/sizes/SHA-256 values.
 - Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from `var/lib/dpkg/status` inside the archive.
-- `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and is designed to execute two real pinned ARM64 builds after merge to `main`; the result is fail-closed if bytes or package evidence diverge.
+- Rootfs build execution now performs a fail-closed host preflight that requires `qemu-aarch64-static`, rejects a competing dynamic `qemu-aarch64`, prevents the pinned upstream dependency helper from replacing the static emulator, and verifies the live HTTPS `InRelease` still matches the previously GPG-validated snapshot before each real build.
+- The reviewed Kali archive keyring used for snapshot verification is carried into the rootfs job so debootstrap can validate Kali repository signatures itself.
+- `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and executes two real pinned ARM64 builds on relevant `main` pushes; the result is fail-closed if bytes or package evidence diverge.
+- Device-independent deterministic rescue-initramfs construction: gzip/newc output normalizes uid/gid/mtime and entry ordering, builds twice, requires byte equality, emits canonical SHA-256 evidence, and rejects setuid/setgid/special-file/unsafe-path inputs. This is an artifact contract, not proof of a phone rescue path.
 - First-boot candidate manifest schema v2 binds the verified boot authorization, rootfs evidence, package-manifest digest/count, source lock and repository snapshot.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 

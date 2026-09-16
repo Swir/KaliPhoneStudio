@@ -53,12 +53,14 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
 - [x] Bind verified rootfs evidence and temporary-boot authorization into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
+- [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [ ] Obtain the first green real double-build run and review/archive its evidence
 - [ ] Mark a concrete ARM64 rootfs artifact reproducible only after that run passes
 - [ ] Promote first-boot evidence into a release-candidate manifest only after hardware gates exist
 - [ ] Generic first-boot provisioning independent of device name
 - [ ] Phosh phone UI stage on the verified common rootfs
-- [ ] Safe minimal rescue initramfs artifact with reproducibility evidence
+- [x] Device-independent deterministic rescue-initramfs gzip/newc builder and canonical reproducibility-evidence contract
+- [ ] Produce a concrete safe minimal rescue initramfs artifact and prove its device rescue/logging path
 - [ ] SSH disabled by default
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
 - [ ] Update/rollback metadata format
