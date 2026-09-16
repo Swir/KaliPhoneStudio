@@ -59,9 +59,12 @@ def fixture_rootfs(tmp_path):
 
 def boot_authorization(**changes):
     values = {
-        "schema_version": 1,
+        "schema_version": 2,
         "profile_id": "oneplus/avicii",
         "device_serial": "SERIAL123",
+        "fastboot_baseline_sha256": "0" * 64,
+        "firmware_build": "AC2003_11_F.22",
+        "firmware_fingerprint": "OnePlus/avicii/avicii:13/test/F.22:user/release-keys",
         "plan_sha256": "1" * 64,
         "stock_boot_sha256": "2" * 64,
         "stock_ota_sha256": "3" * 64,
@@ -74,15 +77,18 @@ def boot_authorization(**changes):
     return TemporaryBootAuthorization(**values)
 
 
-def test_candidate_binds_boot_authorization_and_rootfs_evidence(tmp_path):
+def test_candidate_binds_boot_authorization_firmware_and_rootfs_evidence(tmp_path):
     lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
     boot = boot_authorization()
     manifest = create_first_boot_candidate_manifest(
         boot, lock, snapshot, evidence, rootfs_artifact=rootfs
     )
-    assert manifest.schema_version == 2
+    assert manifest.schema_version == 3
     assert manifest.profile_id == "oneplus/avicii"
     assert manifest.device_serial == "SERIAL123"
+    assert manifest.fastboot_baseline_sha256 == "0" * 64
+    assert manifest.firmware_build == "AC2003_11_F.22"
+    assert manifest.firmware_fingerprint == boot.firmware_fingerprint
     assert manifest.boot_authorization_sha256 == boot.authorization_sha256()
     assert manifest.rootfs_evidence_sha256 == evidence.evidence_sha256()
     assert manifest.rootfs_package_manifest_sha256 == evidence.package_manifest_sha256
@@ -111,12 +117,30 @@ def test_candidate_rejects_missing_device_binding(tmp_path):
         )
 
 
-def test_candidate_rejects_malformed_boot_hash(tmp_path):
+def test_candidate_rejects_malformed_boot_or_baseline_hash(tmp_path):
     lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
     boot = boot_authorization(image_sha256="not-a-hash")
     with pytest.raises(RootfsError, match="image SHA-256"):
         create_first_boot_candidate_manifest(
             boot, lock, snapshot, evidence, rootfs_artifact=rootfs
+        )
+
+    boot = boot_authorization(fastboot_baseline_sha256="not-a-hash")
+    with pytest.raises(RootfsError, match="fastboot baseline SHA-256"):
+        create_first_boot_candidate_manifest(
+            boot, lock, snapshot, evidence, rootfs_artifact=rootfs
+        )
+
+
+def test_candidate_rejects_missing_firmware_identity(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    with pytest.raises(RootfsError, match="firmware build"):
+        create_first_boot_candidate_manifest(
+            boot_authorization(firmware_build=""),
+            lock,
+            snapshot,
+            evidence,
+            rootfs_artifact=rootfs,
         )
 
 

@@ -8,6 +8,8 @@ For a device profile to receive its first public Beta, all items below must be s
 
 - [ ] CI/tests green for the exact release commit.
 - [ ] Device profile schema/identity tests pass.
+- [ ] Read-only Fastboot baseline evidence records the exact physical profile/serial plus firmware build/fingerprint and is SHA-256 bound to the original transcript.
+- [ ] The baseline firmware fingerprint/build matches the exact stock OTA provenance used for the candidate.
 - [ ] Candidate manifest records exact `profile_id`, firmware baseline and hashes.
 - [ ] Every release image has SHA-256 recorded.
 - [ ] Partition-size and boot-layout gates pass.
@@ -33,5 +35,7 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] Known issues and hardware matrix.
 - [ ] Release manifest and SHA-256 files.
 - [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
+
+Importing a saved Fastboot transcript or producing host-side authorization evidence does **not** by itself satisfy any physical-device checkbox above.
 
 Only after these gates pass should a GitHub **Beta** be created. Stable releases require a substantially higher hardware-completeness and regression threshold.

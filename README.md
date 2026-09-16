@@ -10,13 +10,13 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.21-dev** — the verified host boot chain is in place and the rescue path now has a source-locked, independently double-built static ARM64 BusyBox payload plus deterministic profile-formatted initramfs evidence. The payload is built from exact BusyBox 1.38.0 source bytes, its applet inventory is executed under ARM64 QEMU and checked against an allow/deny contract, and network/SSH remain disabled by default. The previous real ARM64 rootfs run reached a concrete archive but failed because the pinned upstream tarball uses one safe top-level directory before `var/lib/dpkg/status`; the parser has been repaired with traversal/ambiguity regression tests, but the artifact is **not** counted reproducible until a new `main` double-build passes. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.22-dev** — the verified host boot chain is in place, and the multi-device profile contract now includes a read-only Fastboot baseline probe. An operator-captured `fastboot getvar all` transcript can be imported offline, hashed byte-for-byte, validated against profile-required identity/A-B/security/version variables, then bound to exact OTA `post-build` / `post-build-incremental` provenance before a candidate can receive temporary-boot authorization. This does **not** claim that a physical AC2003 baseline has been captured. The rescue path retains its source-locked independently double-built static ARM64 BusyBox payload and deterministic profile-formatted initramfs evidence. The repaired real ARM64 rootfs double-build is still not counted reproducible until the active `main` workflow finishes successfully and its evidence is reviewed. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
 The Python core under `kaliphonestudio/` is device-independent. Hardware knowledge belongs in `devices/<vendor>/<codename>/profile.json` and target documentation/build modules. Adding a JSON profile does **not** mean hardware support exists.
 
-A schema-v1 profile must provide unambiguous identity, a destructive-action confirmation token, boot/partition constraints, firmware hints, full-commit upstream source locks, recovery notes, and explicit host/hardware test contracts. The registry fails closed when these fields are missing or malformed. Boot policy is strictly typed, A/B partition names are validated, `profile_id` is bound to its `devices/vendor/codename/profile.json` location, and upstream profile sources must be credential-free HTTPS URLs pinned to full commits.
+A schema-v2 profile must provide unambiguous identity, a destructive-action confirmation token, boot/partition constraints, firmware hints, full-commit upstream source locks, recovery notes, explicit host/hardware test contracts and a Fastboot probe contract describing the read-only variables required to establish a baseline. The registry fails closed when these fields are missing or malformed. Boot policy is strictly typed, A/B partition names are validated, `profile_id` is bound to its `devices/vendor/codename/profile.json` location, upstream profile sources must be credential-free HTTPS URLs pinned to full commits, and Fastboot semantic fields must resolve to explicitly required variable names.
 
 ## Active device profiles
 
@@ -35,6 +35,9 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Temporary `fastboot boot` workflow before persistent boot-slot testing.
 - Manifest/SHA-256 and partition-size validation.
 - Strict multi-device profile contract for boot header/page/kernel/DTB/DTBO/ramdisk compression, safe A/B partition identifiers and full-commit HTTPS upstream sources.
+- Profile schema v2 adds a generic read-only Fastboot probe contract. `oneplus/avicii` requires product/serial, current slot, slot count, unlocked/secure state and bootloader/baseband versions, with an expected two-slot A/B layout.
+- Offline Fastboot baseline importer hashes the original transcript, rejects failed/ambiguous/malformed captures and emits canonical evidence without invoking `adb`, `fastboot` or any phone write.
+- Fastboot baseline evidence is deliberately marked `beta_gate_credit=false`; the raw transcript/evidence may contain a serial and should be treated as private engineering data rather than a public release artifact.
 - Android boot image v2 inspection/repack foundation.
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
@@ -45,7 +48,8 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Boot assembler/unpacker source lock in `tools/boot-tool-locks.json`: LineageOS `android_system_tools_mkbootimg` commit `808ecd09666ffe0ff5800f02af693abce56eb395`; header-v2 plans cannot fall back to an arbitrary host `mkbootimg` from PATH.
 - Deterministic source-locked `mkbootimg` invocation, independent double assembly and byte-for-byte equality requirement before an image can be accepted.
 - Source-locked `unpack_bootimg` round-trip verification of kernel, ramdisk and in-boot DTB against the original plan.
-- Fail-closed `TemporaryBootAuthorization` tying the verified phone identity to stock provenance, plan digest, reproducible assembly and structural verification before temporary boot may be offered.
+- Fail-closed `TemporaryBootAuthorization` schema v2 ties the verified phone serial to the captured Fastboot baseline digest, exact firmware build/fingerprint, stock OTA provenance, plan digest, reproducible assembly and structural verification. The baseline fingerprint must equal OTA metadata `post-build`, and `post-build-incremental` is checked when present.
+- First-boot candidate manifest schema v3 carries the Fastboot baseline digest and exact firmware identity forward together with boot and rootfs evidence.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated extractor reproducibility CI builds the exact pinned source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
 - Linux amd64 and Windows amd64 extractor reproducibility passed in GitHub Actions run `35018283145`.
@@ -64,18 +68,17 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - The rescue payload keeps `poweroff`/`reboot` explicitly compiled while external telinit handoff is disabled; network and SSH remain disabled by default and the init script enters only a local physical-console rescue shell.
 - The rescue verifier independently parses normalized `newc` metadata, canonical ordering/trailer, file types, manifest digest and executable `/init`; artifact SHA-256 alone is not sufficient.
 - Verified rescue-initramfs evidence can bind to a boot plan only when the exact ramdisk bytes, size, compression policy and plan digest agree. This host-side binding is not a physical rescue claim.
-- First-boot candidate manifest schema v2 binds the verified boot authorization, rootfs evidence, package-manifest digest/count, source lock and repository snapshot.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. `rootfs_reproducible_artifact` remains false until a new real double-build run passes and its evidence is reviewed.
+The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. `rootfs_reproducible_artifact` remains false until the active real double-build run passes and its evidence is reviewed.
 
 ## Safety model
 
-KaliPhoneStudio prefers **temporary boot first** and **inactive slot second**. It does not bypass physical bootloader-unlock confirmation. Persistent writes require an identified supported profile, verified identity, explicit confirmation and validated artifacts. No hardware feature is marked working without evidence from that exact phone/firmware baseline.
+KaliPhoneStudio prefers **temporary boot first** and **inactive slot second**. It does not bypass physical bootloader-unlock confirmation. Persistent writes require an identified supported profile, verified identity, explicit confirmation and validated artifacts. Before temporary-boot authorization, the device serial and exact captured firmware baseline must agree with the stock OTA provenance used to build the image. No hardware feature is marked working without evidence from that exact phone/firmware baseline.
 
 ## AC2003 Beta blockers
 
-Before the first Beta, the exact physical AC2003 must provide its OxygenOS build/fingerprint and Fastboot evidence; a matching stock `boot.img` must be obtained and validated; the candidate must successfully temporary-boot; rescue/logging must work; the kernel must reach Kali early userspace; required storage and charging/battery behavior must be safe; and recovery must be exercised and documented. Release artifacts additionally require a compatibility matrix, manifest and SHA-256 checksums.
+Before the first Beta, the exact physical AC2003 must still provide its real OxygenOS build/fingerprint and Fastboot transcript evidence; a matching stock `boot.img` must be obtained and validated; the candidate must successfully temporary-boot; rescue/logging must work; the kernel must reach Kali early userspace; required storage and charging/battery behavior must be safe; and recovery must be exercised and documented. Release artifacts additionally require a compatibility matrix, manifest and SHA-256 checksums.
 
 ## Development
 
@@ -91,6 +94,12 @@ A rescue artifact can be built with its profile-driven compression policy withou
 
 ```powershell
 python scripts/build_rescue_initramfs.py --profile-id oneplus/avicii --staging staging/rescue --out build/rescue.cpio.lz4 --evidence build/rescue-initramfs.json
+```
+
+The read-only Fastboot baseline workflow is documented in `docs/FASTBOOT_BASELINE.md`. Its importer operates only on a previously saved transcript:
+
+```powershell
+python scripts/import_fastboot_baseline.py --profile-id oneplus/avicii --transcript fastboot-getvar-all.txt --firmware-build "EXACT_BUILD" --firmware-fingerprint "EXACT_FINGERPRINT" --out evidence/fastboot-baseline.json
 ```
 
 See `ROADMAP.md`, `BUILD_STATUS.json`, `CHANGELOG.md` and `BETA_RELEASE_GATE.md` for the source-of-truth development state.

@@ -25,6 +25,9 @@ class FirstBootCandidateManifest:
     schema_version: int
     profile_id: str
     device_serial: str
+    fastboot_baseline_sha256: str
+    firmware_build: str
+    firmware_fingerprint: str
     boot_authorization_sha256: str
     boot_image_sha256: str
     boot_image_size: int
@@ -48,6 +51,13 @@ def _require_boot_hash(value: str, label: str) -> None:
         raise RootfsError(f"temporary-boot authorization contains invalid {label}")
 
 
+def _require_boot_text(value: str, label: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise RootfsError(f"temporary-boot authorization contains invalid {label}")
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise RootfsError(f"temporary-boot authorization contains invalid {label}")
+
+
 def create_first_boot_candidate_manifest(
     boot: TemporaryBootAuthorization,
     rootfs_lock: RootfsSourceLock,
@@ -61,7 +71,7 @@ def create_first_boot_candidate_manifest(
     The result is host-side evidence only. It is deliberately not hardware-success
     evidence and does not execute fastboot or write any phone partition.
     """
-    if boot.schema_version != 1:
+    if boot.schema_version != 2:
         raise RootfsError("unsupported temporary-boot authorization schema")
     if not boot.profile_id or not boot.device_serial:
         raise RootfsError("first-boot candidate requires a verified device binding")
@@ -69,10 +79,13 @@ def create_first_boot_candidate_manifest(
         raise RootfsError("first-boot candidate requires fully verified boot authorization")
     if boot.image_size <= 0:
         raise RootfsError("temporary-boot authorization contains invalid image evidence")
+    _require_boot_hash(boot.fastboot_baseline_sha256, "fastboot baseline SHA-256")
     _require_boot_hash(boot.plan_sha256, "plan SHA-256")
     _require_boot_hash(boot.stock_boot_sha256, "stock boot SHA-256")
     _require_boot_hash(boot.stock_ota_sha256, "stock OTA SHA-256")
     _require_boot_hash(boot.image_sha256, "image SHA-256")
+    _require_boot_text(boot.firmware_build, "firmware build")
+    _require_boot_text(boot.firmware_fingerprint, "firmware fingerprint")
 
     verify_rootfs_artifact(
         rootfs_lock,
@@ -81,9 +94,12 @@ def create_first_boot_candidate_manifest(
         artifact=rootfs_artifact,
     )
     return FirstBootCandidateManifest(
-        schema_version=2,
+        schema_version=3,
         profile_id=boot.profile_id,
         device_serial=boot.device_serial,
+        fastboot_baseline_sha256=boot.fastboot_baseline_sha256,
+        firmware_build=boot.firmware_build,
+        firmware_fingerprint=boot.firmware_fingerprint,
         boot_authorization_sha256=boot.authorization_sha256(),
         boot_image_sha256=boot.image_sha256,
         boot_image_size=boot.image_size,

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "profile_id": "oneplus/avicii",
   "vendor": "OnePlus",
   "display_name": "OnePlus Nord AC2003",
@@ -12,6 +12,27 @@
   "board": "lito",
   "bootloader_board_name": "lito",
   "firmware_hints": ["avicii", "AC2003"],
+  "fastboot_probe": {
+    "required_vars": [
+      "product",
+      "serialno",
+      "current-slot",
+      "slot-count",
+      "unlocked",
+      "secure",
+      "version-bootloader",
+      "version-baseband"
+    ],
+    "identity_var": "product",
+    "serial_var": "serialno",
+    "current_slot_var": "current-slot",
+    "slot_count_var": "slot-count",
+    "unlocked_var": "unlocked",
+    "secure_var": "secure",
+    "bootloader_version_var": "version-bootloader",
+    "baseband_version_var": "version-baseband",
+    "expected_slot_count": 2
+  },
   "boot": {
     "header_version": 2,
     "page_size": 4096,
@@ -68,7 +89,8 @@
       "profile schema validation",
       "unique identity resolution",
       "boot layout and partition limit checks",
-      "manifest and SHA-256 checks"
+      "manifest and SHA-256 checks",
+      "offline fastboot baseline transcript validation"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",

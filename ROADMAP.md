@@ -23,6 +23,10 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Automated Python tests on 3.11, 3.12, 3.13 and 3.14
 - [x] Versioned profile schema contract
 - [x] Strict profile boot/A-B/source validation (typed boot contract, safe partition IDs, HTTPS full-commit sources, profile path binding)
+- [x] Profile schema v2 read-only Fastboot probe contract with required variables and expected A/B slot count
+- [x] Offline `fastboot getvar all` transcript parser/importer with exact-byte SHA-256 evidence and fail-closed ambiguity checks
+- [x] Bind captured Fastboot profile/serial/firmware evidence to exact OTA `post-build` / `post-build-incremental` provenance
+- [x] Carry the baseline evidence digest and firmware identity through temporary-boot authorization and first-boot candidate manifests
 - [x] CI-required profile recovery/test contract
 - [x] Full-commit source pin requirement for profile upstreams
 - [x] Fail-closed Android A/B payload envelope inspection
@@ -40,7 +44,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Full-commit source lock for authoritative mkbootimg/unpack_bootimg backend with no PATH fallback
 - [x] Deterministic boot-v2 image assembly from the validated build plan
 - [x] Verify assembled output by locked unpacker + structural invariant round-trip
-- [x] Fail-closed temporary-boot authorization binding device identity, stock provenance, plan, reproducible assembly and round-trip evidence
+- [x] Fail-closed temporary-boot authorization binding device identity, exact captured firmware baseline, stock provenance, plan, reproducible assembly and round-trip evidence
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
 
@@ -52,7 +56,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Verify Kali `InRelease` with `gpgv` and capture exact ARM64 package-index paths/sizes/SHA-256 values
 - [x] Extract a normalized installed package/version/architecture manifest directly from each rootfs archive
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
-- [x] Bind verified rootfs evidence and temporary-boot authorization into a canonical first-boot candidate manifest contract
+- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization and package manifest into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
 - [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [ ] Obtain the first green real double-build run and review/archive its evidence
@@ -90,6 +94,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Host-side checksum-locked boot extraction adapter (not hardware validation)
 - [x] Immutable exact-OTA → payload → stock-boot provenance schema (host-side; exact user OTA still pending)
 - [x] Host-side rescue ramdisk format now matches the profile's required LZ4 legacy boot policy
+- [x] Host-side AC2003 Fastboot baseline contract prepared (`product`, `serialno`, A/B slot/count, lock/security, bootloader/baseband); no physical transcript claimed
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA

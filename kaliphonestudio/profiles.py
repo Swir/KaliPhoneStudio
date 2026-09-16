@@ -9,9 +9,10 @@ from typing import Any, Iterable
 from urllib.parse import urlparse
 
 
-PROFILE_SCHEMA_VERSION = 1
+PROFILE_SCHEMA_VERSION = 2
 _SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SAFE_PARTITION_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_SAFE_FASTBOOT_VAR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 _ALLOWED_RAMDISK_COMPRESSION = {"gzip", "lz4", "none"}
 
 
@@ -48,7 +49,7 @@ REQUIRED = {
     "schema_version", "profile_id", "vendor", "display_name", "codename", "model",
     "confirmation_text", "arch", "soc", "board", "boot", "partition_limits",
     "ab_device", "avb_enabled", "firmware_hints", "sources", "recovery_notes",
-    "test_contract",
+    "test_contract", "fastboot_probe",
 }
 
 
@@ -133,6 +134,52 @@ def _validate_partition_contract(data: dict[str, Any]) -> None:
             raise ProfileError("A/B device profile must declare boot in ab_partitions")
 
 
+def _fastboot_var(contract: dict[str, Any], field: str, required_vars: set[str], *, optional: bool = False) -> str | None:
+    value = contract.get(field)
+    if optional and value is None:
+        return None
+    if not isinstance(value, str) or not _SAFE_FASTBOOT_VAR_RE.fullmatch(value):
+        raise ProfileError(f"fastboot_probe.{field} must be a safe fastboot variable name")
+    if value not in required_vars:
+        raise ProfileError(f"fastboot_probe.{field} must be included in required_vars")
+    return value
+
+
+def _validate_fastboot_probe(data: dict[str, Any]) -> None:
+    contract = data["fastboot_probe"]
+    if not isinstance(contract, dict):
+        raise ProfileError("fastboot_probe must be an object")
+    required = _nonempty_strings(contract.get("required_vars"), "fastboot_probe.required_vars")
+    if len(required) != len(set(required)):
+        raise ProfileError("fastboot_probe.required_vars must not contain duplicates")
+    if any(not _SAFE_FASTBOOT_VAR_RE.fullmatch(name) for name in required):
+        raise ProfileError("fastboot_probe.required_vars contains an unsafe variable name")
+    required_vars = set(required)
+
+    for field in ("identity_var", "serial_var", "unlocked_var", "secure_var"):
+        _fastboot_var(contract, field, required_vars)
+    for field in ("bootloader_version_var", "baseband_version_var"):
+        _fastboot_var(contract, field, required_vars, optional=True)
+
+    if data["ab_device"]:
+        _fastboot_var(contract, "current_slot_var", required_vars)
+        _fastboot_var(contract, "slot_count_var", required_vars)
+        _require_plain_int(
+            contract.get("expected_slot_count"),
+            "fastboot_probe.expected_slot_count",
+            minimum=2,
+        )
+    else:
+        for field in ("current_slot_var", "slot_count_var"):
+            _fastboot_var(contract, field, required_vars, optional=True)
+        if "expected_slot_count" in contract and contract["expected_slot_count"] is not None:
+            _require_plain_int(
+                contract["expected_slot_count"],
+                "fastboot_probe.expected_slot_count",
+                minimum=1,
+            )
+
+
 def validate_profile(data: dict[str, Any]) -> None:
     missing = sorted(REQUIRED - data.keys())
     if missing:
@@ -148,6 +195,7 @@ def validate_profile(data: dict[str, Any]) -> None:
 
     _validate_boot_contract(data["boot"])
     _validate_partition_contract(data)
+    _validate_fastboot_probe(data)
     _nonempty_strings(data["firmware_hints"], "firmware_hints")
     _nonempty_strings(data["recovery_notes"], "recovery_notes")
 

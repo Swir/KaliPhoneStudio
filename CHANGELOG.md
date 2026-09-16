@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.22-dev — profile-driven Fastboot baseline and exact-firmware authorization
+
+- Upgraded the device-profile contract to schema v2 with a generic `fastboot_probe` section instead of hardcoding AC2003 variable names in the common core. The first `oneplus/avicii` profile requires product/serial identity, A/B current slot and slot count, unlocked/secure state, plus bootloader/baseband versions.
+- Added an offline `fastboot getvar all` transcript importer. It never invokes Fastboot itself, hashes the exact captured bytes, rejects explicit command failures, conflicting duplicate variables, malformed/control data, missing profile-required variables, wrong product identity and invalid A/B state, then emits canonical evidence with `beta_gate_credit=false`.
+- Added exact stock-firmware binding: the captured firmware fingerprint must equal OTA provenance `post-build`; when `post-build-incremental` exists it must equal the captured firmware build. A valid boot image from a different firmware baseline therefore cannot cross the temporary-boot authorization boundary.
+- Upgraded `TemporaryBootAuthorization` to schema v2 so it carries the Fastboot-baseline evidence digest and exact firmware identity together with device serial, stock provenance, build plan, reproducible assembly and round-trip evidence.
+- Upgraded the first-boot candidate manifest to schema v3 so the same Fastboot baseline digest and firmware identity remain bound when boot and rootfs evidence are combined.
+- Added `scripts/import_fastboot_baseline.py`, focused parser/schema/binding regression tests and `docs/FASTBOOT_BASELINE.md` with read-only capture/import guidance and privacy handling for serial-bearing evidence.
+- Tightened `BETA_RELEASE_GATE.md`: a real physical baseline and matching exact OTA provenance are required host-side evidence, but importing a transcript still does not satisfy any physical temporary-boot, rescue, early-userspace, storage, charging or recovery gate.
+- Diagnosed the first branch CI regression immediately: version had moved to 0.6.22-dev before `BUILD_STATUS.json`; after reconciling the source-of-truth metadata, GitHub Actions run `35111715807` passed the complete Python 3.11/3.12/3.13/3.14 test and compile matrix.
+- Overall project progress remains conservatively weighted toward hardware. No physical AC2003 Fastboot transcript, OxygenOS baseline or Beta hardware evidence is claimed by this host-side milestone.
+
 ## 0.6.21-dev — source-locked reproducible ARM64 rescue payload
 
 - Added a device-independent rescue payload contract around BusyBox 1.38.0, pinned to exact source archive SHA-256 `34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2`, plus SHA-256 locks for the reviewed rescue miniconfig and `/init` template.
@@ -27,7 +39,7 @@
 
 ## 0.6.19-dev — rootfs execution hardening and deterministic rescue initramfs
 
-- Diagnosed the first real post-merge ARM64 rootfs reproducibility run `35090859764` instead of treating ordinary Python CI as sufficient. The pinned upstream builder's Debian dependency helper installed `qemu-user`/`qemu-user-binfmt`, removed `qemu-user-static`, and left the foreign ARM64 debootstrap second stage unable to enter chroot.
+- Diagnosed the first real post-merge ARM64 rootfs reproducibility run `35090859764` instead of treating ordinary Python CI success as sufficient. The pinned upstream builder's Debian dependency helper installed `qemu-user`/`qemu-user-binfmt`, removed `qemu-user-static`, and left the foreign ARM64 debootstrap second stage unable to enter chroot.
 - Added a fail-closed rootfs host preflight that requires `qemu-aarch64-static`, rejects an ambiguous competing dynamic `qemu-aarch64`, verifies the exact checkout is clean, and only then creates the upstream untracked `.dep_check` sentinel so the pinned builder cannot replace the validated static emulator.
 - Bound every real rootfs build invocation to the previously GPG-verified repository snapshot: the runner re-fetches the live HTTPS `InRelease` and requires its SHA-256 to remain identical immediately before build execution.
 - Carried the reviewed Kali archive keyring into the build job so debootstrap validates Kali repository signatures itself rather than relying only on the earlier snapshot-capture step.
