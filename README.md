@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.19-dev** — the verified host boot chain is in place and the common ARM64 rootfs path is being exercised by real two-build CI. The first real post-merge run exposed an ARM64 chroot/binfmt host failure rather than producing a rootfs; 0.6.19 adds fail-closed QEMU/binfmt + Kali-keyring preflight and signed repository-snapshot drift guards around both builds. A rootfs is **not** accepted until both independent builds finish byte-identically with matching normalized installed-package evidence. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.20-dev** — the verified host boot chain is in place, the common ARM64 rootfs path is being exercised by real two-build CI, and a device-independent deterministic rescue-initramfs evidence foundation has been added. The rescue builder currently publishes an **uncompressed** newc CPIO only; it is not yet boot-ready for `oneplus/avicii`, whose profile requires LZ4 ramdisk compression, and no rescue runtime is accepted until its ARM64 payload is source-locked and reviewed. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -54,12 +54,17 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - `scripts/capture_kali_snapshot.py` requires successful `gpgv` validation of `InRelease` by that fingerprint, then records the exact `InRelease` SHA-256 and ARM64 package-index paths/sizes/SHA-256 values.
 - Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from `var/lib/dpkg/status` inside the archive.
 - `kaliphonestudio/rootfs_host.py` + `scripts/check_rootfs_host.py` fail closed unless the ARM64 binfmt handler is enabled with fix-binary semantics, required build commands exist and the installed Kali keyring contains the locked archive fingerprint.
-- `.github/workflows/rootfs-repro.yml` installs the QEMU userspace/binfmt packages expected by the pinned upstream builder before execution, installs the exact verified Kali archive keyring, and revalidates the signed `InRelease`/canonical repository snapshot immediately before and after **each** independent build.
-- Relevant pull requests now run the real two-build ARM64 job before merge, so execution-host regressions are caught before landing on `main`.
+- `.github/workflows/rootfs-repro.yml` installs a static ARM64 QEMU interpreter before execution, installs the exact verified Kali archive keyring, blocks the pinned upstream dependency step from mutating the prevalidated QEMU runtime, and revalidates the signed `InRelease`/canonical repository snapshot immediately before and after **each** independent build.
+- Relevant pull requests run the real two-build ARM64 job before merge, so execution-host regressions are caught before landing on `main`.
 - First-boot candidate manifest schema v2 binds the verified boot authorization, rootfs evidence, package-manifest digest/count, source lock and repository snapshot.
+- Deterministic rescue initramfs foundation: pure-Python `newc` CPIO serialization with normalized uid/gid, fixed timestamps, stable sorted entries and two independent source scans/builds that must be byte-identical.
+- Rescue source hardening rejects special files, unsafe/root-escaping symlinks, setuid/setgid, world-writable regular files, oversized inputs and a missing/non-executable `/init`.
+- Rescue evidence records source-tree SHA-256, `/init` SHA-256, artifact SHA-256/size and entry count; a strict loader/verifier rejects malformed evidence and post-build artifact tampering.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. The first real post-merge execution (`35090859764`) failed at the ARM64 debootstrap second-stage boundary after the QEMU package transition changed the binfmt runtime. `rootfs_reproducible_artifact` remains false until the repaired real double-build passes and its evidence is reviewed.
+The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. The first real post-merge execution (`35090859764`) failed at the ARM64 debootstrap second-stage boundary. PR #7 repairs the execution host with a prevalidated static-QEMU path and is required to complete its real double-build before the artifact can be accepted.
+
+The rescue-initramfs foundation is also **not** hardware evidence. The current canonical artifact is intentionally uncompressed; `oneplus/avicii` declares LZ4 ramdisk compression, so a source-locked deterministic compression stage and an audited/static ARM64 rescue payload are still required before this can enter a boot candidate.
 
 ## Safety model
 
@@ -76,6 +81,14 @@ python -m pip install -r requirements.txt
 python main.py
 python -m pytest -q
 ```
+
+Build a deterministic host-side rescue CPIO from a reviewed source tree:
+
+```powershell
+python scripts/build_rescue_initramfs.py --source rescue-root --out artifacts/rescue.cpio --evidence evidence/rescue.json --source-date-epoch 0
+```
+
+This command deliberately does **not** compress the ramdisk or make it device-ready. Profile-specific compression and boot integration are separate gates.
 
 `rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, fail-closed ARM64 execution-host preflight and repository-drift guards second, independent builds third, canonical evidence only after equality.
 
