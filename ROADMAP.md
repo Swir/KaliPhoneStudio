@@ -60,6 +60,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [ ] Generic first-boot provisioning independent of device name
 - [ ] Phosh phone UI stage on the verified common rootfs
 - [x] Device-independent deterministic rescue-initramfs gzip/newc builder and canonical reproducibility-evidence contract
+- [x] Bind verified initramfs bytes/evidence to the exact profile-bound boot-plan ramdisk input and fail closed on compression mismatch
+- [ ] Add a deterministic, source/version-locked LZ4 rescue-initramfs stage for profiles such as `oneplus/avicii`
 - [ ] Produce a concrete safe minimal rescue initramfs artifact and prove its device rescue/logging path
 - [ ] SSH disabled by default
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
