@@ -3,7 +3,7 @@ import copy
 
 import pytest
 
-from kaliphonestudio.boot_builder import create_boot_build_plan, verify_boot_build_plan, write_boot_build_plan
+from kaliphonestudio.boot_builder import create_boot_build_plan, source_locked_assembler_prefix, verify_boot_build_plan, write_boot_build_plan
 from kaliphonestudio.boot_image import BootImageError
 from kaliphonestudio.profiles import DeviceProfile, get_profile
 from kaliphonestudio.provenance import StockBootProvenance
@@ -110,3 +110,16 @@ def test_plan_persistence_is_canonical_and_hash_bound(tmp_path):
     assert destination.read_text(encoding="utf-8") == plan.canonical_json()
     assert digest == plan.plan_sha256()
     assert not destination.with_name("boot-plan.json.tmp").exists()
+
+
+def test_plan_resolves_only_source_locked_mkbootimg(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    checkout = tmp_path / "mkbootimg-checkout"
+    checkout.mkdir()
+    (checkout / "mkbootimg.py").write_text("# exact locked checkout fixture\n", encoding="utf-8")
+    prefix = source_locked_assembler_prefix(
+        plan,
+        lock_manifest=ROOT / "tools" / "boot-tool-locks.json",
+        exact_checkout=checkout,
+    )
+    assert prefix == ("python", str(checkout / "mkbootimg.py"))
