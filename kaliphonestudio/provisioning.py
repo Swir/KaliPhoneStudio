@@ -1,8 +1,8 @@
 """Device-independent first-boot provisioning bundle for the common Kali rootfs.
 
-The bundle intentionally contains only non-secret policy and identity defaults.  User
+The bundle intentionally contains only non-secret policy and identity defaults. User
 credentials remain an explicit local/interactive first-boot responsibility, the root
-password must stay locked, and remote access is disabled by default.  The generated
+password must stay locked, and remote access is disabled by default. The generated
 tar is deterministic and bound to the exact accepted rootfs evidence digest.
 
 This module performs no phone I/O and grants no hardware/Beta credit.
@@ -77,6 +77,12 @@ def _require_sha256(value: object, label: str) -> str:
     return value
 
 
+def _require_positive_int(value: object, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise RootfsError(f"{label} must be a positive integer")
+    return value
+
+
 def _validate_hostname(value: object) -> str:
     if not isinstance(value, str) or not _HOSTNAME_RE.fullmatch(value):
         raise RootfsError("first-boot hostname must be one lowercase RFC-style label")
@@ -100,6 +106,27 @@ def _validate_timezone(value: object) -> str:
     if not all(_TZ_SEGMENT_RE.fullmatch(part) for part in path.parts):
         raise RootfsError("first-boot timezone contains an invalid segment")
     return value
+
+
+def _validate_rootfs_evidence(rootfs_evidence: RootfsArtifactEvidence) -> None:
+    if not isinstance(rootfs_evidence, RootfsArtifactEvidence):
+        raise RootfsError("first-boot provisioning requires typed rootfs artifact evidence")
+    if rootfs_evidence.schema_version != 2 or rootfs_evidence.reproducible is not True:
+        raise RootfsError("first-boot provisioning requires reproducible rootfs evidence schema v2")
+    for value, label in (
+        (rootfs_evidence.source_lock_sha256, "rootfs source lock"),
+        (rootfs_evidence.repository_snapshot_sha256, "rootfs repository snapshot"),
+        (rootfs_evidence.artifact_sha256, "rootfs artifact"),
+        (rootfs_evidence.package_manifest_sha256, "rootfs package manifest"),
+        (rootfs_evidence.evidence_sha256(), "rootfs evidence"),
+    ):
+        _require_sha256(value, label)
+    _require_positive_int(rootfs_evidence.artifact_size, "rootfs artifact size")
+    _require_positive_int(rootfs_evidence.package_count, "rootfs package count")
+    if rootfs_evidence.architecture != "arm64":
+        raise RootfsError("first-boot provisioning requires an ARM64 rootfs")
+    if not isinstance(rootfs_evidence.variant, str) or not rootfs_evidence.variant.strip():
+        raise RootfsError("first-boot provisioning requires a non-empty rootfs variant")
 
 
 def validate_first_boot_provisioning_plan(plan: FirstBootProvisioningPlan) -> None:
@@ -130,14 +157,7 @@ def create_first_boot_provisioning_plan(
     locale: str = "en_US.UTF-8",
     timezone: str = "UTC",
 ) -> FirstBootProvisioningPlan:
-    if not isinstance(rootfs_evidence, RootfsArtifactEvidence):
-        raise RootfsError("first-boot provisioning requires typed rootfs artifact evidence")
-    if rootfs_evidence.schema_version != 2 or rootfs_evidence.reproducible is not True:
-        raise RootfsError("first-boot provisioning requires reproducible rootfs evidence schema v2")
-    _require_sha256(rootfs_evidence.evidence_sha256(), "rootfs evidence")
-    if rootfs_evidence.architecture != "arm64":
-        raise RootfsError("first-boot provisioning requires an ARM64 rootfs")
-
+    _validate_rootfs_evidence(rootfs_evidence)
     plan = FirstBootProvisioningPlan(
         schema_version=1,
         rootfs_evidence_sha256=rootfs_evidence.evidence_sha256(),
@@ -247,6 +267,9 @@ def verify_first_boot_provisioning_bundle(
         raise RootfsError("provisioning bundle rootfs binding drifted")
     if evidence.provisioning_plan_sha256 != plan.plan_sha256():
         raise RootfsError("provisioning bundle plan digest drifted")
+    _require_sha256(evidence.bundle_sha256, "first-boot provisioning bundle")
+    _require_positive_int(evidence.bundle_size, "first-boot provisioning bundle size")
+    _require_positive_int(evidence.member_count, "first-boot provisioning member count")
     if evidence.credentials_embedded is not False:
         raise RootfsError("first-boot provisioning bundle must not embed credentials")
     if evidence.remote_access_enabled is not False:
@@ -283,8 +306,6 @@ def verify_first_boot_provisioning_bundle(
                 if extracted is None or extracted.read() != expected[member.name]:
                     raise RootfsError("first-boot provisioning bundle payload drifted")
     except (tarfile.TarError, OSError) as exc:
-        if isinstance(exc, RootfsError):
-            raise
         raise RootfsError(f"cannot verify first-boot provisioning bundle: {exc}") from exc
 
 
@@ -296,6 +317,11 @@ def write_first_boot_provisioning_evidence(
         raise RootfsError("invalid first-boot provisioning evidence type")
     if evidence.schema_version != 1 or evidence.credentials_embedded is not False:
         raise RootfsError("invalid first-boot provisioning evidence")
+    _require_sha256(evidence.rootfs_evidence_sha256, "provisioning rootfs evidence")
+    _require_sha256(evidence.provisioning_plan_sha256, "provisioning plan")
+    _require_sha256(evidence.bundle_sha256, "provisioning bundle")
+    _require_positive_int(evidence.bundle_size, "provisioning bundle size")
+    _require_positive_int(evidence.member_count, "provisioning member count")
     if evidence.remote_access_enabled is not False or evidence.hardware_verified is not False or evidence.beta_gate_credit is not False:
         raise RootfsError("invalid first-boot provisioning safety flags")
     destination = destination.resolve(strict=False)
