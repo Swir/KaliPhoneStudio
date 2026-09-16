@@ -17,6 +17,7 @@ _MAX_ENTRIES = 4096
 _MAX_FILE_BYTES = 64 * 1024 * 1024
 _MAX_TOTAL_PAYLOAD_BYTES = 128 * 1024 * 1024
 _MAX_CPIO_BYTES = 192 * 1024 * 1024
+_MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 _COMPRESSION_CONTRACTS = {
     "gzip": "gzip-mtime0-level9",
     "lz4": "lz4-legacy-literal-v1",
@@ -229,24 +230,31 @@ def _build_archive(entries: tuple[_Entry, ...], compression: str) -> bytes:
         compressed = io.BytesIO()
         with gzip.GzipFile(filename="", mode="wb", fileobj=compressed, compresslevel=9, mtime=0) as handle:
             handle.write(raw)
-        return compressed.getvalue()
-    if compression == "lz4":
+        result = compressed.getvalue()
+    elif compression == "lz4":
         try:
-            return compress_legacy(raw)
+            result = compress_legacy(raw)
         except Lz4LegacyError as exc:
             raise InitramfsError(f"cannot encode LZ4 legacy initramfs: {exc}") from exc
-    raise InitramfsError(f"unsupported initramfs compression policy: {compression}")
+    else:
+        raise InitramfsError(f"unsupported initramfs compression policy: {compression}")
+    if len(result) > _MAX_ARCHIVE_BYTES:
+        raise InitramfsError("compressed initramfs exceeds the artifact safety limit")
+    return result
 
 
 def _decompress_archive(compression: str, payload: bytes) -> bytes:
+    if len(payload) > _MAX_ARCHIVE_BYTES:
+        raise InitramfsError("compressed initramfs exceeds the artifact safety limit")
     if compression == "gzip-mtime0-level9":
         try:
-            raw = gzip.decompress(payload)
+            with gzip.GzipFile(fileobj=io.BytesIO(payload), mode="rb") as handle:
+                raw = handle.read(_MAX_CPIO_BYTES + 1)
         except (OSError, EOFError) as exc:
             raise InitramfsError(f"invalid gzip initramfs artifact: {exc}") from exc
     elif compression == "lz4-legacy-literal-v1":
         try:
-            raw, _ = decompress_legacy(payload, max_output_bytes=_MAX_CPIO_BYTES)
+            raw, _ = decompress_legacy(payload, max_output_bytes=_MAX_CPIO_BYTES + 1)
         except Lz4LegacyError as exc:
             raise InitramfsError(f"invalid LZ4 legacy initramfs artifact: {exc}") from exc
     else:
@@ -348,6 +356,8 @@ def _inspect_payload(evidence: InitramfsEvidence, payload: bytes) -> InitramfsIn
         raise InitramfsError("unsupported initramfs artifact contract")
     if evidence.entry_count <= 0 or evidence.artifact_size <= 0:
         raise InitramfsError("invalid initramfs evidence size/count")
+    if evidence.artifact_size > _MAX_ARCHIVE_BYTES:
+        raise InitramfsError("initramfs evidence exceeds the artifact safety limit")
     if len(payload) != evidence.artifact_size or sha256(payload).hexdigest() != evidence.artifact_sha256:
         raise InitramfsError("initramfs artifact changed after reproducibility verification")
 
@@ -420,6 +430,12 @@ def build_reproducible_initramfs(
 def inspect_initramfs_artifact(evidence: InitramfsEvidence, artifact: Path) -> InitramfsInspection:
     if not artifact.is_file():
         raise InitramfsError("initramfs artifact is missing")
+    try:
+        artifact_size = artifact.stat().st_size
+    except OSError as exc:
+        raise InitramfsError(f"cannot stat initramfs artifact: {exc}") from exc
+    if artifact_size > _MAX_ARCHIVE_BYTES:
+        raise InitramfsError("compressed initramfs exceeds the artifact safety limit")
     return _inspect_payload(evidence, artifact.read_bytes())
 
 
