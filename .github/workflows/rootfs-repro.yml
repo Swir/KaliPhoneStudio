@@ -119,12 +119,12 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install pinned-builder host prerequisites
+      - name: Install static ARM64 builder host prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             binfmt-support ca-certificates curl debootstrap git gnupg \
-            qemu-user qemu-user-binfmt xz-utils
+            qemu-user-static xz-utils
 
       - name: Download exact signed repository snapshot
         uses: actions/download-artifact@v5
@@ -132,14 +132,18 @@ jobs:
           name: kali-repository-snapshot
           path: evidence
 
-      - name: Install verified Kali keyring and refresh ARM64 binfmt
+      - name: Install verified Kali keyring and prepare static ARM64 interpreter
         shell: bash
         run: |
           set -euo pipefail
           sudo install -m 0644 evidence/kali-archive-keyring.gpg /usr/share/keyrings/kali-archive-keyring.gpg
-          if ! sudo systemctl restart systemd-binfmt.service; then
-            sudo /usr/lib/systemd/systemd-binfmt
+          test -x /usr/bin/qemu-aarch64-static
+          if [ -e /usr/bin/qemu-aarch64 ]; then
+            test "$(readlink -f /usr/bin/qemu-aarch64)" = "$(readlink -f /usr/bin/qemu-aarch64-static)"
+          else
+            sudo ln -s /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64
           fi
+          sudo update-binfmts --enable qemu-aarch64
           test -r /proc/sys/fs/binfmt_misc/qemu-aarch64
           python scripts/check_rootfs_host.py --lock tools/rootfs-source-lock.json
 
@@ -184,7 +188,8 @@ jobs:
             --lock tools/rootfs-source-lock.json \
             --checkout builder-a \
             --out artifacts/rootfs-a.tar.xz \
-            --sudo
+            --sudo \
+            --host-deps-prevalidated
 
       - name: Require repository snapshot unchanged after build A
         shell: bash
@@ -228,7 +233,8 @@ jobs:
             --lock tools/rootfs-source-lock.json \
             --checkout builder-b \
             --out artifacts/rootfs-b.tar.xz \
-            --sudo
+            --sudo \
+            --host-deps-prevalidated
 
       - name: Require repository snapshot unchanged after build B
         shell: bash
