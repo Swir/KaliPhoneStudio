@@ -73,8 +73,9 @@ jobs:
           set -euo pipefail
           test "$(git -C upstream-lz4-a rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
           test "$(git -C upstream-lz4-b rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
-          test "$(git -C upstream-lz4-a rev-list -n1 '${{ steps.lock.outputs.tag }}')" = "${{ steps.lock.outputs.commit }}"
-          test "$(git -C upstream-lz4-b rev-list -n1 '${{ steps.lock.outputs.tag }}')" = "${{ steps.lock.outputs.commit }}"
+          tag_sha="$(git -C upstream-lz4-a ls-remote --refs origin "refs/tags/${{ steps.lock.outputs.tag }}" | cut -f1)"
+          test -n "$tag_sha"
+          test "$tag_sha" = "${{ steps.lock.outputs.commit }}"
 
       - name: Build two deterministic Linux LZ4 binaries
         if: runner.os == 'Linux'
