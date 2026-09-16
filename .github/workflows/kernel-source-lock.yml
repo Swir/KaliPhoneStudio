@@ -63,9 +63,22 @@ jobs:
               print(f"commit={plan.source_commit}", file=out)
               print(f"version={plan.expected_kernel_version}", file=out)
               print(f"plan_sha256={plan.plan_sha256()}", file=out)
+
+          sparse_paths = [
+              "/Makefile",
+              f"/arch/{plan.arch}/configs/{plan.defconfig}",
+              *[f"/arch/{plan.arch}/configs/{fragment}" for fragment in plan.config_fragments],
+          ]
+          Path("kernel-sparse-paths.txt").write_text(
+              "\n".join(sparse_paths) + "\n",
+              encoding="utf-8",
+              newline="\n",
+          )
           print(f"kernel source lock: {plan.source_url}@{plan.source_commit}")
           print(f"kernel version contract: {plan.expected_kernel_version}")
           print(f"kernel plan sha256: {plan.plan_sha256()}")
+          print("sparse source paths:")
+          print(Path("kernel-sparse-paths.txt").read_text(encoding="utf-8"), end="")
           PY
 
       - name: Fetch and verify exact upstream kernel checkout
@@ -77,7 +90,9 @@ jobs:
           set -euo pipefail
           git init --quiet upstream-kernel
           git -C upstream-kernel remote add origin "$SOURCE_URL"
-          git -C upstream-kernel fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          git -C upstream-kernel config core.sparseCheckout true
+          cp kernel-sparse-paths.txt upstream-kernel/.git/info/sparse-checkout
+          git -C upstream-kernel fetch --quiet --depth=1 --filter=blob:none origin "$SOURCE_COMMIT"
           test "$(git -C upstream-kernel rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
           git -C upstream-kernel checkout --quiet --detach "$SOURCE_COMMIT"
           test "$(git -C upstream-kernel rev-parse HEAD)" = "$SOURCE_COMMIT"
