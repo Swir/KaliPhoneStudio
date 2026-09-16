@@ -13,6 +13,9 @@ from .initramfs import InitramfsEvidence, InitramfsError, verify_initramfs_artif
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_INITRAMFS_COMPRESSION_TO_BOOT_POLICY = {
+    "gzip-mtime0-level9": "gzip",
+}
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,7 @@ class InitramfsBootBindingEvidence:
     ramdisk_sha256: str
     ramdisk_size: int
     init_sha256: str
+    ramdisk_compression: str
     verified: bool
 
     def canonical_json(self) -> str:
@@ -69,6 +73,13 @@ def bind_initramfs_to_boot_plan(
     _require_sha256(initramfs.init_sha256, "initramfs /init")
     verify_initramfs_artifact(initramfs, artifact)
 
+    compression = _INITRAMFS_COMPRESSION_TO_BOOT_POLICY.get(initramfs.compression)
+    if compression is None:
+        raise BootImageError("initramfs compression has no approved boot-policy mapping")
+    if compression != plan.ramdisk_compression:
+        raise BootImageError(
+            "verified initramfs compression does not match the boot plan ramdisk policy"
+        )
     if initramfs.artifact_sha256 != planned.sha256 or initramfs.artifact_size != planned.size:
         raise BootImageError("verified initramfs does not match the boot plan ramdisk input")
 
@@ -80,6 +91,7 @@ def bind_initramfs_to_boot_plan(
         ramdisk_sha256=planned.sha256,
         ramdisk_size=planned.size,
         init_sha256=initramfs.init_sha256,
+        ramdisk_compression=compression,
         verified=True,
     )
 
@@ -99,6 +111,8 @@ def write_initramfs_boot_binding(
         _require_sha256(value, label)
     if evidence.ramdisk_size <= 0:
         raise InitramfsError("initramfs/boot binding contains an invalid ramdisk size")
+    if evidence.ramdisk_compression not in {"gzip", "lz4", "none"}:
+        raise InitramfsError("initramfs/boot binding contains an invalid compression policy")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = evidence.canonical_json()
