@@ -10,13 +10,13 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.19-dev** — the verified host boot chain is in place, the rootfs path uses a GPG-verified Kali repository snapshot and exact-source double-build workflow, and a device-independent deterministic rescue-initramfs artifact contract is now implemented. The first post-merge real rootfs build exposed an Ubuntu/QEMU packaging conflict; KaliPhoneStudio now fail-closes on the host emulator state, preserves `qemu-aarch64-static`, revalidates the signed repository state immediately before each build, and supplies the reviewed Kali keyring to debootstrap. The repaired real double-build is being validated on `main`; it is **not** counted as reproducible until that run passes and its evidence is reviewed. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.20-dev** — the verified host boot chain is in place, the rootfs path uses a GPG-verified Kali repository snapshot and exact-source double-build workflow, and the rescue-initramfs contract now supports a deterministic Linux-kernel-compatible **LZ4 legacy** ramdisk path required by the first `oneplus/avicii` profile. LZ4 output is structurally decoded and its normalized `newc` contents are independently re-verified before it can bind to a boot plan. The long-running repaired real ARM64 rootfs double-build is still being validated and is **not** counted as reproducible until its evidence passes and is reviewed. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
 The Python core under `kaliphonestudio/` is device-independent. Hardware knowledge belongs in `devices/<vendor>/<codename>/profile.json` and target documentation/build modules. Adding a JSON profile does **not** mean hardware support exists.
 
-A schema-v1 profile must provide unambiguous identity, a destructive-action confirmation token, boot/partition constraints, firmware hints, full-commit upstream source locks, recovery notes, and explicit host/hardware test contracts. The registry fails closed when these fields are missing or malformed.
+A schema-v1 profile must provide unambiguous identity, a destructive-action confirmation token, boot/partition constraints, firmware hints, full-commit upstream source locks, recovery notes, and explicit host/hardware test contracts. The registry fails closed when these fields are missing or malformed. Boot policy is strictly typed, A/B partition names are validated, `profile_id` is bound to its `devices/vendor/codename/profile.json` location, and upstream profile sources must be credential-free HTTPS URLs pinned to full commits.
 
 ## Active device profiles
 
@@ -24,7 +24,7 @@ A schema-v1 profile must provide unambiguous identity, a destructive-action conf
 |---|---|---|---|
 | OnePlus Nord AC2003 | `oneplus/avicii` | Bring-up; physical first boot pending | **Not released** |
 
-The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_avicii` commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`. This is a source reference, **not** proof that Kali hardware functions work.
+The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_avicii` commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`. That exact board configuration records Android boot header v2, 4096-byte pages, in-boot DTB, separate DTBO and `BOARD_RAMDISK_USE_LZ4 := true`. This is a source reference, **not** proof that Kali hardware functions work.
 
 ## Implemented host-side foundations
 
@@ -34,6 +34,7 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - A/B slot-aware planning, dry-run defaults and guarded inactive-slot writes.
 - Temporary `fastboot boot` workflow before persistent boot-slot testing.
 - Manifest/SHA-256 and partition-size validation.
+- Strict multi-device profile contract for boot header/page/kernel/DTB/DTBO/ramdisk compression, safe A/B partition identifiers and full-commit HTTPS upstream sources.
 - Android boot image v2 inspection/repack foundation.
 - Safe OTA ZIP inspection, payload discovery and firmware metadata checks.
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
@@ -53,10 +54,13 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Rootfs lock schema v2 forces the Kali mirror to HTTPS and pins the current Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5`.
 - `scripts/capture_kali_snapshot.py` requires a successful `gpgv` validation of `InRelease` by that fingerprint, then records the exact `InRelease` SHA-256 and ARM64 package-index paths/sizes/SHA-256 values.
 - Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from `var/lib/dpkg/status` inside the archive.
-- Rootfs build execution now performs a fail-closed host preflight that requires `qemu-aarch64-static`, rejects a competing dynamic `qemu-aarch64`, prevents the pinned upstream dependency helper from replacing the static emulator, and verifies the live HTTPS `InRelease` still matches the previously GPG-validated snapshot before each real build.
+- Rootfs build execution performs a fail-closed host preflight requiring `qemu-aarch64-static`, rejecting a competing dynamic `qemu-aarch64`, preventing the pinned upstream dependency helper from replacing the static emulator, and revalidating the signed HTTPS `InRelease` state immediately before each build.
 - The reviewed Kali archive keyring used for snapshot verification is carried into the rootfs job so debootstrap can validate Kali repository signatures itself.
 - `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and executes two real pinned ARM64 builds on relevant `main` pushes; the result is fail-closed if bytes or package evidence diverge.
-- Device-independent deterministic rescue-initramfs construction: gzip/newc output normalizes uid/gid/mtime and entry ordering, builds twice, requires byte equality, emits canonical SHA-256 evidence, and rejects setuid/setgid/special-file/unsafe-path inputs. This is an artifact contract, not proof of a phone rescue path.
+- Device-independent deterministic rescue-initramfs construction normalizes uid/gid/mtime and entry ordering, builds twice, requires byte equality, emits canonical SHA-256 evidence, and rejects setuid/setgid, world-writable regular files, special files and unsafe paths.
+- Rescue initramfs now supports deterministic LZ4 legacy framing for profiles whose boot policy requires `lz4`. The implementation is pinned to reviewed AOSP/LZ4 format references in `tools/ramdisk-format-locks.json`, uses bounded 8 MiB legacy blocks and independently decodes the resulting stream before acceptance.
+- The rescue verifier independently parses normalized `newc` metadata, canonical ordering/trailer, file types, manifest digest and executable `/init`; artifact SHA-256 alone is not sufficient.
+- Verified rescue-initramfs evidence can bind to a boot plan only when the exact ramdisk bytes, size, compression policy and plan digest agree. This host-side binding is not a physical rescue claim.
 - First-boot candidate manifest schema v2 binds the verified boot authorization, rootfs evidence, package-manifest digest/count, source lock and repository snapshot.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
@@ -79,6 +83,12 @@ python -m pytest -q
 ```
 
 `rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, independent builds second, canonical evidence only after equality.
+
+A rescue artifact can be built with its profile-driven compression policy without touching a phone, for example:
+
+```powershell
+python scripts/build_rescue_initramfs.py --profile-id oneplus/avicii --staging staging/rescue --out build/rescue.cpio.lz4 --evidence build/rescue-initramfs.json
+```
 
 See `ROADMAP.md`, `BUILD_STATUS.json`, `CHANGELOG.md` and `BETA_RELEASE_GATE.md` for the source-of-truth development state.
 
