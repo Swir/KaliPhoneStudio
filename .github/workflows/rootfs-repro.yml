@@ -5,7 +5,9 @@ on:
     paths:
       - "tools/rootfs-source-lock.json"
       - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/rootfs_host.py"
       - "scripts/capture_kali_snapshot.py"
+      - "scripts/check_rootfs_host.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
       - ".github/workflows/rootfs-repro.yml"
@@ -14,7 +16,9 @@ on:
     paths:
       - "tools/rootfs-source-lock.json"
       - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/rootfs_host.py"
       - "scripts/capture_kali_snapshot.py"
+      - "scripts/check_rootfs_host.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
       - ".github/workflows/rootfs-repro.yml"
@@ -23,6 +27,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: rootfs-repro-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   signed-snapshot-contract:
     runs-on: ubuntu-latest
@@ -30,6 +38,8 @@ jobs:
     outputs:
       source_url: ${{ steps.lock.outputs.source_url }}
       source_commit: ${{ steps.lock.outputs.source_commit }}
+      mirror: ${{ steps.lock.outputs.mirror }}
+      suite: ${{ steps.lock.outputs.suite }}
     steps:
       - uses: actions/checkout@v5
 
@@ -85,7 +95,7 @@ jobs:
       - name: Run rootfs contract tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m pytest -q tests/test_rootfs.py tests/test_candidate.py
+        run: python -m pytest -q tests/test_rootfs.py tests/test_rootfs_host.py tests/test_candidate.py
 
       - name: Upload signed repository snapshot evidence
         uses: actions/upload-artifact@v4
@@ -93,12 +103,12 @@ jobs:
           name: kali-repository-snapshot
           path: |
             evidence/InRelease
+            evidence/kali-archive-keyring.gpg
             evidence/repository-snapshot.json
           if-no-files-found: error
           retention-days: 7
 
   reproducible-rootfs:
-    if: github.event_name != 'pull_request'
     needs: signed-snapshot-contract
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -113,13 +123,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            binfmt-support ca-certificates curl debootstrap git qemu-user-static xz-utils
+            binfmt-support ca-certificates curl debootstrap git gnupg \
+            qemu-user qemu-user-binfmt xz-utils
 
       - name: Download exact signed repository snapshot
         uses: actions/download-artifact@v5
         with:
           name: kali-repository-snapshot
           path: evidence
+
+      - name: Install verified Kali keyring and refresh ARM64 binfmt
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -m 0644 evidence/kali-archive-keyring.gpg /usr/share/keyrings/kali-archive-keyring.gpg
+          sudo update-binfmts --disable qemu-aarch64 || true
+          sudo update-binfmts --enable qemu-aarch64
+          python scripts/check_rootfs_host.py --lock tools/rootfs-source-lock.json
 
       - name: Prepare two independent exact-source checkouts
         shell: bash
@@ -137,6 +157,23 @@ jobs:
             test "$(git -C "$checkout" rev-parse HEAD)" = "$SOURCE_COMMIT"
           done
 
+      - name: Require repository snapshot unchanged before build A
+        shell: bash
+        env:
+          MIRROR: ${{ needs.signed-snapshot-contract.outputs.mirror }}
+          SUITE: ${{ needs.signed-snapshot-contract.outputs.suite }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "$MIRROR/dists/$SUITE/InRelease" -o evidence/pre-a.InRelease
+          cmp --silent evidence/InRelease evidence/pre-a.InRelease
+          python scripts/capture_kali_snapshot.py \
+            --lock tools/rootfs-source-lock.json \
+            --inrelease evidence/pre-a.InRelease \
+            --keyring evidence/kali-archive-keyring.gpg \
+            --out evidence/pre-a-snapshot.json
+          cmp --silent evidence/repository-snapshot.json evidence/pre-a-snapshot.json
+
       - name: Build rootfs A from locked source and snapshot
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -147,6 +184,40 @@ jobs:
             --out artifacts/rootfs-a.tar.xz \
             --sudo
 
+      - name: Require repository snapshot unchanged after build A
+        shell: bash
+        env:
+          MIRROR: ${{ needs.signed-snapshot-contract.outputs.mirror }}
+          SUITE: ${{ needs.signed-snapshot-contract.outputs.suite }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "$MIRROR/dists/$SUITE/InRelease" -o evidence/post-a.InRelease
+          cmp --silent evidence/InRelease evidence/post-a.InRelease
+          python scripts/capture_kali_snapshot.py \
+            --lock tools/rootfs-source-lock.json \
+            --inrelease evidence/post-a.InRelease \
+            --keyring evidence/kali-archive-keyring.gpg \
+            --out evidence/post-a-snapshot.json
+          cmp --silent evidence/repository-snapshot.json evidence/post-a-snapshot.json
+
+      - name: Require repository snapshot unchanged before build B
+        shell: bash
+        env:
+          MIRROR: ${{ needs.signed-snapshot-contract.outputs.mirror }}
+          SUITE: ${{ needs.signed-snapshot-contract.outputs.suite }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "$MIRROR/dists/$SUITE/InRelease" -o evidence/pre-b.InRelease
+          cmp --silent evidence/InRelease evidence/pre-b.InRelease
+          python scripts/capture_kali_snapshot.py \
+            --lock tools/rootfs-source-lock.json \
+            --inrelease evidence/pre-b.InRelease \
+            --keyring evidence/kali-archive-keyring.gpg \
+            --out evidence/pre-b-snapshot.json
+          cmp --silent evidence/repository-snapshot.json evidence/pre-b-snapshot.json
+
       - name: Build rootfs B independently
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -156,6 +227,23 @@ jobs:
             --checkout builder-b \
             --out artifacts/rootfs-b.tar.xz \
             --sudo
+
+      - name: Require repository snapshot unchanged after build B
+        shell: bash
+        env:
+          MIRROR: ${{ needs.signed-snapshot-contract.outputs.mirror }}
+          SUITE: ${{ needs.signed-snapshot-contract.outputs.suite }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "$MIRROR/dists/$SUITE/InRelease" -o evidence/post-b.InRelease
+          cmp --silent evidence/InRelease evidence/post-b.InRelease
+          python scripts/capture_kali_snapshot.py \
+            --lock tools/rootfs-source-lock.json \
+            --inrelease evidence/post-b.InRelease \
+            --keyring evidence/kali-archive-keyring.gpg \
+            --out evidence/post-b-snapshot.json
+          cmp --silent evidence/repository-snapshot.json evidence/post-b-snapshot.json
 
       - name: Require byte-identical rootfs and package evidence
         env:
@@ -176,6 +264,7 @@ jobs:
           name: kali-arm64-rootfs-reproducible
           path: |
             artifacts/rootfs-a.tar.xz
+            evidence/InRelease
             evidence/repository-snapshot.json
             evidence/rootfs-artifact.json
             evidence/rootfs.sha256
