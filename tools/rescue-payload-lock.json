@@ -49,6 +49,7 @@
     "stat",
     "switch_root",
     "sync",
+    "tail",
     "tr",
     "umount",
     "uname"
