@@ -4,6 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from kaliphonestudio.rescue_evidence import (
+    evidence_from_dict,
+    load_rescue_initramfs_evidence,
+    verify_rescue_initramfs_artifact,
+)
 from kaliphonestudio.rescue_initramfs import (
     RescueInitramfsError,
     build_reproducible_rescue_initramfs,
@@ -43,6 +48,10 @@ def test_reproducible_newc_and_evidence(tmp_path: Path) -> None:
     raw = json.loads(evidence_path.read_text(encoding="utf-8"))
     assert raw["source_tree_sha256"] == evidence.source_tree_sha256
     assert raw["init_sha256"] == sha256((source / "init").read_bytes()).hexdigest()
+
+    reloaded = load_rescue_initramfs_evidence(evidence_path)
+    assert reloaded == evidence
+    verify_rescue_initramfs_artifact(out, reloaded)
 
 
 def test_same_tree_gives_same_artifact_across_separate_publications(tmp_path: Path) -> None:
@@ -103,6 +112,27 @@ def test_rejects_world_writable_regular_file(tmp_path: Path) -> None:
     bad.chmod(0o666)
     with pytest.raises(RescueInitramfsError, match="world-writable"):
         build_reproducible_rescue_initramfs(source, tmp_path / "a", tmp_path / "e")
+
+
+def test_tampered_artifact_fails_evidence_revalidation(tmp_path: Path) -> None:
+    source = tmp_path / "root"
+    source.mkdir()
+    _make_tree(source)
+    out = tmp_path / "rescue.cpio"
+    evidence_path = tmp_path / "rescue.json"
+    build_reproducible_rescue_initramfs(source, out, evidence_path)
+    evidence = load_rescue_initramfs_evidence(evidence_path)
+
+    data = bytearray(out.read_bytes())
+    data[200] ^= 1
+    out.write_bytes(data)
+    with pytest.raises(RescueInitramfsError, match="SHA-256"):
+        verify_rescue_initramfs_artifact(out, evidence)
+
+
+def test_malformed_evidence_fails_closed() -> None:
+    with pytest.raises(RescueInitramfsError, match="fields"):
+        evidence_from_dict({"schema_version": 1})
 
 
 def test_refuses_overwrite(tmp_path: Path) -> None:
