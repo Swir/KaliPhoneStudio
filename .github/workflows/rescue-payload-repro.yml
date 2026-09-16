@@ -1,0 +1,164 @@
+name: rescue-payload-repro
+
+on:
+  push:
+    paths:
+      - "tools/rescue-payload-lock.json"
+      - "rescue/busybox-minimal.config"
+      - "rescue/init"
+      - "kaliphonestudio/rescue_payload.py"
+      - "kaliphonestudio/rescue_payload_repro.py"
+      - "kaliphonestudio/rescue_candidate.py"
+      - "kaliphonestudio/initramfs.py"
+      - "kaliphonestudio/lz4_legacy.py"
+      - "scripts/build_verified_rescue_candidate.py"
+      - ".github/workflows/rescue-payload-repro.yml"
+  pull_request:
+    paths:
+      - "tools/rescue-payload-lock.json"
+      - "rescue/busybox-minimal.config"
+      - "rescue/init"
+      - "kaliphonestudio/rescue_payload.py"
+      - "kaliphonestudio/rescue_payload_repro.py"
+      - "kaliphonestudio/rescue_candidate.py"
+      - "kaliphonestudio/initramfs.py"
+      - "kaliphonestudio/lz4_legacy.py"
+      - "scripts/build_verified_rescue_candidate.py"
+      - ".github/workflows/rescue-payload-repro.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-rescue-payload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout KaliPhoneStudio
+        uses: actions/checkout@v5
+
+      - name: Read authoritative rescue build lock
+        id: lock
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path("tools/rescue-payload-lock.json").read_text(encoding="utf-8"))
+          source = data["busybox"]
+          build = data["build"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              print(f"source_url={source['source_url']}", file=f)
+              print(f"source_sha256={source['source_sha256']}", file=f)
+              print(f"cross_compile={build['cross_compile']}", file=f)
+              print(f"kconfig_target={build['kconfig_target']}", file=f)
+              print(f"make_target={build['make_target']}", file=f)
+              print(f"ldflags={build['ldflags']}", file=f)
+              print(f"source_date_epoch={build['source_date_epoch']}", file=f)
+
+      - name: Install ARM64 cross-build and execution prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static make bzip2 curl ca-certificates
+
+      - name: Fetch and verify exact BusyBox source archive
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.lock.outputs.source_url }}
+          SOURCE_SHA256: ${{ steps.lock.outputs.source_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/source
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 \
+            "$SOURCE_URL" --output build/source/busybox.tar.bz2
+          printf '%s  %s\n' "$SOURCE_SHA256" build/source/busybox.tar.bz2 | sha256sum -c -
+
+      - name: Build two independent static ARM64 rescue binaries
+        shell: bash
+        env:
+          CROSS_COMPILE: ${{ steps.lock.outputs.cross_compile }}
+          KCONFIG_TARGET: ${{ steps.lock.outputs.kconfig_target }}
+          MAKE_TARGET: ${{ steps.lock.outputs.make_target }}
+          LOCKED_LDFLAGS: ${{ steps.lock.outputs.ldflags }}
+          SOURCE_DATE_EPOCH: ${{ steps.lock.outputs.source_date_epoch }}
+          KBUILD_BUILD_USER: kaliphonestudio
+          KBUILD_BUILD_HOST: reproducible
+          KBUILD_BUILD_VERSION: "1"
+          LC_ALL: C
+          TZ: UTC
+        run: |
+          set -euo pipefail
+          for pass in a b; do
+            mkdir -p "build/$pass"
+            tar -xjf build/source/busybox.tar.bz2 -C "build/$pass" --strip-components=1
+            (
+              cd "build/$pass"
+              KCONFIG_ALLCONFIG="$GITHUB_WORKSPACE/rescue/busybox-minimal.config" \
+                make CROSS_COMPILE="$CROSS_COMPILE" "$KCONFIG_TARGET"
+              grep -qx 'CONFIG_STATIC=y' .config
+              LDFLAGS="$LOCKED_LDFLAGS" \
+                make -j2 CROSS_COMPILE="$CROSS_COMPILE" "$MAKE_TARGET"
+            )
+            cp "build/$pass/busybox" "build/busybox-$pass"
+            qemu-aarch64-static "build/busybox-$pass" --list | LC_ALL=C sort -u > "build/applets-$pass.txt"
+          done
+          cmp build/busybox-a build/busybox-b
+          cmp build/applets-a.txt build/applets-b.txt
+          file build/busybox-a
+          sha256sum build/busybox-a build/busybox-b
+
+      - name: Build profile-formatted candidate through the verified evidence chain
+        shell: bash
+        env:
+          CROSS_COMPILE: ${{ steps.lock.outputs.cross_compile }}
+        run: |
+          set -euo pipefail
+          compiler="${CROSS_COMPILE}gcc"
+          compiler_id="$($compiler --version | head -n 1)"
+          target_machine="$($compiler -dumpmachine)"
+          mkdir -p build/evidence
+          python scripts/build_verified_rescue_candidate.py \
+            --profile-id oneplus/avicii \
+            --source-archive build/source/busybox.tar.bz2 \
+            --busybox-a build/busybox-a \
+            --busybox-b build/busybox-b \
+            --applets-a build/applets-a.txt \
+            --applets-b build/applets-b.txt \
+            --compiler-id "$compiler_id" \
+            --target-machine "$target_machine" \
+            --out build/rescue.cpio.lz4 \
+            --repro-evidence build/evidence/rescue-payload-repro.json \
+            --candidate-evidence build/evidence/rescue-candidate.json
+          sha256sum build/rescue.cpio.lz4 > build/evidence/rescue.cpio.lz4.sha256
+
+      - name: Cross-check candidate evidence and offline policy
+        shell: python
+        run: |
+          import hashlib, json
+          from pathlib import Path
+          candidate = json.loads(Path("build/evidence/rescue-candidate.json").read_text(encoding="utf-8"))
+          repro = json.loads(Path("build/evidence/rescue-payload-repro.json").read_text(encoding="utf-8"))
+          ramdisk = Path("build/rescue.cpio.lz4").read_bytes()
+          if candidate["profile_id"] != "oneplus/avicii":
+              raise SystemExit("candidate profile drift")
+          if candidate["ramdisk_compression"] != "lz4":
+              raise SystemExit("avicii rescue candidate must use LZ4")
+          if candidate["ramdisk_sha256"] != hashlib.sha256(ramdisk).hexdigest():
+              raise SystemExit("candidate ramdisk hash drift")
+          if repro["independent_builds"] != 2 or repro["reproducible"] is not True:
+              raise SystemExit("payload reproducibility evidence is incomplete")
+          if repro["architecture"] != "arm64" or repro["target_machine"] != "aarch64-linux-gnu":
+              raise SystemExit("payload architecture evidence drift")
+
+      - name: Upload reproducibility evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: rescue-payload-repro-evidence
+          path: |
+            build/evidence/rescue-payload-repro.json
+            build/evidence/rescue-candidate.json
+            build/evidence/rescue.cpio.lz4.sha256
+          if-no-files-found: error

@@ -70,5 +70,17 @@
   ],
   "init_template": "rescue/init",
   "network_default": "disabled",
-  "ssh_default": "disabled"
+  "ssh_default": "disabled",
+  "materials": {
+    "config_sha256": "33c41855c66cb1a03385a29cec3f688ebeea9bb9d879fdb04bcca077ee2efe88",
+    "init_sha256": "329de79ba0f3404066685b3b424c9c00e1fb34f26cbc7303974ff9279247725f"
+  },
+  "build": {
+    "cross_compile": "aarch64-linux-gnu-",
+    "kconfig_target": "allnoconfig",
+    "make_target": "busybox",
+    "ldflags": "--static",
+    "source_date_epoch": 0,
+    "independent_builds": 2
+  }
 }
