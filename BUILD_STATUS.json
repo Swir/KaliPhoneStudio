@@ -1,6 +1,6 @@
 {
   "version": "0.6.17-dev",
-  "stage": "boot authorization hardened; Kali ARM64 rootfs source/reproducibility evidence contract in progress",
+  "stage": "boot authorization hardened; Kali ARM64 rootfs source/reproducibility and first-boot evidence contracts in progress",
   "repository_source_of_truth": true,
   "project_progress_percent": 49,
   "host_ci": "main run 35083769496 PASS; 0.6.17 branch CI pending",
@@ -32,6 +32,7 @@
   "rootfs_target": "kali-rolling arm64 minimal",
   "rootfs_reproducibility_contract": "implemented-host-side; exact repository metadata/package-index hashes and independent double-build equality required",
   "rootfs_reproducible_artifact": false,
+  "first_boot_candidate_manifest": "implemented-host-side; binds temporary-boot authorization and verified rootfs evidence without claiming hardware success",
   "destructive_write_policy": "inactive-slot-only for declared A/B partitions",
   "first_profile": "oneplus/avicii",
   "hardware_verified": false,
