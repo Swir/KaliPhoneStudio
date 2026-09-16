@@ -5,11 +5,12 @@ Historical development entries through **0.6.27-dev** are preserved verbatim in 
 ## 0.6.30-dev — first-boot execution provenance binding
 
 - Upgraded the host-side first-boot candidate contract to schema v8.
-- A candidate now requires `KernelReproducibilityBindingEvidence`, not only output-level kernel reproducibility and compiler provenance.
-- The execution binding must match the exact profile, kernel-plan digest, source commit, toolchain-lock digest and strict reproducibility-evidence digest.
-- Final `.config` and ARM64 `Image` SHA-256/size must agree across kernel candidate evidence, strict reproducibility evidence and executed-build binding evidence.
-- Schema-v8 manifests carry the canonical kernel build-recipe digest, reproducibility-environment digest and both A/B build-run evidence digests so release-candidate provenance cannot silently detach from the builds that produced the accepted bytes.
-- Added fail-closed regression coverage for reproducibility-digest drift, toolchain substitution, incomplete independent-build equality and host evidence attempting to claim hardware/Beta credit.
+- A candidate now requires `KernelReproducibilityBindingEvidence` **and both exact `KernelBuildRunEvidence` records**, not only output-level kernel reproducibility and compiler provenance.
+- The candidate re-hashes the supplied A/B run records and requires those digests to equal the execution binding; a substituted run record therefore fails closed even when final kernel bytes happen to match.
+- Both run records are cross-checked against the accepted profile, kernel-plan digest, source commit, checkout evidence, toolchain lock, compiler-selection evidence, materialized compiler evidence, canonical build recipe and reproducibility environment.
+- Each run's config/Image verification-evidence digest and final SHA-256/size must agree with strict reproducibility evidence and `KernelCandidateEvidence`, closing the remaining summary-only provenance gap.
+- Schema-v8 manifests carry the execution-binding digest, canonical build-recipe/environment digests and both A/B build-run evidence digests so release-candidate provenance cannot silently detach from the builds that produced the accepted bytes.
+- Added fail-closed regression coverage for run-record substitution, checkout drift, reproducibility-digest drift, toolchain substitution, incomplete independent-build equality and host evidence attempting to claim hardware/Beta credit.
 - Updated README, ROADMAP, BUILD_STATUS and `BETA_RELEASE_GATE.md`; project completion intentionally remains 52% because this milestone is host-side provenance hardening only.
 - Real kernel run `35146536390` and real rootfs run `35142328320` remain authoritative and are not credited until their strict final verification completes and evidence is reviewed.
 
