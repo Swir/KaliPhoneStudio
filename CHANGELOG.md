@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.27-dev — source-locked Android Clang kernel toolchain
+
+- Added a device-independent schema-v1 kernel toolchain lock for the compiler required by the current avicii kernel baseline instead of trusting a host `clang` or moving prebuilt path.
+- Pinned AOSP `platform/prebuilts/clang/host/linux-x86` commit `69e4b00fe608feec1bde77294dd648427644725f`, exact `clang-r416183b` subtree/bin tree and `AndroidVersion.txt` / build-manifest Git object identities, Android Clang `12.0.5` build `7284624`, and LLVM project commit `c935d99d7cf2016289302412d708641d52d2f7ee`.
+- Added strict Gitiles metadata verification with anti-XSSI parsing and immutable tree/blob identity checks, plus exact `AndroidVersion.txt` validation and canonical evidence marked `beta_gate_credit=false`.
+- Added materialized-toolchain verification that rejects symlink/non-executable compiler inputs, SHA-256 binds the local `clang` binary and requires the exact locked compiler banner and LLVM commit.
+- Added `KernelToolchainBindingEvidence`: the profile-driven kernel plan must explicitly use `LLVM=1`, and the exact kernel checkout's `build.config.common` must select a safe path ending in the locked `clang-r416183b/bin`; build-config and toolchain-lock hashes are bound to the kernel-plan digest.
+- Added dedicated `kernel-toolchain-lock` CI plus focused negative tests. The first workflow attempt exposed a missing pytest installation in the new dedicated job; that CI prerequisite was fixed immediately without weakening the contract. Live Gitiles verification subsequently passed before the binding extension, and the final branch matrix is re-running.
+- Tightened `BETA_RELEASE_GATE.md` so a future release kernel must have compiler/toolchain provenance bound to its approved build plan. No compiled-kernel or physical AC2003 hardware gate is credited, so project completion remains 52%.
+
 ## 0.6.26-dev — strict rootfs reproducibility diagnostics
 
 - Added device-independent `kaliphonestudio/rootfs_repro_diagnostics.py` for safe, bounded analysis of two failed rootfs `tar.xz` candidates without extracting either archive.

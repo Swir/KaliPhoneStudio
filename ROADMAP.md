@@ -49,6 +49,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Device-independent kernel evidence model for exact checkout, final `.config` and ARM64 `Image`
 - [x] Bind kernel source/config/Image evidence to the exact kernel SHA-256/size in the approved boot build plan
 - [x] Require two independent byte-identical final kernel `.config` and ARM64 `Image` builds before kernel reproducibility evidence is accepted
+- [x] Pin the Android Clang kernel compiler to an immutable AOSP commit/subtree/object set and verify it against live Gitiles metadata
+- [x] Bind the kernel plan to the exact checkout build configuration selecting the locked Clang revision; reject toolchain/path drift fail-closed
 - [x] Carry kernel provenance, reproducibility and exact Image evidence into schema-v6 first-boot candidate manifests
 - [x] Pin exact upstream FDT and Android DT table format references
 - [x] Device-independent structural DTB/DTBO validation with bounded parsing, partition limits and exact boot-plan SHA-256/size binding
@@ -69,7 +71,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
 - [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [x] Add bounded canonical rootfs divergence diagnostics for strict CI failures; compare member sets/order/metadata/content hashes without extraction, mark the report `beta_gate_credit=false`, and keep the strict job failed
-- [ ] Obtain the first green real double-build run and review/archive its evidence (latest real run completed both builds but failed strict final reproducibility)
+- [ ] Obtain the first green real double-build run and review/archive its evidence (latest completed strict run failed; the next diagnostics-enabled run is still executing)
 - [ ] Mark a concrete ARM64 rootfs artifact reproducible only after that run passes
 - [ ] Promote first-boot evidence into a release-candidate manifest only after hardware gates exist
 - [ ] Generic first-boot provisioning independent of device name
@@ -108,7 +110,9 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Public LineageOS `android_kernel_oneplus_sm7250` bring-up baseline pinned to exact commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` and kernel `4.19.300`
 - [x] Host-side exact kernel checkout/config/Image evidence and boot-plan binding implemented
 - [x] Host-side kernel reproducibility evidence contract implemented; no concrete final hardware kernel is credited yet
+- [x] AOSP Android Clang `r416183b` source identity locked to exact commit/tree/blob metadata and bound to the kernel checkout's declared compiler path
 - [x] Host-side DTB/DTBO structural evidence, exact boot-plan binding and partition-bound checks implemented
+- [ ] Produce and review a concrete double-build kernel artifact using the locked toolchain
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA

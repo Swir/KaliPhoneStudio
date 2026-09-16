@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.26-dev** — the host boot chain, exact-firmware authorization, profile-driven kernel/device-tree evidence and kernel reproducibility contracts are in place. First-boot candidate schema v6 binds the reproducible kernel evidence together with exact firmware, boot, DTB/DTBO and rootfs evidence. The real ARM64 rootfs workflow completed two independent builds but failed the strict byte-for-byte acceptance step, so `rootfs_reproducible_artifact` remains false. The new rootfs diagnostic layer records bounded member/content/metadata/order differences after such a failure without changing the strict gate or granting Beta credit. This remains **host-side provenance and preflight only**: no final kernel/DTB/DTBO candidate or Kali userspace has been proven on a physical AC2003. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.27-dev** — the host boot chain, exact-firmware authorization, profile-driven kernel/device-tree evidence and kernel reproducibility contracts are in place. The current avicii kernel baseline's Android Clang dependency is now source-locked to immutable AOSP Gitiles commit/tree/blob identities for `clang-r416183b`, and the kernel checkout's `build.config.common` can be bound fail-closed to that exact compiler lock instead of trusting a moving host compiler or PATH. First-boot candidate schema v6 still binds reproducible kernel evidence together with exact firmware, boot, DTB/DTBO and rootfs evidence. The latest completed ARM64 rootfs double-build failed strict byte-for-byte acceptance; the next diagnostics-enabled real double-build is still running, so `rootfs_reproducible_artifact` remains false. This remains **host-side provenance and preflight only**: no final kernel/DTB/DTBO candidate or Kali userspace has been proven on a physical AC2003. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ A schema-v2 profile must provide unambiguous identity, a destructive-action conf
 |---|---|---|---|
 | OnePlus Nord AC2003 | `oneplus/avicii` | Bring-up; physical first boot pending | **Not released** |
 
-The avicii engineering board baseline is pinned to LineageOS `android_device_oneplus_avicii` commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`. That source records Android boot header v2, 4096-byte pages, in-boot DTB, separate DTBO and LZ4 ramdisk policy. Its kernel dependency is independently pinned in the device profile to LineageOS `android_kernel_oneplus_sm7250` commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`) as a reviewed bring-up baseline. DTB parsing semantics are pinned to AOSP `platform/external/dtc` commit `295e585a34339f6280e561278288e4490d9390f7`; Android DT table semantics are pinned to AOSP `platform/system/libufdt` commit `1ebea487f96b2a4d1a4e1a28ea338591c36a4f8b`. These are source references, **not** proof that Kali hardware functions work and not yet the final hardware-verified first-boot kernel/device-tree set.
+The avicii engineering board baseline is pinned to LineageOS `android_device_oneplus_avicii` commit `3f1270c2871e9893332073eb0f8f5f9499abbf13`. That source records Android boot header v2, 4096-byte pages, in-boot DTB, separate DTBO and LZ4 ramdisk policy. Its kernel dependency is independently pinned in the device profile to LineageOS `android_kernel_oneplus_sm7250` commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`) as a reviewed bring-up baseline. That exact kernel checkout declares Android Clang `r416183b`; KaliPhoneStudio locks the corresponding AOSP prebuilt source identity to `platform/prebuilts/clang/host/linux-x86@69e4b00fe608feec1bde77294dd648427644725f`, Android Clang `12.0.5` build `7284624`, LLVM project commit `c935d99d7cf2016289302412d708641d52d2f7ee`, and exact Gitiles subtree/blob object IDs. DTB parsing semantics are pinned to AOSP `platform/external/dtc` commit `295e585a34339f6280e561278288e4490d9390f7`; Android DT table semantics are pinned to AOSP `platform/system/libufdt` commit `1ebea487f96b2a4d1a4e1a28ea338591c36a4f8b`. These are source references, **not** proof that Kali hardware functions work and not yet the final hardware-verified first-boot kernel/device-tree set.
 
 ## Implemented host-side foundations
 
@@ -48,7 +48,7 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Mandatory pre-assembly TOCTOU revalidation detects changed profile policy, provenance, component size/hash or unsafe input paths.
 - Boot assembler/unpacker source lock in `tools/boot-tool-locks.json`: LineageOS `android_system_tools_mkbootimg` commit `808ecd09666ffe0ff5800f02af693abce56eb395`; header-v2 plans cannot fall back to an arbitrary host `mkbootimg` from PATH.
 - Deterministic source-locked `mkbootimg` invocation, independent double assembly and byte-for-byte equality requirement before an image can be accepted.
-- Source-locked `unpack_bootimg` round-trip verification of kernel, ramdisk and in-boot DTB against the original plan.
+- Source-locked `unpack_bootimg` round-trip verification of kernel, ramdisk and in-boot DTB against the approved plan.
 - Fail-closed `TemporaryBootAuthorization` schema v2 ties the verified phone serial to the captured Fastboot baseline digest, exact firmware build/fingerprint, stock OTA provenance, plan digest, reproducible assembly and structural verification.
 - Device-independent kernel evidence contract creates a canonical `KernelBuildPlan` from the selected profile and exactly one pinned kernel source.
 - Exact kernel checkout evidence verifies git `HEAD`, expected Makefile kernel version and SHA-256 of the profile-selected defconfig/config fragments before build evidence can advance.
@@ -56,6 +56,10 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - ARM64 kernel preflight verifies Linux `Image` magic, SHA-256 and size, then re-hashes the image when source/config/image evidence is bundled to prevent post-verification drift.
 - `KernelCandidateEvidence` binds plan, source commit/version, config evidence and exact `Image`; the first-boot candidate additionally requires that the kernel SHA-256/size equal the kernel input in the approved `BootBuildPlan`.
 - Kernel reproducibility evidence requires two independent build roots, revalidates both final `.config` and ARM64 `Image` outputs against the same profile-driven plan, and accepts evidence only when both pairs are byte-identical. Canonical evidence intentionally omits host paths and does not grant hardware credit.
+- `tools/kernel-toolchain-lock.json` pins the Android Clang source commit, exact `clang-r416183b` subtree/bin tree and metadata blobs, Android Clang version/build and LLVM project commit; source evidence is canonical and explicitly `beta_gate_credit=false`.
+- Dedicated `kernel-toolchain-lock` CI verifies the immutable AOSP Gitiles object identities and exact `AndroidVersion.txt` content instead of trusting a moving download URL or host compiler.
+- Materialized toolchain verification hashes the local `clang` binary, requires executable regular-file semantics and checks the exact compiler banner plus LLVM commit before that compiler can be treated as the locked build input.
+- `KernelToolchainBindingEvidence` requires both the profile-driven kernel plan and exact kernel `build.config.common` to use LLVM mode and select a safe path ending in the locked `clang-r416183b/bin`; the build-config SHA-256 and toolchain-lock SHA-256 are bound to the kernel-plan digest.
 - `tools/device-tree-format-locks.json` pins exact upstream FDT and Android DT table format references; dedicated CI fetches those exact commits and verifies the expected authoritative format definitions are still present.
 - Device-independent DTB verification parses big-endian FDT v17 headers, validates block offsets/ranges/alignment, supports safe zero-padded concatenated DTB bundles and emits canonical SHA-256/size/tree-count evidence.
 - Device-independent DTBO verification parses the Android DT table header/entries, validates page/table metadata, non-overlapping payload ranges, every embedded FDT and zero-only padding, then enforces the selected profile's DTBO partition limit.
@@ -72,7 +76,7 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Rootfs build execution performs a fail-closed host preflight requiring `qemu-aarch64-static`, rejecting a competing dynamic `qemu-aarch64`, preventing the pinned upstream dependency helper from replacing the static emulator, and revalidating the signed HTTPS `InRelease` state immediately before each build.
 - The reviewed Kali archive keyring used for snapshot verification is carried into the rootfs job so debootstrap can validate Kali repository signatures itself.
 - `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and executes two real pinned ARM64 builds on relevant `main` pushes; strict acceptance still requires byte-identical archives and package evidence.
-- Failed strict rootfs comparisons now trigger a bounded, safe `tar.xz` diagnostic report that compares canonical member sets, order, metadata and streamed regular-file SHA-256 values. The report is non-release evidence with `beta_gate_credit=false`; it is uploaded only to explain a failure, after which the workflow still fails.
+- Failed strict rootfs comparisons trigger a bounded, safe `tar.xz` diagnostic report that compares canonical member sets, order, metadata and streamed regular-file SHA-256 values. The report is non-release evidence with `beta_gate_credit=false`; it is uploaded only to explain a failure, after which the workflow still fails.
 - Device-independent deterministic rescue-initramfs construction normalizes uid/gid/mtime and entry ordering, builds twice, requires byte equality, emits canonical SHA-256 evidence, and rejects setuid/setgid, world-writable regular files, special files and unsafe paths.
 - Rescue initramfs supports deterministic LZ4 legacy framing for profiles whose boot policy requires `lz4`. The implementation is pinned to reviewed AOSP/LZ4 format references in `tools/ramdisk-format-locks.json`, uses bounded 8 MiB legacy blocks and independently decodes the resulting stream before acceptance.
 - Source-locked ARM64 rescue payload contract pins BusyBox 1.38.0 source URL/SHA-256, reviewed local miniconfig and `/init` hashes, ARM64 static-ELF policy, required rescue applets and forbidden remote-access applets.
@@ -82,7 +86,7 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Verified rescue-initramfs evidence can bind to a boot plan only when exact ramdisk bytes, size, compression policy and plan digest agree. This host-side binding is not a physical rescue claim.
 - CI targets Python **3.11, 3.12, 3.13 and 3.14**.
 
-The latest real ARM64 rootfs double-build completed both builds but failed the strict reproducibility verifier. `rootfs_reproducible_artifact` therefore remains **false**. Rootfs diagnostics may identify whether divergence is container-only, metadata, ordering or file-content related, but they never substitute for byte-for-byte acceptance.
+The latest completed real ARM64 rootfs double-build failed the strict reproducibility verifier. `rootfs_reproducible_artifact` therefore remains **false**. The next diagnostics-enabled real run is still executing; rootfs diagnostics may identify whether divergence is container-only, metadata, ordering or file-content related, but they never substitute for byte-for-byte acceptance.
 
 ## Safety model
 
@@ -90,7 +94,7 @@ KaliPhoneStudio prefers **temporary boot first** and **inactive slot second**. I
 
 ## AC2003 Beta blockers
 
-Before the first Beta, the exact physical AC2003 must still provide its real OxygenOS build/fingerprint and Fastboot transcript evidence; a matching stock `boot.img` must be obtained and validated; a concrete final kernel + DTB/DTBO candidate must be built and proven on that phone; the candidate must successfully temporary-boot; rescue/logging must work; the kernel must reach Kali early userspace/rootfs; required storage and charging/battery behavior must be safe; and recovery must be exercised and documented. Release artifacts additionally require a compatibility matrix, manifest and SHA-256 checksums.
+Before the first Beta, the exact physical AC2003 must still provide its real OxygenOS build/fingerprint and Fastboot transcript evidence; a matching stock `boot.img` must be obtained and validated; a concrete final kernel + DTB/DTBO candidate must be built reproducibly using the locked compiler provenance and proven on that phone; the candidate must successfully temporary-boot; rescue/logging must work; the kernel must reach Kali early userspace/rootfs; required storage and charging/battery behavior must be safe; and recovery must be exercised and documented. Release artifacts additionally require a compatibility matrix, manifest and SHA-256 checksums.
 
 ## Development
 
@@ -98,6 +102,12 @@ Before the first Beta, the exact physical AC2003 must still provide its real Oxy
 python -m pip install -r requirements.txt
 python main.py
 python -m pytest -q
+```
+
+The immutable Android Clang source identity can be checked without downloading the full compiler payload:
+
+```powershell
+python scripts/verify_kernel_toolchain_upstream.py --lock tools/kernel-toolchain-lock.json --out evidence/kernel-toolchain-source.json
 ```
 
 `rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, independent builds second, canonical evidence only after equality. When strict comparison fails, the CI emits a bounded diagnostic artifact and then remains failed.

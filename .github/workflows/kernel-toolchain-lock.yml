@@ -1,0 +1,68 @@
+name: kernel-toolchain-lock
+
+on:
+  pull_request:
+    paths:
+      - "tools/kernel-toolchain-lock.json"
+      - "kaliphonestudio/kernel_toolchain.py"
+      - "kaliphonestudio/kernel_toolchain_binding.py"
+      - "scripts/verify_kernel_toolchain_upstream.py"
+      - "scripts/verify_kernel_toolchain_binding.py"
+      - "tests/test_kernel_toolchain.py"
+      - "tests/test_kernel_toolchain_binding.py"
+      - ".github/workflows/kernel-toolchain-lock.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/kernel-toolchain-lock.json"
+      - "kaliphonestudio/kernel_toolchain.py"
+      - "kaliphonestudio/kernel_toolchain_binding.py"
+      - "scripts/verify_kernel_toolchain_upstream.py"
+      - "scripts/verify_kernel_toolchain_binding.py"
+      - "tests/test_kernel_toolchain.py"
+      - "tests/test_kernel_toolchain_binding.py"
+      - ".github/workflows/kernel-toolchain-lock.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run focused toolchain lock tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_kernel_toolchain.py
+          tests/test_kernel_toolchain_binding.py
+      - name: Verify exact upstream Gitiles objects
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python scripts/verify_kernel_toolchain_upstream.py
+          --lock tools/kernel-toolchain-lock.json
+          --out evidence/kernel-toolchain-source.json
+      - name: Compile verifiers
+        run: >-
+          python -m py_compile
+          kaliphonestudio/kernel_toolchain.py
+          kaliphonestudio/kernel_toolchain_binding.py
+          scripts/verify_kernel_toolchain_upstream.py
+          scripts/verify_kernel_toolchain_binding.py
+      - name: Upload non-hardware source-lock evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-toolchain-source-lock
+          path: evidence/kernel-toolchain-source.json
+          if-no-files-found: error
+          retention-days: 14
