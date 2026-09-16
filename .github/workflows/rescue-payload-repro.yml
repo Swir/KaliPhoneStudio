@@ -11,6 +11,7 @@ on:
       - "kaliphonestudio/rescue_candidate.py"
       - "kaliphonestudio/initramfs.py"
       - "kaliphonestudio/lz4_legacy.py"
+      - "scripts/apply_busybox_miniconfig.py"
       - "scripts/build_verified_rescue_candidate.py"
       - ".github/workflows/rescue-payload-repro.yml"
   pull_request:
@@ -23,6 +24,7 @@ on:
       - "kaliphonestudio/rescue_candidate.py"
       - "kaliphonestudio/initramfs.py"
       - "kaliphonestudio/lz4_legacy.py"
+      - "scripts/apply_busybox_miniconfig.py"
       - "scripts/build_verified_rescue_candidate.py"
       - ".github/workflows/rescue-payload-repro.yml"
   workflow_dispatch:
@@ -96,9 +98,14 @@ jobs:
             tar -xjf build/source/busybox.tar.bz2 -C "build/$pass" --strip-components=1
             (
               cd "build/$pass"
-              KCONFIG_ALLCONFIG="$GITHUB_WORKSPACE/rescue/busybox-minimal.config" \
-                make CROSS_COMPILE="$CROSS_COMPILE" "$KCONFIG_TARGET"
-              grep -qx 'CONFIG_STATIC=y' .config
+              make CROSS_COMPILE="$CROSS_COMPILE" "$KCONFIG_TARGET" >/dev/null
+              python "$GITHUB_WORKSPACE/scripts/apply_busybox_miniconfig.py" \
+                --miniconfig "$GITHUB_WORKSPACE/rescue/busybox-minimal.config" \
+                --config .config
+              make CROSS_COMPILE="$CROSS_COMPILE" silentoldconfig >/dev/null
+              python "$GITHUB_WORKSPACE/scripts/apply_busybox_miniconfig.py" \
+                --miniconfig "$GITHUB_WORKSPACE/rescue/busybox-minimal.config" \
+                --config .config --check
               LDFLAGS="$LOCKED_LDFLAGS" \
                 make -j2 CROSS_COMPILE="$CROSS_COMPILE" "$MAKE_TARGET"
             )
