@@ -2,11 +2,11 @@
 
 The pinned NetHunter builder is authoritative for package selection and filesystem
 contents, but it necessarily creates a few machine-local values and records wall-clock
-mtimes.  This module removes only that explicitly reviewed volatile state and rewrites
+mtimes. This module removes only that explicitly reviewed volatile state and rewrites
 the tar.xz deterministically before independent A/B artifacts are compared.
 
 It never extracts the archive to the host filesystem and never grants hardware/Beta
-credit.  Package selection remains verified separately from dpkg status and strict
+credit. Package selection remains verified separately from dpkg status and strict
 byte-for-byte equality remains the final reproducibility gate.
 """
 from __future__ import annotations
@@ -114,7 +114,7 @@ def _canonical_shadow(data: bytes) -> tuple[bytes, int]:
     except UnicodeDecodeError as exc:
         raise RootfsError("rootfs shadow file is not valid UTF-8") from exc
 
-    locked = 0
+    changed = 0
     output: list[str] = []
     for raw_line in text.splitlines():
         if not raw_line or raw_line.startswith("#"):
@@ -123,17 +123,19 @@ def _canonical_shadow(data: bytes) -> tuple[bytes, int]:
         fields = raw_line.split(":")
         if len(fields) < 2 or not fields[0]:
             raise RootfsError("rootfs shadow file contains a malformed account record")
-        password = fields[1]
-        if not password.startswith(("!", "*")):
-            # A generic reproducible image must not preserve a builder-generated
-            # password salt/hash as a machine identity.  Lock it; first-boot
-            # provisioning is responsible for creating user credentials.
+
+        # Preserve the conventional '*' non-login marker. Any other password field,
+        # including !<hash>, is normalized to one locked marker. This removes random
+        # salt/hash identity without introducing a shared deterministic password.
+        # First-boot provisioning must create real user credentials later.
+        if fields[1] != "*" and fields[1] != "!":
             fields[1] = "!"
-            if len(fields) >= 3:
-                fields[2] = "0"
-            locked += 1
+            changed += 1
+        if len(fields) >= 3 and fields[2] != "0":
+            fields[2] = "0"
+            changed += 1
         output.append(":".join(fields))
-    return ("\n".join(output) + "\n").encode("utf-8"), locked
+    return ("\n".join(output) + "\n").encode("utf-8"), changed
 
 
 def _canonical_member(member: tarfile.TarInfo) -> tarfile.TarInfo:
@@ -155,8 +157,7 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
     Reviewed normalization policy:
     * all tar member mtimes -> epoch 0;
     * machine-id/dbus machine-id/fake-hwclock payloads -> empty;
-    * active password hashes in /etc/shadow -> locked (never replaced by a shared
-      deterministic password);
+    * password hashes and password-aging build dates in /etc/shadow -> locked/canonical;
     * ldconfig auxiliary cache -> omitted because it is regenerated from libraries.
 
     No other regular-file payload is changed.
@@ -176,6 +177,8 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
     locked_passwords = 0
     dropped = 0
     output_count = 0
+    members: list[tarfile.TarInfo] = []
+    prefix: tuple[str, ...] = ()
 
     try:
         with tarfile.open(source_path, mode="r:xz") as source:
@@ -207,9 +210,8 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
                         if extracted is None:
                             raise RootfsError(f"cannot read regular rootfs member: {member.name}")
                         if logical in _ZERO_CONTENT_PATHS:
-                            payload_bytes = b""
                             normalized.size = 0
-                            payload = io.BytesIO(payload_bytes)
+                            payload = io.BytesIO(b"")
                             zeroed += 1
                         elif logical == _SHADOW_PATH:
                             original = extracted.read(_MAX_SHADOW_BYTES + 1)
@@ -222,11 +224,13 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
 
                     output.addfile(normalized, payload)
                     output_count += 1
-    except (tarfile.TarError, OSError) as exc:
+    except (RootfsError, tarfile.TarError, OSError) as exc:
         try:
             destination_path.unlink(missing_ok=True)
         except OSError:
             pass
+        if isinstance(exc, RootfsError):
+            raise
         raise RootfsError(f"cannot canonicalize rootfs archive: {exc}") from exc
 
     output_sha, output_size = _sha256_and_size(destination_path)
@@ -246,6 +250,7 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
         beta_gate_credit=False,
     )
     if evidence.member_count_input - evidence.member_count_output != evidence.dropped_cache_entries:
+        destination_path.unlink(missing_ok=True)
         raise RootfsError("canonical rootfs member accounting mismatch")
     return evidence
 
