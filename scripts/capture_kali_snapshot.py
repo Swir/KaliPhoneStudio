@@ -5,8 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import subprocess
+import sys
 
-from kaliphonestudio.rootfs import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from kaliphonestudio.rootfs import (  # noqa: E402
     RootfsError,
     load_rootfs_source_lock,
     repository_snapshot_from_inrelease,
