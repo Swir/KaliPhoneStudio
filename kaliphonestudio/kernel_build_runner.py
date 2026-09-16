@@ -3,7 +3,7 @@
 The runner deliberately separates *execution* from the existing evidence layers. It
 accepts an already validated :class:`KernelBuildPlan`, exact kernel checkout and
 materialized source-locked Clang tree, then runs a deterministic out-of-tree build
-using argv-only subprocess calls.  It emits per-build canonical evidence but never
+using argv-only subprocess calls. It emits per-build canonical evidence but never
 claims hardware or Beta-gate success.
 """
 from __future__ import annotations
@@ -13,6 +13,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import subprocess
 from typing import Any, Callable, Mapping
 
@@ -32,6 +33,8 @@ from .kernel_toolchain_binding import bind_kernel_plan_to_toolchain
 
 MAX_JOBS = 16
 DEFAULT_STEP_TIMEOUT_SECONDS = 45 * 60
+_POLICY_FRAGMENT_NAME = ".kaliphonestudio-required.config"
+_CONFIG_NAME_RE = re.compile(r"^CONFIG_[A-Z0-9_]+$")
 _REPRO_ENV = {
     "KBUILD_BUILD_USER": "kaliphonestudio",
     "KBUILD_BUILD_HOST": "repro-builder",
@@ -190,6 +193,45 @@ def _merge_script(checkout: Path) -> Path:
     return resolved
 
 
+def _required_config_fragment_payload(plan: KernelBuildPlan) -> str:
+    """Render the plan's required CONFIG states as a deterministic Kconfig fragment.
+
+    Required configs used to be verification-only. Applying the exact same profile-bound
+    policy before ``olddefconfig`` makes the build construction match the policy already
+    committed into ``KernelBuildPlan.plan_sha256()``. This is intentionally generic and
+    does not contain any device name or phone-specific conditional.
+    """
+    lines: list[str] = []
+    seen: set[str] = set()
+    for name, state in plan.required_configs:
+        if not isinstance(name, str) or not _CONFIG_NAME_RE.fullmatch(name):
+            raise KernelContractError("kernel build plan contains invalid required CONFIG name")
+        if name in seen:
+            raise KernelContractError(f"kernel build plan contains duplicate required config {name}")
+        seen.add(name)
+        if state == "n":
+            lines.append(f"# {name} is not set")
+        elif state in {"y", "m"}:
+            lines.append(f"{name}={state}")
+        else:
+            raise KernelContractError(f"kernel build plan contains unsupported required state for {name}")
+    if not lines:
+        raise KernelContractError("kernel build plan contains no required CONFIG policy")
+    return "\n".join(lines) + "\n"
+
+
+def _write_required_config_fragment(plan: KernelBuildPlan, output: Path) -> Path:
+    destination = output / _POLICY_FRAGMENT_NAME
+    if destination.exists() or destination.is_symlink():
+        raise KernelContractError("refusing to overwrite kernel required-config policy fragment")
+    destination.write_text(
+        _required_config_fragment_payload(plan),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return destination
+
+
 def _make_argv(
     checkout: Path,
     output: Path,
@@ -255,9 +297,14 @@ def execute_kernel_build(
 ) -> KernelBuildRunEvidence:
     """Run one exact-source, out-of-tree kernel build and emit canonical evidence.
 
-    The function never invokes ADB/Fastboot and never writes phone storage.  The
+    The function never invokes ADB/Fastboot and never writes phone storage. The
     output directory must be empty and independent from both the source checkout
-    and toolchain root.  Commands are passed as argv arrays with ``shell=False``.
+    and toolchain root. Commands are passed as argv arrays with ``shell=False``.
+
+    After upstream defconfig/fragments are loaded, the runner applies a generated,
+    deterministic fragment containing the profile's exact ``required_configs``.
+    The source checkout is never mutated. This ensures compatibility/security
+    policy is both *constructed* and independently verified in the final `.config`.
     """
     if not isinstance(step_timeout_seconds, int) or isinstance(step_timeout_seconds, bool) or step_timeout_seconds < 60:
         raise KernelContractError("kernel build step timeout must be an integer >= 60 seconds")
@@ -285,23 +332,24 @@ def execute_kernel_build(
         timeout=step_timeout_seconds,
     )
 
-    if recipe.config_fragments:
-        merge = _merge_script(source)
-        fragments = [_fragment_path(source, plan, item) for item in recipe.config_fragments]
-        _run_checked(
-            runner,
-            [
-                "bash",
-                str(merge),
-                "-m",
-                "-O",
-                str(output),
-                str(output / ".config"),
-                *[str(path) for path in fragments],
-            ],
-            env=env,
-            timeout=step_timeout_seconds,
-        )
+    merge = _merge_script(source)
+    fragments = [_fragment_path(source, plan, item) for item in recipe.config_fragments]
+    policy_fragment = _write_required_config_fragment(plan, output)
+    _run_checked(
+        runner,
+        [
+            "bash",
+            str(merge),
+            "-m",
+            "-O",
+            str(output),
+            str(output / ".config"),
+            *[str(path) for path in fragments],
+            str(policy_fragment),
+        ],
+        env=env,
+        timeout=step_timeout_seconds,
+    )
 
     _run_checked(
         runner,
