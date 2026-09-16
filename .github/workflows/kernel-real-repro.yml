@@ -1,0 +1,265 @@
+name: kernel-real-repro
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "devices/**/profile.json"
+      - "kaliphonestudio/kernel_contract.py"
+      - "kaliphonestudio/kernel_repro.py"
+      - "kaliphonestudio/kernel_toolchain.py"
+      - "kaliphonestudio/kernel_toolchain_binding.py"
+      - "kaliphonestudio/kernel_build_runner.py"
+      - "tools/kernel-toolchain-lock.json"
+      - "scripts/run_locked_kernel_build.py"
+      - "scripts/verify_kernel_repro_pair.py"
+      - "tests/test_kernel_build_runner.py"
+      - ".github/workflows/kernel-real-repro.yml"
+  pull_request:
+    paths:
+      - "devices/**/profile.json"
+      - "kaliphonestudio/kernel_contract.py"
+      - "kaliphonestudio/kernel_repro.py"
+      - "kaliphonestudio/kernel_toolchain.py"
+      - "kaliphonestudio/kernel_toolchain_binding.py"
+      - "kaliphonestudio/kernel_build_runner.py"
+      - "tools/kernel-toolchain-lock.json"
+      - "scripts/run_locked_kernel_build.py"
+      - "scripts/verify_kernel_repro_pair.py"
+      - "tests/test_kernel_build_runner.py"
+      - ".github/workflows/kernel-real-repro.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kernel-build-runner-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
+      - name: Compile build runner and verifier
+        run: >-
+          python -m py_compile
+          kaliphonestudio/kernel_build_runner.py
+          scripts/run_locked_kernel_build.py
+          scripts/verify_kernel_repro_pair.py
+
+      - name: Run focused kernel build-runner contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_kernel_build_runner.py
+          tests/test_kernel_repro.py
+          tests/test_kernel_toolchain.py
+          tests/test_kernel_toolchain_binding.py
+
+  reproducible-kernel:
+    if: github.event_name != 'pull_request'
+    needs: kernel-build-runner-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      PROFILE_ID: oneplus/avicii
+      TOOLCHAIN_LOCK: tools/kernel-toolchain-lock.json
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install exact-build host prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev dwarves rsync cpio xz-utils \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
+
+      - name: Resolve profile-driven kernel and compiler locks
+        id: locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.kernel_contract import create_kernel_build_plan
+          from kaliphonestudio.kernel_toolchain import load_kernel_toolchain_lock
+          from kaliphonestudio.profiles import get_profile
+
+          profile = get_profile(Path("devices"), os.environ["PROFILE_ID"])
+          plan = create_kernel_build_plan(profile)
+          lock = load_kernel_toolchain_lock(Path(os.environ["TOOLCHAIN_LOCK"]))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"kernel_url={plan.source_url}", file=out)
+              print(f"kernel_commit={plan.source_commit}", file=out)
+              print(f"kernel_plan_sha256={plan.plan_sha256()}", file=out)
+              print(f"toolchain_url={lock.source_url}", file=out)
+              print(f"toolchain_commit={lock.source_commit}", file=out)
+              print(f"toolchain_subtree={lock.subtree}", file=out)
+              print(f"toolchain_tree={lock.tree_sha1}", file=out)
+              print(f"toolchain_lock_sha256={lock.lock_sha256()}", file=out)
+          PY
+
+      - name: Materialize exact source-locked Android Clang subtree
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.locks.outputs.toolchain_url }}
+          SOURCE_COMMIT: ${{ steps.locks.outputs.toolchain_commit }}
+          SOURCE_SUBTREE: ${{ steps.locks.outputs.toolchain_subtree }}
+          SOURCE_TREE: ${{ steps.locks.outputs.toolchain_tree }}
+        run: |
+          set -euo pipefail
+          git init --quiet toolchain-repo
+          git -C toolchain-repo remote add origin "$SOURCE_URL"
+          git -C toolchain-repo config core.sparseCheckout true
+          printf '/%s/\n' "$SOURCE_SUBTREE" > toolchain-repo/.git/info/sparse-checkout
+          git -C toolchain-repo fetch --quiet --depth=1 --filter=blob:none origin "$SOURCE_COMMIT"
+          test "$(git -C toolchain-repo rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C toolchain-repo checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C toolchain-repo rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git -C toolchain-repo rev-parse "$SOURCE_COMMIT:$SOURCE_SUBTREE")" = "$SOURCE_TREE"
+          test -x "toolchain-repo/$SOURCE_SUBTREE/bin/clang"
+
+      - name: Verify immutable compiler source identity and materialized bytes
+        shell: bash
+        env:
+          TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python scripts/verify_kernel_toolchain_upstream.py \
+            --lock "$TOOLCHAIN_LOCK" \
+            --out evidence/kernel-toolchain-source.json
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.kernel_toolchain import load_kernel_toolchain_lock, verify_materialized_toolchain, write_evidence
+
+          lock = load_kernel_toolchain_lock(Path(os.environ["TOOLCHAIN_LOCK"]))
+          evidence = verify_materialized_toolchain(lock, Path(os.environ["TOOLCHAIN_ROOT"]))
+          digest = write_evidence(evidence, Path("evidence/kernel-toolchain-materialized.json"))
+          print(evidence.canonical_json(), end="")
+          print(f"materialized toolchain evidence sha256={digest}")
+          PY
+
+      - name: Prepare two independent exact-source kernel checkouts
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.locks.outputs.kernel_url }}
+          SOURCE_COMMIT: ${{ steps.locks.outputs.kernel_commit }}
+        run: |
+          set -euo pipefail
+          git init --quiet kernel-seed
+          git -C kernel-seed remote add origin "$SOURCE_URL"
+          git -C kernel-seed fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C kernel-seed rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C kernel-seed checkout --quiet --detach "$SOURCE_COMMIT"
+          git clone --quiet --no-hardlinks kernel-seed kernel-a
+          git clone --quiet --no-hardlinks kernel-seed kernel-b
+          git -C kernel-a checkout --quiet --detach "$SOURCE_COMMIT"
+          git -C kernel-b checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C kernel-a rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git -C kernel-b rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(realpath kernel-a)" != "$(realpath kernel-b)"
+
+      - name: Verify exact kernel checkout selects the locked compiler revision
+        run: |
+          python scripts/verify_kernel_toolchain_binding.py \
+            --profile-id "$PROFILE_ID" \
+            --checkout kernel-a \
+            --lock "$TOOLCHAIN_LOCK" \
+            --out evidence/kernel-toolchain-binding.json
+
+      - name: Build kernel A and B concurrently from locked source and compiler
+        id: build_pair
+        shell: bash
+        env:
+          TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
+        run: |
+          set +e
+          mkdir -p build-logs
+          python scripts/run_locked_kernel_build.py \
+            --profile-id "$PROFILE_ID" \
+            --toolchain-lock "$TOOLCHAIN_LOCK" \
+            --checkout kernel-a \
+            --toolchain-root "$TOOLCHAIN_ROOT" \
+            --build-root build-a \
+            --jobs 2 \
+            --out evidence/kernel-build-a.json \
+            >build-logs/kernel-a.log 2>&1 &
+          pid_a=$!
+          python scripts/run_locked_kernel_build.py \
+            --profile-id "$PROFILE_ID" \
+            --toolchain-lock "$TOOLCHAIN_LOCK" \
+            --checkout kernel-b \
+            --toolchain-root "$TOOLCHAIN_ROOT" \
+            --build-root build-b \
+            --jobs 2 \
+            --out evidence/kernel-build-b.json \
+            >build-logs/kernel-b.log 2>&1 &
+          pid_b=$!
+
+          wait "$pid_a"
+          rc_a=$?
+          wait "$pid_b"
+          rc_b=$?
+          set -e
+
+          echo "===== kernel A tail ====="
+          tail -n 200 build-logs/kernel-a.log || true
+          echo "===== kernel B tail ====="
+          tail -n 200 build-logs/kernel-b.log || true
+          if [ "$rc_a" -ne 0 ] || [ "$rc_b" -ne 0 ]; then
+            echo "Independent kernel build failed: A=$rc_a B=$rc_b" >&2
+            exit 1
+          fi
+
+      - name: Verify strict byte-identical kernel outputs
+        run: |
+          python scripts/verify_kernel_repro_pair.py \
+            --profile-id "$PROFILE_ID" \
+            --build-a build-a \
+            --build-b build-b \
+            --out evidence/kernel-reproducibility.json
+          sha256sum \
+            build-a/.config build-b/.config \
+            build-a/arch/arm64/boot/Image build-b/arch/arm64/boot/Image
+
+      - name: Upload kernel build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-real-repro-failure-logs
+          path: |
+            build-logs/
+            evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload verified non-release reproducible kernel evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-real-repro-nonrelease
+          path: |
+            evidence/
+            build-a/.config
+            build-a/arch/arm64/boot/Image
+            build-b/.config
+            build-b/arch/arm64/boot/Image
+          if-no-files-found: error
+          retention-days: 14
