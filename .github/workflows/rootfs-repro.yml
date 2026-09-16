@@ -5,6 +5,7 @@ on:
     paths:
       - "tools/rootfs-source-lock.json"
       - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/rootfs_canonical.py"
       - "kaliphonestudio/rootfs_repro_diagnostics.py"
       - "scripts/capture_kali_snapshot.py"
       - "scripts/verify_live_kali_snapshot.py"
@@ -12,6 +13,7 @@ on:
       - "scripts/verify_rootfs_pair.py"
       - "scripts/diagnose_rootfs_repro.py"
       - "tests/test_rootfs_builder.py"
+      - "tests/test_rootfs_canonical.py"
       - "tests/test_rootfs_repro_diagnostics.py"
       - "tests/test_rootfs_repro_diagnostics_v2.py"
       - ".github/workflows/rootfs-repro.yml"
@@ -20,6 +22,7 @@ on:
     paths:
       - "tools/rootfs-source-lock.json"
       - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/rootfs_canonical.py"
       - "kaliphonestudio/rootfs_repro_diagnostics.py"
       - "scripts/capture_kali_snapshot.py"
       - "scripts/verify_live_kali_snapshot.py"
@@ -27,6 +30,7 @@ on:
       - "scripts/verify_rootfs_pair.py"
       - "scripts/diagnose_rootfs_repro.py"
       - "tests/test_rootfs_builder.py"
+      - "tests/test_rootfs_canonical.py"
       - "tests/test_rootfs_repro_diagnostics.py"
       - "tests/test_rootfs_repro_diagnostics_v2.py"
       - ".github/workflows/rootfs-repro.yml"
@@ -100,6 +104,7 @@ jobs:
         run: >-
           python -m py_compile
           kaliphonestudio/rootfs.py
+          kaliphonestudio/rootfs_canonical.py
           kaliphonestudio/rootfs_repro_diagnostics.py
           scripts/capture_kali_snapshot.py
           scripts/verify_live_kali_snapshot.py
@@ -114,6 +119,7 @@ jobs:
           python -m pytest -q
           tests/test_rootfs.py
           tests/test_rootfs_builder.py
+          tests/test_rootfs_canonical.py
           tests/test_rootfs_repro_diagnostics.py
           tests/test_rootfs_repro_diagnostics_v2.py
           tests/test_candidate.py
@@ -190,7 +196,7 @@ jobs:
             --snapshot evidence/repository-snapshot.json \
             --inrelease evidence/InRelease
 
-      - name: Build rootfs A and B concurrently from the same signed start state
+      - name: Build and canonicalize rootfs A and B concurrently from the same signed start state
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -203,6 +209,7 @@ jobs:
             --inrelease evidence/InRelease \
             --checkout builder-a \
             --out artifacts/rootfs-a.tar.xz \
+            --canonicalization-evidence evidence/rootfs-canonical-a.json \
             --sudo >evidence/build-logs/rootfs-a.log 2>&1 &
           pid_a=$!
           python scripts/run_locked_rootfs_build.py \
@@ -211,6 +218,7 @@ jobs:
             --inrelease evidence/InRelease \
             --checkout builder-b \
             --out artifacts/rootfs-b.tar.xz \
+            --canonicalization-evidence evidence/rootfs-canonical-b.json \
             --sudo >evidence/build-logs/rootfs-b.log 2>&1 &
           pid_b=$!
 
@@ -226,11 +234,13 @@ jobs:
           cat evidence/build-logs/rootfs-b.log
 
           if [ "$rc_a" -ne 0 ] || [ "$rc_b" -ne 0 ]; then
-            echo "Independent rootfs build failed: A=$rc_a B=$rc_b" >&2
+            echo "Independent rootfs build/canonicalization failed: A=$rc_a B=$rc_b" >&2
             exit 1
           fi
           test -s artifacts/rootfs-a.tar.xz
           test -s artifacts/rootfs-b.tar.xz
+          test -s evidence/rootfs-canonical-a.json
+          test -s evidence/rootfs-canonical-b.json
 
       - name: Verify strict byte-identical rootfs and package evidence
         id: strict_verify
@@ -270,7 +280,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kali-arm64-rootfs-repro-diagnostic
-          path: evidence/rootfs-repro-diagnostic.json
+          path: |
+            evidence/rootfs-repro-diagnostic.json
+            evidence/rootfs-canonical-a.json
+            evidence/rootfs-canonical-b.json
           if-no-files-found: error
           retention-days: 7
 
@@ -289,6 +302,8 @@ jobs:
             artifacts/rootfs-a.tar.xz
             evidence/InRelease
             evidence/repository-snapshot.json
+            evidence/rootfs-canonical-a.json
+            evidence/rootfs-canonical-b.json
             evidence/rootfs-artifact.json
             evidence/rootfs.sha256
             evidence/packages.tsv
