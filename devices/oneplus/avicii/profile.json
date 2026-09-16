@@ -49,8 +49,29 @@
     "super": 15032385536
   },
   "kernel": {
-    "source_hint": "kernel/oneplus/sm7250",
-    "config_hint": ["vendor/lito-perf_defconfig", "vendor/debugfs.config"]
+    "source_name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline",
+    "expected_version": "4.19.300",
+    "arch": "arm64",
+    "image_name": "Image",
+    "defconfig": "vendor/lito-perf_defconfig",
+    "config_fragments": ["vendor/debugfs.config"],
+    "make_flags": {
+      "ARCH": "arm64",
+      "LLVM": "1",
+      "BRAND_SHOW_FLAG": "oneplus"
+    },
+    "required_configs": {
+      "CONFIG_ARCH_LITO": "y",
+      "CONFIG_ARCH_QCOM": "y",
+      "CONFIG_BLK_DEV_INITRD": "y",
+      "CONFIG_INPUT_EVDEV": "y",
+      "CONFIG_INPUT_TOUCHSCREEN": "y",
+      "CONFIG_NAMESPACES": "y",
+      "CONFIG_SCSI_UFSHCD": "y",
+      "CONFIG_SCSI_UFS_QCOM": "y",
+      "CONFIG_SECCOMP": "y",
+      "CONFIG_SERIAL_MSM_GENI": "y"
+    }
   },
   "kernel_cmdline": [
     "androidboot.hardware=qcom",
@@ -77,6 +98,11 @@
       "name": "LineageOS android_device_oneplus_avicii lineage-22.1 baseline",
       "url": "https://github.com/LineageOS/android_device_oneplus_avicii",
       "commit": "3f1270c2871e9893332073eb0f8f5f9499abbf13"
+    },
+    {
+      "name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline",
+      "url": "https://github.com/LineageOS/android_kernel_oneplus_sm7250",
+      "commit": "fb4b4374d3b9ad0f10ba38d159585129f092fb3d"
     }
   ],
   "recovery_notes": [
@@ -90,7 +116,8 @@
       "unique identity resolution",
       "boot layout and partition limit checks",
       "manifest and SHA-256 checks",
-      "offline fastboot baseline transcript validation"
+      "offline fastboot baseline transcript validation",
+      "exact kernel source/config/image evidence validation"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",

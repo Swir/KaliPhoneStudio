@@ -33,7 +33,7 @@ def test_profile_requires_recovery_and_hardware_contract():
         validate_profile(data)
 
 
-def test_profile_sources_must_be_commit_pinned_and_https():
+def test_profile_sources_must_be_commit_pinned_https_and_unique():
     data = deepcopy(_profile())
     data["sources"][0]["commit"] = "lineage-22.1"
     with pytest.raises(ProfileError, match="40-character"):
@@ -42,6 +42,11 @@ def test_profile_sources_must_be_commit_pinned_and_https():
     data = deepcopy(_profile())
     data["sources"][0]["url"] = "http://example.invalid/device-tree"
     with pytest.raises(ProfileError, match="HTTPS"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["sources"][1]["name"] = data["sources"][0]["name"]
+    with pytest.raises(ProfileError, match="source names must be unique"):
         validate_profile(data)
 
 
@@ -101,4 +106,48 @@ def test_profile_id_vendor_and_codename_must_match_and_use_safe_components():
     data = deepcopy(_profile())
     data["profile_id"] = "OnePlus/avicii"
     with pytest.raises(ProfileError, match="lowercase"):
+        validate_profile(data)
+
+
+def test_kernel_contract_resolves_exactly_one_pinned_source_and_matches_boot_contract():
+    data = deepcopy(_profile())
+    data["kernel"]["source_name"] = "missing kernel source"
+    with pytest.raises(ProfileError, match="resolve exactly one"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["kernel"]["arch"] = "x86_64"
+    with pytest.raises(ProfileError, match="kernel.arch"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["kernel"]["image_name"] = "Image.gz"
+    with pytest.raises(ProfileError, match="kernel.image_name"):
+        validate_profile(data)
+
+
+def test_kernel_contract_rejects_unsafe_paths_flags_and_config_requirements():
+    data = deepcopy(_profile())
+    data["kernel"]["defconfig"] = "../escape_defconfig"
+    with pytest.raises(ProfileError, match="kernel.defconfig"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["kernel"]["config_fragments"] = ["vendor/debugfs.config", "vendor/debugfs.config"]
+    with pytest.raises(ProfileError, match="duplicates"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["kernel"]["make_flags"] = {"ARCH;rm": "arm64"}
+    with pytest.raises(ProfileError, match="unsafe variable"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["kernel"]["required_configs"] = {"NOT_A_CONFIG": "y"}
+    with pytest.raises(ProfileError, match="invalid CONFIG_"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["kernel"]["required_configs"] = {"CONFIG_SECCOMP": "auto"}
+    with pytest.raises(ProfileError, match="must be y, m or n"):
         validate_profile(data)
