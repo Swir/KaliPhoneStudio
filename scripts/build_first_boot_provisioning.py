@@ -7,13 +7,19 @@ import json
 from pathlib import Path
 import sys
 
-from kaliphonestudio.provisioning import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from kaliphonestudio.provisioning import (  # noqa: E402
     build_first_boot_provisioning_bundle,
     create_first_boot_provisioning_plan,
     write_first_boot_provisioning_evidence,
 )
-from kaliphonestudio.rootfs import RootfsError
-from kaliphonestudio.rootfs_canonical_binding import load_rootfs_artifact_evidence
+from kaliphonestudio.rootfs import RootfsError  # noqa: E402
+from kaliphonestudio.rootfs_canonical_binding import (  # noqa: E402
+    load_rootfs_artifact_evidence,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
