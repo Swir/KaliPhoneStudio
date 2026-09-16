@@ -179,6 +179,8 @@ def _verify_kernel_build_run(
     run: KernelBuildRunEvidence,
     *,
     expected_digest: str,
+    expected_config_evidence_digest: str,
+    expected_image_evidence_digest: str,
     label: str,
 ) -> None:
     if run.schema_version != 1:
@@ -203,10 +205,14 @@ def _verify_kernel_build_run(
         raise RootfsError(f"{label} build recipe does not match execution binding")
     if run.reproducible_environment_sha256 != execution.reproducible_environment_sha256:
         raise RootfsError(f"{label} reproducibility environment does not match execution binding")
+    if run.config_evidence_sha256 != expected_config_evidence_digest:
+        raise RootfsError(f"{label} config verification evidence does not match strict reproducibility evidence")
     if run.config_evidence_sha256 != kernel.config_evidence_sha256:
         raise RootfsError(f"{label} config evidence does not match kernel candidate")
     if run.config_sha256 != kernel.config_sha256 or run.config_size != execution.config_size:
         raise RootfsError(f"{label} final config does not match accepted kernel evidence")
+    if run.image_evidence_sha256 != expected_image_evidence_digest:
+        raise RootfsError(f"{label} Image verification evidence does not match strict reproducibility evidence")
     if run.image_evidence_sha256 != kernel.image_evidence_sha256:
         raise RootfsError(f"{label} Image evidence does not match kernel candidate")
     if run.image_sha256 != kernel.image_sha256 or run.image_size != kernel.image_size:
@@ -264,6 +270,8 @@ def _verify_kernel_execution_binding(
         execution,
         build_a,
         expected_digest=execution.build_a_run_evidence_sha256,
+        expected_config_evidence_digest=reproducibility.build_a_config_evidence_sha256,
+        expected_image_evidence_digest=reproducibility.build_a_image_evidence_sha256,
         label="kernel build A evidence",
     )
     _verify_kernel_build_run(
@@ -272,6 +280,8 @@ def _verify_kernel_execution_binding(
         execution,
         build_b,
         expected_digest=execution.build_b_run_evidence_sha256,
+        expected_config_evidence_digest=reproducibility.build_b_config_evidence_sha256,
+        expected_image_evidence_digest=reproducibility.build_b_image_evidence_sha256,
         label="kernel build B evidence",
     )
 
