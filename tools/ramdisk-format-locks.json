@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "lz4_legacy": {
+    "boot_policy": "lz4",
+    "artifact_compression": "lz4-legacy-literal-v1",
+    "legacy_magic_le_hex": "02214c18",
+    "legacy_block_size": 8388608,
+    "aosp": {
+      "url": "https://android.googlesource.com/platform/build",
+      "commit": "5db2b8fa45a8ba9e90f76f583bc46ffdcf6c3c57",
+      "path": "core/Makefile",
+      "reference_argv": ["lz4", "-l", "-12", "--favor-decSpeed"]
+    },
+    "lz4_reference": {
+      "url": "https://github.com/lz4/lz4",
+      "version": "1.10.0",
+      "commit": "ebb370ca83af193212df4dcbadcc5d87bc0de2f0",
+      "path": "programs/lz4io.c"
+    },
+    "implementation_note": "KaliPhoneStudio emits valid legacy-framed literal-only LZ4 blocks for deterministic rescue artifacts. It does not claim byte equality with AOSP's high-compression reference command."
+  }
+}

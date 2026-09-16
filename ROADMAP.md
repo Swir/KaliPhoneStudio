@@ -22,6 +22,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Transaction / boot-session journals
 - [x] Automated Python tests on 3.11, 3.12, 3.13 and 3.14
 - [x] Versioned profile schema contract
+- [x] Strict profile boot/A-B/source validation (typed boot contract, safe partition IDs, HTTPS full-commit sources, profile path binding)
 - [x] CI-required profile recovery/test contract
 - [x] Full-commit source pin requirement for profile upstreams
 - [x] Fail-closed Android A/B payload envelope inspection
@@ -60,6 +61,10 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [ ] Generic first-boot provisioning independent of device name
 - [ ] Phosh phone UI stage on the verified common rootfs
 - [x] Device-independent deterministic rescue-initramfs gzip/newc builder and canonical reproducibility-evidence contract
+- [x] Deterministic Linux-kernel-compatible LZ4 legacy ramdisk stage with pinned AOSP/LZ4 format references
+- [x] Independent post-compression LZ4 decode + canonical `newc` structural verification before rescue evidence is accepted
+- [x] Profile-driven rescue compression selection and exact rescue-evidence → boot-plan ramdisk binding
+- [ ] Add a reviewed/source-locked static ARM64 rescue payload (`/init` + minimum required tools) without redistributing unlicensed blobs
 - [ ] Produce a concrete safe minimal rescue initramfs artifact and prove its device rescue/logging path
 - [ ] SSH disabled by default
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
@@ -84,6 +89,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Host-side OTA ZIP, payload-envelope and integrity-evidence validation foundation
 - [x] Host-side checksum-locked boot extraction adapter (not hardware validation)
 - [x] Immutable exact-OTA → payload → stock-boot provenance schema (host-side; exact user OTA still pending)
+- [x] Host-side rescue ramdisk format now matches the profile's required LZ4 legacy boot policy
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA
