@@ -2,7 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from kaliphonestudio.kernel_bundle import bind_kernel_candidate_evidence
+from kaliphonestudio.kernel_bundle import (
+    bind_kernel_candidate_evidence,
+    write_kernel_candidate_evidence,
+)
 from kaliphonestudio.kernel_contract import (
     KernelCheckoutEvidence,
     KernelConfigEvidence,
@@ -57,6 +60,15 @@ def _evidence(plan, image_path):
         arm64_magic_verified=True,
     )
     return checkout, config, image
+
+
+def _bound(tmp_path):
+    plan = _plan()
+    image_path = _kernel_image(tmp_path / "Image")
+    checkout, config, image = _evidence(plan, image_path)
+    return bind_kernel_candidate_evidence(
+        plan, checkout, config, image, kernel_image=image_path
+    )
 
 
 def test_kernel_candidate_evidence_binds_source_config_and_exact_image(tmp_path):
@@ -122,3 +134,24 @@ def test_kernel_candidate_evidence_rejects_unverified_arm64_header(tmp_path):
         bind_kernel_candidate_evidence(
             plan, checkout, config, bad_image, kernel_image=image_path
         )
+
+
+def test_kernel_candidate_evidence_writer_is_canonical_and_atomic(tmp_path):
+    evidence = _bound(tmp_path)
+    destination = tmp_path / "evidence" / "kernel.json"
+    digest = write_kernel_candidate_evidence(evidence, destination)
+    assert digest == evidence.evidence_sha256()
+    assert destination.read_text(encoding="utf-8") == evidence.canonical_json()
+    assert not destination.with_name(destination.name + ".tmp").exists()
+
+
+def test_kernel_candidate_evidence_writer_rejects_stale_temp_file(tmp_path):
+    evidence = _bound(tmp_path)
+    destination = tmp_path / "evidence" / "kernel.json"
+    destination.parent.mkdir(parents=True)
+    temporary = destination.with_name(destination.name + ".tmp")
+    temporary.write_text("stale", encoding="utf-8")
+    with pytest.raises(KernelContractError, match="stale"):
+        write_kernel_candidate_evidence(evidence, destination)
+    assert temporary.read_text(encoding="utf-8") == "stale"
+    assert not destination.exists()
