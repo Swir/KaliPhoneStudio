@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**50% complete**
+**51% complete**
 
-`██████████░░░░░░░░░░ 50%`
+`██████████▏░░░░░░░░░ 51%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -26,9 +26,10 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Profile schema v2 read-only Fastboot probe contract with required variables and expected A/B slot count
 - [x] Offline `fastboot getvar all` transcript parser/importer with exact-byte SHA-256 evidence and fail-closed ambiguity checks
 - [x] Bind captured Fastboot profile/serial/firmware evidence to exact OTA `post-build` / `post-build-incremental` provenance
-- [x] Carry the baseline evidence digest and firmware identity through temporary-boot authorization and first-boot candidate manifests
+- [x] Carry baseline evidence digest and firmware identity through temporary-boot authorization and first-boot candidate manifests
 - [x] CI-required profile recovery/test contract
 - [x] Full-commit source pin requirement for profile upstreams
+- [x] Strict profile-driven kernel contract with exact pinned source, version, architecture, Image name, config material, build flags and required CONFIG states
 - [x] Fail-closed Android A/B payload envelope inspection
 - [x] Payload + metadata SHA-256 evidence before extractor hand-off
 - [x] Checksum-locked, source-pinned boot-only OTA extraction adapter
@@ -45,6 +46,9 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Deterministic boot-v2 image assembly from the validated build plan
 - [x] Verify assembled output by locked unpacker + structural invariant round-trip
 - [x] Fail-closed temporary-boot authorization binding device identity, exact captured firmware baseline, stock provenance, plan, reproducible assembly and round-trip evidence
+- [x] Device-independent kernel evidence model for exact checkout, final `.config` and ARM64 `Image`
+- [x] Bind kernel source/config/Image evidence to the exact kernel SHA-256/size in the approved boot build plan
+- [x] Carry kernel provenance and exact Image evidence into the canonical first-boot candidate manifest
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
 
@@ -56,7 +60,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Verify Kali `InRelease` with `gpgv` and capture exact ARM64 package-index paths/sizes/SHA-256 values
 - [x] Extract a normalized installed package/version/architecture manifest directly from each rootfs archive
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
-- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization and package manifest into a canonical first-boot candidate manifest contract
+- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact kernel evidence and package manifest into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
 - [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [ ] Obtain the first green real double-build run and review/archive its evidence
@@ -93,14 +97,17 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Host-side OTA ZIP, payload-envelope and integrity-evidence validation foundation
 - [x] Host-side checksum-locked boot extraction adapter (not hardware validation)
 - [x] Immutable exact-OTA → payload → stock-boot provenance schema (host-side; exact user OTA still pending)
-- [x] Host-side rescue ramdisk format now matches the profile's required LZ4 legacy boot policy
+- [x] Host-side rescue ramdisk format matches the profile's required LZ4 legacy boot policy
 - [x] Host-side AC2003 Fastboot baseline contract prepared (`product`, `serialno`, A/B slot/count, lock/security, bootloader/baseband); no physical transcript claimed
+- [x] Public LineageOS `android_kernel_oneplus_sm7250` bring-up baseline pinned to exact commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d` and kernel `4.19.300`
+- [x] Host-side exact kernel checkout/config/Image evidence and boot-plan binding implemented
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA
 - [ ] Validate parser/repacker against that exact stock image
-- [ ] Pin final first-boot kernel commit
-- [ ] Build kernel + DTB/DTBO candidate
+- [ ] Pin final first-boot kernel commit after exact-firmware/hardware review
+- [ ] Build final kernel + DTB/DTBO candidate from pinned sources
+- [ ] Bind concrete final kernel/DTB/DTBO artifacts into the exact first-boot candidate
 - [ ] Temporary `fastboot boot` on physical AC2003
 - [ ] Capture early kernel/rescue logs
 
