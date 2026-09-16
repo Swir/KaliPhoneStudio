@@ -10,14 +10,17 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.32-dev
+## Current development line — 0.6.33-dev
 
 - [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
 - [x] Exact-source kernel runner applies the profile-required `CONFIG_*` policy deterministically before build.
 - [x] `oneplus/avicii` kernel policy explicitly requires LZ4 initramfs support and disables engineering module signing for deterministic bring-up builds.
-- [x] Rootfs divergence diagnostics v2 prioritize payload changes over metadata noise and compare normalized installed-package manifests.
-- [ ] Accept a concrete reproducible kernel only after the current exact-source A/B build passes strict `.config` + `Image` equality and execution-provenance review.
-- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after a real A/B build passes strict byte equality and package-evidence equality.
+- [x] Real kernel A/B failure was narrowed to different `Image` bytes despite identical final `.config`, toolchain, recipe and Image size.
+- [x] Independent kernel source/output host paths are compiler-prefix-mapped to fixed virtual roots and the remap policy is evidence-bound.
+- [x] Rootfs diagnostics isolated the latest pre-fix run to identical 269-package manifests, five volatile payload files and 4817 mtime-only metadata differences.
+- [x] Rootfs canonicalization now removes only that reviewed volatile state before strict A/B comparison, with audit evidence and no Beta credit.
+- [ ] Accept a concrete reproducible kernel only after a post-fix exact-source A/B build passes strict `.config` + `Image` equality and execution-provenance review.
+- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after a post-fix real A/B build passes strict byte equality and package-evidence equality.
 
 ## Phase A — Multi-device Studio Core
 
@@ -68,6 +71,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Deterministic profile-required config fragment application before build.
 - [x] `CONFIG_RD_LZ4=y` compatibility for the avicii LZ4 ramdisk policy.
 - [x] Deterministic engineering module-signing policy.
+- [x] Canonical compiler source/output path remapping with `KBUILD_ABS_SRCTREE=0`, `-fdebug-prefix-map` and `-fmacro-prefix-map`.
 - [x] Source-locked FDT and Android DT table format references.
 - [x] Structural DTB and DTBO verification bound to the exact boot plan.
 - [ ] Review and accept first real byte-identical kernel A/B evidence.
@@ -91,7 +95,9 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Real main CI executes two exact-source ARM64 builds concurrently from one verified repository start state.
 - [x] Fail-closed rootfs divergence diagnostics for failed strict comparisons.
 - [x] Diagnostic v2 prioritizes content/type/add/remove/order before metadata, counts mtime-only/field drift and compares package manifests.
-- [ ] Eliminate current real-build nondeterminism: the reviewed failed A/B run showed 5 content differences and 5050 metadata differences.
+- [x] Latest pre-fix real A/B divergence reduced to five reviewed volatile payloads plus 4817 mtime-only differences while package manifests remain identical.
+- [x] Device-independent canonicalization normalizes tar mtimes, machine identity/fake-clock state, generated password hash state and the regenerable ldconfig auxiliary cache before strict comparison.
+- [x] Canonicalization emits per-build non-release audit evidence; it never substitutes for strict byte equality.
 - [ ] Produce and review the first byte-identical ARM64 rootfs artifact.
 - [ ] Generic first-boot provisioning independent of device name.
 - [ ] Phosh stage on the verified common rootfs.
