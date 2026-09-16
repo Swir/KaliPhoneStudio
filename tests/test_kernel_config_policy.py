@@ -21,7 +21,7 @@ def test_avicii_required_kernel_policy_matches_boot_ramdisk_and_deterministic_si
     plan = create_kernel_build_plan(profile)
     required = dict(plan.required_configs)
 
-    assert profile.boot.ramdisk_compression == "lz4"
+    assert profile.data["boot"]["ramdisk_compression"] == "lz4"
     assert required["CONFIG_BLK_DEV_INITRD"] == "y"
     assert required["CONFIG_RD_LZ4"] == "y"
     assert required["CONFIG_MODULE_SIG"] == "n"
