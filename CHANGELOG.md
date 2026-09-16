@@ -1,10 +1,23 @@
 # Changelog
 
+## 0.6.20-dev — deterministic rescue initramfs evidence foundation
+
+- Added a device-independent pure-Python `newc` CPIO serializer for a minimal rescue initramfs. Archive metadata is normalized with root uid/gid, sorted entries, deterministic inode numbering and a fixed `SOURCE_DATE_EPOCH`.
+- The builder scans the reviewed source tree twice and serializes two independent archives; publication is rejected unless the source-tree digest, `/init` digest and complete CPIO bytes are identical.
+- Added fail-closed source-tree policy: `/init` must be an executable regular file; special files, setuid/setgid bits, world-writable regular files, unsafe/root-escaping symlinks, oversized files/trees and unstable files changing while read are rejected.
+- Added canonical schema-v1 rescue evidence recording source-tree SHA-256, `/init` SHA-256, artifact SHA-256/size, entry count and reproducibility state, plus strict evidence reload and post-publication artifact SHA-256/size verification.
+- Added `scripts/build_rescue_initramfs.py` for deterministic host-side generation without embedding any device name in the core.
+- Added focused tests for reproducibility, independent publication equality, malformed/missing `/init`, symlink escape/absolute targets, unsafe file modes, overwrite refusal, evidence reload and post-build artifact tampering.
+- The first rescue-branch CI exposed only a repository version-contract mismatch (`0.6.20-dev` package vs `0.6.19-dev` BUILD_STATUS) after 108 other tests passed; BUILD_STATUS was corrected in the same iteration and the branch was re-run.
+- This milestone deliberately emits an **uncompressed** CPIO. `oneplus/avicii` requires LZ4 ramdisk compression, so a source-locked deterministic compression stage and an audited/source-locked static ARM64 rescue payload remain mandatory before boot integration.
+- Corrected the 0.6.19 documentation to match its actual execution strategy: KaliPhoneStudio preserves a prevalidated static `qemu-aarch64` runtime and uses a guarded upstream dependency sentinel instead of allowing the pinned builder to replace that runtime.
+- Project completion remains 49%; no AC2003 hardware or Beta gate is credited for host-side rescue tooling.
+
 ## 0.6.19-dev — ARM64 rootfs CI host repair and snapshot drift guards
 
 - Diagnosed the first real post-merge ARM64 rootfs reproducibility run (`35090859764`) instead of treating the signed-snapshot job as artifact success. Build A failed during debootstrap second stage with exit 127 after the pinned upstream builder replaced `qemu-user-static` with `qemu-user`/`qemu-user-binfmt`; `/debootstrap/debootstrap` could no longer execute inside the ARM64 chroot.
 - Added a fail-closed host preflight for the `qemu-aarch64` binfmt handler, including the `F`/fix-binary flag required for reliable chroot execution, and checks for all required host commands before the expensive build starts.
-- The reproducibility workflow now installs `qemu-user` and `qemu-user-binfmt` up front, refreshes the ARM64 binfmt registration, and fails early with explicit diagnostics rather than allowing the upstream dependency checker to mutate the QEMU runtime mid-build.
+- The reproducibility workflow now installs a static `qemu-aarch64` runtime up front, verifies the kernel-visible ARM64 binfmt registration and Kali archive keyring, then creates the pinned builder's dependency sentinel only after KaliPhoneStudio preflight succeeds so the upstream dependency mutator cannot replace the verified QEMU runtime mid-build.
 - The exact GPG-verified Kali archive keyring captured with the repository snapshot is installed as `/usr/share/keyrings/kali-archive-keyring.gpg`; host preflight confirms it contains the locked fingerprint before debootstrap starts.
 - Added signed repository drift guards immediately before and after each independent rootfs build. The workflow re-downloads `InRelease`, verifies it with the locked keyring, reconstructs canonical repository snapshot evidence and requires byte-identical snapshot evidence throughout the two-build window.
 - The real two-build job now runs on relevant pull requests as well as `main`, so a rootfs execution repair must prove itself before merge instead of being deferred to a post-merge surprise.
