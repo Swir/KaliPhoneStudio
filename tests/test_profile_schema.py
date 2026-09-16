@@ -87,10 +87,15 @@ def test_ab_contract_requires_safe_unique_boot_partition():
         validate_profile(data)
 
 
-def test_profile_id_codename_must_match_and_use_safe_components():
+def test_profile_id_vendor_and_codename_must_match_and_use_safe_components():
     data = deepcopy(_profile())
     data["profile_id"] = "oneplus/different"
     with pytest.raises(ProfileError, match="codename"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["vendor"] = "different-vendor"
+    with pytest.raises(ProfileError, match="vendor"):
         validate_profile(data)
 
     data = deepcopy(_profile())
