@@ -19,7 +19,8 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] The kernel evidence SHA-256/size matches the exact kernel input embedded in the approved boot build plan; source/config/Image evidence may not be mixed across plans or profiles.
 - [ ] Final DTB/DTBO artifacts satisfy the selected profile layout and are bound to the same approved first-boot build evidence.
 - [ ] Reviewed reproducible Kali ARM64 rootfs evidence comes from a strict byte-identical independent double-build and is bound to the candidate manifest; diagnostic or semantic-equality reports cannot substitute for this evidence.
-- [ ] If the rootfs pipeline canonicalizes reviewed volatile builder state, both A/B canonicalization audit records must bind each raw input SHA-256 to the exact canonical output and must use the same reviewed policy; the release rootfs evidence/candidate must not silently detach from that transformation provenance.
+- [ ] If the rootfs pipeline canonicalizes reviewed volatile builder state, both A/B canonicalization audit records must bind each raw input SHA-256 to the exact canonical output and must use the same reviewed policy.
+- [ ] A first-boot rootfs provenance record must cryptographically bind the exact candidate-manifest digest to the strict rootfs evidence, canonicalization-binding digest/policy, both A/B canonicalization evidence digests and both raw input hashes/sizes; transformation provenance may not be detached during release preparation.
 - [ ] Every release image has SHA-256 recorded.
 - [ ] Partition-size and boot-layout gates pass.
 - [ ] Build instructions are reproducible from pinned sources.
@@ -45,6 +46,6 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] Release manifest and SHA-256 files.
 - [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
 
-Importing a saved Fastboot transcript, producing host-side authorization evidence, pinning a public kernel/compiler source, binding exact executed kernel builds, canonicalizing a rootfs, or passing host-side kernel/rootfs checks does **not** by itself satisfy any physical-device checkbox above.
+Importing a saved Fastboot transcript, producing host-side authorization evidence, pinning a public kernel/compiler source, binding exact executed kernel builds, canonicalizing a rootfs, binding candidate/rootfs provenance, or passing host-side kernel/rootfs checks does **not** by itself satisfy any physical-device checkbox above.
 
 Only after these gates pass should a GitHub **Beta** be created. Stable releases require a substantially higher hardware-completeness and regression threshold.
