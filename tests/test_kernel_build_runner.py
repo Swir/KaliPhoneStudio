@@ -52,8 +52,12 @@ def test_kernel_build_recipe_is_canonical_and_reproducible():
     assert first.profile_id == plan.profile_id
     assert first.kernel_plan_sha256 == plan.plan_sha256()
     assert first.toolchain_lock_sha256 == lock.lock_sha256()
-    assert dict(first.reproducible_environment)["SOURCE_DATE_EPOCH"] == "0"
-    assert dict(first.reproducible_environment)["KBUILD_BUILD_USER"] == "kaliphonestudio"
+    env = dict(first.reproducible_environment)
+    assert env["SOURCE_DATE_EPOCH"] == "0"
+    assert env["KBUILD_BUILD_USER"] == "kaliphonestudio"
+    assert env["KPS_CANONICAL_SOURCE_PREFIX"] == "/usr/src/kaliphonestudio-kernel"
+    assert env["KPS_CANONICAL_OUTPUT_PREFIX"] == "/usr/src/kaliphonestudio-kernel-build"
+    assert "prefix-map" in env["KPS_PATH_REMAP_POLICY"]
     assert len(first.recipe_sha256()) == 64
     assert len(first.environment_sha256()) == 64
 
@@ -63,6 +67,27 @@ def test_kernel_build_recipe_rejects_unsafe_job_counts(jobs):
     plan, lock = _plan_and_lock()
     with pytest.raises(KernelContractError, match="jobs"):
         build_runner.create_kernel_build_recipe(plan, lock, jobs=jobs)
+
+
+def test_path_remap_flags_bind_distinct_host_roots_to_fixed_virtual_roots(tmp_path):
+    source_a = (tmp_path / "kernel-a").resolve()
+    source_b = (tmp_path / "kernel-b").resolve()
+    out_a = (tmp_path / "build-a").resolve()
+    out_b = (tmp_path / "build-b").resolve()
+
+    flags_a = build_runner._path_remap_flags(source_a, out_a)
+    flags_b = build_runner._path_remap_flags(source_b, out_b)
+
+    assert str(source_a) in flags_a
+    assert str(out_a) in flags_a
+    assert str(source_b) in flags_b
+    assert str(out_b) in flags_b
+    assert flags_a != flags_b
+    for flags in (flags_a, flags_b):
+        assert build_runner._CANONICAL_SOURCE_PREFIX in flags
+        assert build_runner._CANONICAL_OUTPUT_PREFIX in flags
+        assert flags.count("-fdebug-prefix-map=") == 2
+        assert flags.count("-fmacro-prefix-map=") == 2
 
 
 def test_execute_kernel_build_uses_argv_only_locked_inputs_and_emits_evidence(tmp_path, monkeypatch):
@@ -122,6 +147,18 @@ def test_execute_kernel_build_uses_argv_only_locked_inputs_and_emits_evidence(tm
     assert calls[1][0][2:5] == ["-m", "-O", str(output.resolve())]
     assert calls[2][0][-1] == "olddefconfig"
     assert calls[3][0][-2:] == ["-j2", plan.image_name]
+
+    for index in (0, 2, 3):
+        argv = calls[index][0]
+        assert "KBUILD_ABS_SRCTREE=0" in argv
+        kcflags = next(item for item in argv if item.startswith("KCFLAGS="))
+        kaflags = next(item for item in argv if item.startswith("KAFLAGS="))
+        for value in (kcflags, kaflags):
+            assert str(checkout.resolve()) in value
+            assert str(output.resolve()) in value
+            assert build_runner._CANONICAL_SOURCE_PREFIX in value
+            assert build_runner._CANONICAL_OUTPUT_PREFIX in value
+
     for argv, kwargs in calls:
         assert isinstance(argv, list)
         assert kwargs["shell"] is False
@@ -130,6 +167,7 @@ def test_execute_kernel_build_uses_argv_only_locked_inputs_and_emits_evidence(tm
         assert kwargs["env"]["PATH"].split(":", 1)[0] == str((toolchain / "bin").resolve())
         assert kwargs["env"]["SOURCE_DATE_EPOCH"] == "0"
         assert kwargs["env"]["LC_ALL"] == "C"
+        assert kwargs["env"]["KPS_CANONICAL_SOURCE_PREFIX"] == build_runner._CANONICAL_SOURCE_PREFIX
 
     assert evidence.profile_id == plan.profile_id
     assert evidence.kernel_plan_sha256 == plan.plan_sha256()
