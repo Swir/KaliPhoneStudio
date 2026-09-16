@@ -28,6 +28,22 @@ def test_apply_and_verify_busybox_miniconfig(tmp_path: Path) -> None:
     assert verify_overlay(config, locked) == 3
 
 
+def test_repository_rescue_miniconfig_keeps_inventory_and_static_contract() -> None:
+    """The evidence workflow needs the BusyBox applet itself for ``--list``.
+
+    ``allnoconfig`` disables CONFIG_BUSYBOX unless we lock it explicitly.  If it
+    disappears, QEMU can execute the binary but ``busybox --list`` degenerates
+    into the cryptic ``applet not found`` path and we lose an independently
+    verified applet manifest.
+    """
+
+    locked = load_miniconfig(Path("rescue/busybox-minimal.config"))
+    assert locked["CONFIG_BUSYBOX"] == "y"
+    assert locked["CONFIG_STATIC"] == "y"
+    assert locked["CONFIG_ASH"] == "y"
+    assert locked["CONFIG_SH_IS_ASH"] == "y"
+
+
 def test_rejects_unknown_locked_symbol(tmp_path: Path) -> None:
     mini = tmp_path / "mini"
     config = tmp_path / ".config"
