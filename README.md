@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**47% complete**
+**48% complete**
 
-`█████████░░░░░░░░░░░ 47%`
+`██████████░░░░░░░░░░ 48%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.15-dev** — deterministic boot build plans now bind exact stock OTA/boot provenance to profile-declared kernel, ramdisk, DTB/DTBO layout and SHA-256 inputs. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.16-dev** — deterministic boot build plans bind exact stock provenance and inputs, are revalidated immediately before assembly, and may resolve only the full-commit source-locked boot assembler. The first active target is **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -39,7 +39,9 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Fail-closed `payload.bin` envelope inspection and streaming SHA-256 evidence.
 - Checksum-locked, boot-only OTA extraction adapter whose output immediately enters boot-image preflight.
 - Immutable schema-v1 stock-boot provenance records bind `profile_id`, exact OTA SHA-256 and firmware metadata, payload SHA-256/metadata SHA-256, and extracted `boot.img` SHA-256/size/header version.
-- Deterministic schema-v1 boot build plans bind that exact stock provenance to profile-driven header/page/compression/cmdline policy and SHA-256 of kernel, ramdisk, DTB and DTBO inputs; missing or unexpected profile-required components fail closed.
+- Deterministic schema-v1 boot build plans bind exact stock provenance to profile-driven header/page/compression/cmdline policy and SHA-256 of kernel, ramdisk, DTB and DTBO inputs.
+- Mandatory pre-assembly TOCTOU revalidation detects changed profile policy, provenance, component size/hash or unsafe input paths.
+- Boot assembler/unpacker source lock in `tools/boot-tool-locks.json`: LineageOS `android_system_tools_mkbootimg` commit `808ecd09666ffe0ff5800f02af693abce56eb395`; header-v2 plans cannot fall back to an arbitrary host `mkbootimg` from PATH.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated reproducibility CI builds the exact pinned extractor source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
 - Linux amd64 and Windows amd64 reproducibility both pass in GitHub Actions run `35018283145`.
