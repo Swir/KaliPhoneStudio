@@ -94,7 +94,7 @@ def build_plan(dtb: Path, dtbo: Path) -> BootBuildPlan:
 def test_inspect_dtb_supports_zero_padded_concatenated_fdt(tmp_path):
     artifact = tmp_path / "dtb"
     one = fdt_blob()
-    artifact.write_bytes(one + b"\x00\x00" + b"\x00\x00" + one)
+    artifact.write_bytes(one + b"\x00\x00" + one)
     evidence = inspect_dtb_artifact(artifact)
     assert evidence.schema_version == 1
     assert evidence.tree_count == 2
