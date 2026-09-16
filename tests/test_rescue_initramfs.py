@@ -1,3 +1,4 @@
+from dataclasses import replace
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -24,6 +25,16 @@ def _make_tree(root: Path) -> None:
     shell.write_bytes(b"ELF-placeholder")
     shell.chmod(0o755)
     (root / "bin" / "sh").symlink_to("rescue-shell")
+
+
+def _built_rescue(tmp_path: Path):
+    source = tmp_path / "root"
+    source.mkdir()
+    _make_tree(source)
+    out = tmp_path / "rescue.cpio"
+    evidence_path = tmp_path / "rescue.json"
+    evidence = build_reproducible_rescue_initramfs(source, out, evidence_path)
+    return source, out, evidence_path, evidence
 
 
 def test_reproducible_newc_and_evidence(tmp_path: Path) -> None:
@@ -115,12 +126,7 @@ def test_rejects_world_writable_regular_file(tmp_path: Path) -> None:
 
 
 def test_tampered_artifact_fails_evidence_revalidation(tmp_path: Path) -> None:
-    source = tmp_path / "root"
-    source.mkdir()
-    _make_tree(source)
-    out = tmp_path / "rescue.cpio"
-    evidence_path = tmp_path / "rescue.json"
-    build_reproducible_rescue_initramfs(source, out, evidence_path)
+    _, out, evidence_path, _ = _built_rescue(tmp_path)
     evidence = load_rescue_initramfs_evidence(evidence_path)
 
     data = bytearray(out.read_bytes())
@@ -128,6 +134,34 @@ def test_tampered_artifact_fails_evidence_revalidation(tmp_path: Path) -> None:
     out.write_bytes(data)
     with pytest.raises(RescueInitramfsError, match="SHA-256"):
         verify_rescue_initramfs_artifact(out, evidence)
+
+
+def test_forged_hash_cannot_hide_noncanonical_newc_metadata(tmp_path: Path) -> None:
+    _, out, _, evidence = _built_rescue(tmp_path)
+    data = bytearray(out.read_bytes())
+    # newc field 2 is uid: magic (6) + ino (8) + mode (8) = byte 22.
+    data[22:30] = b"00000001"
+    out.write_bytes(data)
+    forged = replace(evidence, artifact_sha256=sha256(data).hexdigest())
+    with pytest.raises(RescueInitramfsError, match="metadata is not canonical"):
+        verify_rescue_initramfs_artifact(out, forged)
+
+
+def test_forged_hash_cannot_hide_nonzero_bytes_after_trailer(tmp_path: Path) -> None:
+    _, out, _, evidence = _built_rescue(tmp_path)
+    data = bytearray(out.read_bytes())
+    data[-1] = 1
+    out.write_bytes(data)
+    forged = replace(evidence, artifact_sha256=sha256(data).hexdigest())
+    with pytest.raises(RescueInitramfsError, match="Non-zero|non-zero"):
+        verify_rescue_initramfs_artifact(out, forged)
+
+
+def test_init_digest_is_independently_rechecked(tmp_path: Path) -> None:
+    _, out, _, evidence = _built_rescue(tmp_path)
+    forged = replace(evidence, init_sha256="0" * 64)
+    with pytest.raises(RescueInitramfsError, match="/init SHA-256"):
+        verify_rescue_initramfs_artifact(out, forged)
 
 
 def test_malformed_evidence_fails_closed() -> None:
