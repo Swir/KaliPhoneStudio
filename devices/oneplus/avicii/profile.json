@@ -71,7 +71,10 @@
       "CONFIG_BLK_DEV_INITRD": "y",
       "CONFIG_INPUT_EVDEV": "y",
       "CONFIG_INPUT_TOUCHSCREEN": "y",
+      "CONFIG_MODULE_SIG": "n",
+      "CONFIG_MODULE_SIG_FORCE": "n",
       "CONFIG_NAMESPACES": "y",
+      "CONFIG_RD_LZ4": "y",
       "CONFIG_SCSI_UFSHCD": "y",
       "CONFIG_SCSI_UFS_QCOM": "y",
       "CONFIG_SECCOMP": "y",
@@ -113,6 +116,8 @@
   "recovery_notes": [
     "Capture the exact OxygenOS build/fingerprint and stock recovery path before device writes.",
     "Prefer temporary fastboot boot; persistent tests must target only the inactive A/B slot.",
+    "The engineering first-boot kernel disables automatic module signing so builds do not embed an ephemeral random certificate; Stable must define a reviewed signing policy before release.",
+    "The engineering first-boot kernel requires CONFIG_RD_LZ4=y because the profile boot policy uses an LZ4 ramdisk.",
     "Do not mark recovery verified until restore has been exercised on the exact physical AC2003 baseline."
   ],
   "test_contract": {
@@ -123,6 +128,7 @@
       "manifest and SHA-256 checks",
       "offline fastboot baseline transcript validation",
       "exact kernel source/config/image evidence validation",
+      "kernel config policy enforces ramdisk decompressor compatibility and deterministic module-signing behavior",
       "source-locked compiler kernel build and two-build reproducibility verification"
     ],
     "hardware_beta": [
