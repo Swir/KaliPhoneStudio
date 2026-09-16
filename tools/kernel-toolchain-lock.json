@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "AOSP Android Clang r416183b",
+  "source_url": "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86",
+  "source_commit": "69e4b00fe608feec1bde77294dd648427644725f",
+  "subtree": "clang-r416183b",
+  "tree_sha1": "b2d417040452b5fb47ea22fb70d79741fa6ef455",
+  "bin_tree_sha1": "6f8d6e866e540da23d80d599e959712f6de7fe85",
+  "android_version_blob_sha1": "76b2048751fe7c55ebe3c713036dc1382d628d34",
+  "manifest_blob_sha1": "41b501575f6db19a9361b0d62d62fe19ef62f47e",
+  "android_version": "12.0.5",
+  "clang_revision": "r416183b",
+  "build_id": "7284624",
+  "llvm_project_commit": "c935d99d7cf2016289302412d708641d52d2f7ee",
+  "expected_clang_banner": "Android (7284624, based on r416183b) clang version 12.0.5",
+  "host": "linux-x86_64",
+  "beta_gate_credit": false
+}
