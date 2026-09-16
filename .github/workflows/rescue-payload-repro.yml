@@ -110,7 +110,7 @@ jobs:
                 make -j2 CROSS_COMPILE="$CROSS_COMPILE" "$MAKE_TARGET"
             )
             cp "build/$pass/busybox" "build/busybox-$pass"
-            qemu-aarch64-static "build/busybox-$pass" --list | LC_ALL=C sort -u > "build/applets-$pass.txt"
+            qemu-aarch64-static -0 busybox "build/busybox-$pass" --list | LC_ALL=C sort -u > "build/applets-$pass.txt"
           done
           cmp build/busybox-a build/busybox-b
           cmp build/applets-a.txt build/applets-b.txt
