@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.23-dev — exact profile-driven kernel provenance and first-boot binding
+
+- Added a device-independent kernel evidence layer with canonical `KernelBuildPlan`, exact-checkout, generated-config and ARM64 `Image` evidence contracts. Host-side kernel evidence does not imply hardware success.
+- Extended the multi-device profile contract so every supported profile must define an exact kernel source name resolving to one unique HTTPS/full-commit source, expected kernel version, architecture, image name, safe defconfig/config-fragment paths, build flags and required `CONFIG_*` states.
+- Pinned the `oneplus/avicii` public bring-up kernel baseline to LineageOS `android_kernel_oneplus_sm7250` commit `fb4b4374d3b9ad0f10ba38d159585129f092fb3d`, verified as kernel `4.19.300`; this remains a reviewed source baseline rather than the final hardware-verified first-boot kernel.
+- Kernel checkout evidence verifies exact git `HEAD`, Makefile kernel version and hashes of profile-selected defconfig/fragments. Final `.config` evidence rejects missing/mismatched required settings.
+- ARM64 kernel Image evidence verifies the Linux ARM64 image magic, hashes/size and re-hashes the artifact at bundle-binding time to reject post-verification drift.
+- Added `KernelCandidateEvidence`, binding kernel plan, exact source commit/version, checkout/config/Image evidence and enforcing a single profile/plan identity.
+- Upgraded the first-boot candidate manifest to schema v4. It now requires the exact `BootBuildPlan` and rejects a kernel evidence bundle unless its `Image` SHA-256 and size exactly match the kernel input embedded in that approved boot plan.
+- Added focused regression coverage for profile-kernel schema failures, exact kernel planning, wrong source commit, config drift/duplicates, ARM64 magic, profile/plan mixing, Image drift and kernel-to-boot-plan mismatch.
+- Diagnosed the first integration failures instead of weakening checks: stale pre-schema-v4 candidate tests were updated, then the remaining Python matrix failure was isolated to version metadata being advanced before `BUILD_STATUS.json`; source-of-truth metadata is reconciled in the same development iteration.
+- Tightened `BETA_RELEASE_GATE.md` so a public Beta additionally requires exact kernel source/config/Image evidence, exact kernel-to-boot-plan binding and profile-correct DTB/DTBO evidence. None of these host-side checks satisfy a physical-device gate.
+- Advanced the conservative completion indicator to 51% for this substantial host-side provenance milestone. Physical AC2003 firmware capture, exact stock boot, final kernel/DTB/DTBO build, temporary boot, early Kali userspace, storage/charging and recovery remain unverified.
+
 ## 0.6.22-dev — profile-driven Fastboot baseline and exact-firmware authorization
 
 - Upgraded the device-profile contract to schema v2 with a generic `fastboot_probe` section instead of hardcoding AC2003 variable names in the common core. The first `oneplus/avicii` profile requires product/serial identity, A/B current slot and slot count, unlocked/secure state, plus bootloader/baseband versions.
