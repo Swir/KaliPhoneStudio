@@ -1,9 +1,9 @@
 {
-  "version": "0.6.18-dev",
-  "stage": "signed Kali repository snapshot and real double-build ARM64 rootfs reproducibility CI ready for main validation",
+  "version": "0.6.19-dev",
+  "stage": "repaired real ARM64 rootfs double-build validation plus deterministic rescue-initramfs contract",
   "repository_source_of_truth": true,
   "project_progress_percent": 49,
-  "host_ci": "main 0.6.17 tests 35089711035 PASS + source-lock 35089711001 PASS; 0.6.18 code head tests 35090602706 PASS + source-lock 35090602833 PASS + PR signed-snapshot rootfs-repro 35090602795 PASS; real double-build awaits main push",
+  "host_ci": "rootfs repair PR #9 head 17af7c594f94362adeedb7c2d06810c2788959f5: tests 35098001537 PASS + rootfs-repro PR contract 35098001682 PASS; merged as efbc8bee1d5abd2f71835d5ef7331fdd9dd37dcd; repaired main full rootfs-repro run 35098070478 currently executing real build A/B; deterministic initramfs PR #10 tests 35098415518 PASS on Python 3.11-3.14 and merged as f359fdb272abd5c300b5cac8fb42c027662c38f4",
   "python_ci": ["3.11", "3.12", "3.13", "3.14"],
   "profile_schema_version": 1,
   "profile_contract": "implemented-and-ci-enforced",
@@ -32,8 +32,10 @@
   "rootfs_target": "kali-rolling arm64 minimal over HTTPS",
   "rootfs_repository_trust": "schema-v2 requires GPG-valid InRelease signed by Kali archive fingerprint 827C8569F2518CC677FECA1AED65462EC8D5E4C5 and records exact ARM64 package-index hashes",
   "rootfs_reproducibility_contract": "schema-v2; signed repository snapshot plus exact source lock, byte-identical independent builds and normalized installed-package manifest required",
-  "rootfs_repro_ci": "implemented; PR signed-snapshot contract passed; main push performs two real independent ARM64 builds and fails closed unless byte-identical",
+  "rootfs_repro_ci": "first main run 35090859764 failed because upstream package dependency checks replaced qemu-user-static; repaired runner now requires static qemu-aarch64, rejects competing dynamic qemu, carries the reviewed Kali keyring to debootstrap, and revalidates signed InRelease state before each build; repaired main run 35098070478 is in progress",
   "rootfs_reproducible_artifact": false,
+  "rescue_initramfs_contract": "schema-v1 device-independent deterministic gzip/newc builder; normalized uid/gid/mtime/order, mandatory executable /init, double-build byte equality, canonical SHA-256 evidence and post-build drift verification",
+  "rescue_initramfs_hardware_verified": false,
   "first_boot_candidate_manifest": "schema-v2 host-side contract binds temporary-boot authorization, rootfs evidence and installed-package manifest without claiming hardware success",
   "destructive_write_policy": "inactive-slot-only for declared A/B partitions",
   "first_profile": "oneplus/avicii",
@@ -42,7 +44,7 @@
   "beta_blockers": [
     "physical AC2003 identity/firmware baseline",
     "matching stock boot.img extracted and validated from exact OTA",
-    "real reproducible Kali ARM64 rootfs/early-userspace artifact",
+    "reviewed real reproducible Kali ARM64 rootfs artifact and physical early-userspace proof",
     "temporary boot on physical AC2003",
     "Kali early userspace/rootfs proof",
     "rescue, charging/storage and recovery verification"
