@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from hashlib import sha256
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,11 +14,10 @@ if str(ROOT) not in sys.path:
 
 from kaliphonestudio.rootfs import (  # noqa: E402
     RootfsError,
-    load_repository_snapshot,
     load_rootfs_source_lock,
     package_manifest_from_rootfs,
-    validate_repository_snapshot,
 )
+from scripts.verify_live_kali_snapshot import verify_captured_inrelease  # noqa: E402
 
 _DEP_CHECK_MARKER = "KaliPhoneStudio: host dependencies preflighted; preserve qemu-user-static\n"
 _REQUIRED_HOST_TOOLS = (
@@ -83,32 +81,6 @@ def _prepare_host_environment(checkout: Path) -> Path:
     return sentinel
 
 
-def _verify_live_repository_snapshot(lock, snapshot_path: Path) -> None:
-    """Require the live mirror InRelease to still equal the GPG-verified snapshot."""
-    snapshot = load_repository_snapshot(snapshot_path)
-    validate_repository_snapshot(lock, snapshot)
-    url = f"{lock.mirror.rstrip('/')}/dists/{lock.suite}/InRelease"
-    try:
-        result = subprocess.run(
-            [
-                "curl", "--fail", "--location", "--silent", "--show-error",
-                "--proto", "=https", "--tlsv1.2", url,
-            ],
-            check=True,
-            shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=60,
-        )
-    except (subprocess.SubprocessError, OSError) as exc:
-        raise RootfsError(f"cannot revalidate locked Kali repository snapshot: {exc}") from exc
-    digest = sha256(result.stdout).hexdigest()
-    if digest != snapshot.inrelease_sha256:
-        raise RootfsError(
-            "Kali repository InRelease changed after signed snapshot capture; refusing rootfs build"
-        )
-
-
 def _find_rootfs_artifact(checkout: Path, architecture: str) -> Path:
     candidates = []
     for path in checkout.rglob("*.tar.xz"):
@@ -132,6 +104,12 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--lock", type=Path, required=True)
     result.add_argument("--snapshot", type=Path, required=True)
+    result.add_argument(
+        "--inrelease",
+        type=Path,
+        required=True,
+        help="captured, GPG-verified InRelease whose SHA-256 is bound by --snapshot",
+    )
     result.add_argument("--checkout", type=Path, required=True)
     result.add_argument("--out", type=Path, required=True)
     result.add_argument("--sudo", action="store_true", help="prefix the locked builder argv with sudo --")
@@ -153,7 +131,11 @@ def main() -> int:
     if not (checkout / "build-fs.sh").is_file():
         raise RootfsError("locked rootfs builder entrypoint is missing")
 
-    _verify_live_repository_snapshot(lock, args.snapshot)
+    # The live mirror is checked once for the whole A/B pair immediately before both
+    # builders start.  Per-builder validation is deliberately local so an upstream
+    # rolling-repository update during build A cannot prevent build B from running.
+    # Strict byte/package equality remains mandatory after both builds complete.
+    verify_captured_inrelease(lock, args.snapshot, args.inrelease)
     sentinel = _prepare_host_environment(checkout)
     argv = list(lock.command)
     if args.sudo:
