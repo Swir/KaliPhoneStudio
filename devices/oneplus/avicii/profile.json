@@ -57,7 +57,8 @@
     "config_fragments": ["vendor/debugfs.config"],
     "make_flags": {
       "ARCH": "arm64",
-      "LLVM": "1"
+      "LLVM": "1",
+      "BRAND_SHOW_FLAG": "oneplus"
     },
     "required_configs": {
       "CONFIG_ARCH_LITO": "y",
