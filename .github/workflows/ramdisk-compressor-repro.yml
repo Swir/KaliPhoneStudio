@@ -1,0 +1,161 @@
+name: ramdisk-compressor-repro
+
+on:
+  push:
+    paths:
+      - "tools/ramdisk-compressor-locks.json"
+      - ".github/workflows/ramdisk-compressor-repro.yml"
+      - "kaliphonestudio/ramdisk_compression.py"
+      - "tests/test_ramdisk_compression.py"
+  pull_request:
+    paths:
+      - "tools/ramdisk-compressor-locks.json"
+      - ".github/workflows/ramdisk-compressor-repro.yml"
+      - "kaliphonestudio/ramdisk_compression.py"
+      - "tests/test_ramdisk_compression.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-lz4:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+          - os: windows-latest
+            platform: windows-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout KaliPhoneStudio
+        uses: actions/checkout@v5
+
+      - name: Read authoritative LZ4 lock
+        id: lock
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path("tools/ramdisk-compressor-locks.json").read_text(encoding="utf-8"))
+          lz4 = data["compressors"]["lz4"]
+          source = lz4["source"]
+          build = lz4["build"]
+          if lz4["invocation"] != ["-l", "-12", "--favor-decSpeed"]:
+              raise SystemExit("locked LZ4 invocation drifted from Android legacy ramdisk policy")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              print(f"repository={source['url'].removeprefix('https://github.com/')}", file=f)
+              print(f"commit={source['commit']}", file=f)
+              print(f"tag={source['tag']}", file=f)
+              print(f"cflags={build['cflags']}", file=f)
+
+      - name: Checkout exact LZ4 source A
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.lock.outputs.repository }}
+          ref: ${{ steps.lock.outputs.commit }}
+          path: upstream-lz4-a
+          persist-credentials: false
+
+      - name: Checkout exact LZ4 source B
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ steps.lock.outputs.repository }}
+          ref: ${{ steps.lock.outputs.commit }}
+          path: upstream-lz4-b
+          persist-credentials: false
+
+      - name: Verify source commit and release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream-lz4-a rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
+          test "$(git -C upstream-lz4-b rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
+          test "$(git -C upstream-lz4-a rev-list -n1 '${{ steps.lock.outputs.tag }}')" = "${{ steps.lock.outputs.commit }}"
+          test "$(git -C upstream-lz4-b rev-list -n1 '${{ steps.lock.outputs.tag }}')" = "${{ steps.lock.outputs.commit }}"
+
+      - name: Build two deterministic Linux LZ4 binaries
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for side in a b; do
+            src="$GITHUB_WORKSPACE/upstream-lz4-$side"
+            make -C "$src/programs" clean
+            make -C "$src/programs" lz4-release \
+              CC=gcc \
+              CFLAGS="${{ steps.lock.outputs.cflags }} -ffile-prefix-map=$src=." \
+              LDFLAGS="-Wl,--build-id=none"
+            cp "$src/programs/lz4" "$GITHUB_WORKSPACE/lz4-$side"
+          done
+
+      - name: Install deterministic Windows MinGW toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed make mingw-w64-x86_64-gcc'
+          if ($LASTEXITCODE -ne 0) { throw 'MSYS2 toolchain install failed' }
+
+      - name: Build two deterministic Windows LZ4 binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ws = & 'C:\msys64\usr\bin\cygpath.exe' -u $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw 'cygpath failed' }
+          $cflags = '${{ steps.lock.outputs.cflags }}'
+          $script = @"
+          set -euo pipefail
+          export PATH=/mingw64/bin:/usr/bin:`$PATH
+          cd '$ws'
+          for side in a b; do
+            src='$ws/upstream-lz4-'`$side
+            make -C "`$src/programs" clean
+            make -C "`$src/programs" lz4-release CC=gcc CFLAGS="$cflags -ffile-prefix-map=`$src=." LDFLAGS="-Wl,--no-insert-timestamp"
+            cp "`$src/programs/lz4.exe" "$ws/lz4-`$side.exe"
+          done
+          "@
+          & 'C:\msys64\usr\bin\bash.exe' -lc $script
+          if ($LASTEXITCODE -ne 0) { throw 'deterministic Windows LZ4 build failed' }
+
+      - name: Prove binary and legacy-stream reproducibility
+        shell: python
+        run: |
+          import hashlib
+          import os
+          from pathlib import Path
+          import subprocess
+
+          suffix = ".exe" if os.name == "nt" else ""
+          a_path = Path(f"lz4-a{suffix}")
+          b_path = Path(f"lz4-b{suffix}")
+          a = a_path.read_bytes()
+          b = b_path.read_bytes()
+          if a != b:
+              raise SystemExit("pinned LZ4 binaries are not byte-for-byte reproducible")
+          digest = hashlib.sha256(a).hexdigest()
+
+          sample = (b"KaliPhoneStudio-rescue-repro-contract\n" * 8192)
+          args = ["-l", "-12", "--favor-decSpeed"]
+          out_a = subprocess.run([str(a_path.resolve()), *args], input=sample, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
+          out_b = subprocess.run([str(b_path.resolve()), *args], input=sample, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
+          if out_a != out_b:
+              raise SystemExit("legacy LZ4 streams diverge across independent binaries")
+          if not out_a.startswith(bytes.fromhex("02214c18")):
+              raise SystemExit("locked invocation did not emit legacy Linux-kernel LZ4 magic")
+
+          stream_digest = hashlib.sha256(out_a).hexdigest()
+          print("${{ matrix.platform }} binary SHA-256:", digest)
+          print("${{ matrix.platform }} legacy stream SHA-256:", stream_digest)
+          Path("lz4-${{ matrix.platform }}.sha256").write_text(
+              f"binary_sha256={digest}\nlegacy_stream_sha256={stream_digest}\nsource_commit=${{ steps.lock.outputs.commit }}\n",
+              encoding="ascii",
+          )
+
+      - name: Upload LZ4 reproducibility evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ramdisk-compressor-repro-${{ matrix.platform }}
+          path: lz4-${{ matrix.platform }}.sha256
+          if-no-files-found: error
