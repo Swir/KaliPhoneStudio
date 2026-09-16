@@ -17,6 +17,11 @@ _SAFE_KERNEL_CONFIG_RE = re.compile(r"^CONFIG_[A-Z0-9_]+$")
 _SAFE_MAKE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _KERNEL_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _ALLOWED_RAMDISK_COMPRESSION = {"gzip", "lz4", "none"}
+_RAMDISK_DECOMPRESSOR_CONFIG = {
+    "gzip": "CONFIG_RD_GZIP",
+    "lz4": "CONFIG_RD_LZ4",
+    "none": None,
+}
 
 
 class ProfileError(ValueError):
@@ -246,6 +251,17 @@ def _validate_kernel_contract(data: dict[str, Any]) -> None:
             raise ProfileError("kernel.required_configs contains an invalid CONFIG_ name")
         if state not in {"y", "m", "n"}:
             raise ProfileError(f"kernel.required_configs.{name} must be y, m or n")
+
+    compression = data["boot"]["ramdisk_compression"]
+    decompressor = _RAMDISK_DECOMPRESSOR_CONFIG[compression]
+    if compression != "none" and configs.get("CONFIG_BLK_DEV_INITRD") != "y":
+        raise ProfileError(
+            "kernel.required_configs.CONFIG_BLK_DEV_INITRD must be y when a boot ramdisk is used"
+        )
+    if decompressor is not None and configs.get(decompressor) != "y":
+        raise ProfileError(
+            f"kernel.required_configs.{decompressor} must be y for boot.ramdisk_compression={compression}"
+        )
 
 
 def validate_profile(data: dict[str, Any]) -> None:
