@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from .boot_image import BootImageError, boot_build_contract
+from .boot_tools import load_boot_tool_locks, require_assembler_for_header
 from .profiles import DeviceProfile
 from .provenance import StockBootProvenance
 
@@ -109,11 +110,7 @@ def verify_boot_build_plan(
     *,
     input_dir: Path,
 ) -> None:
-    """Fail closed if profile, stock evidence, or any planned input has drifted.
-
-    This is the mandatory pre-assembly TOCTOU guard: callers should invoke it as
-    close as possible to the actual image assembly operation.
-    """
+    """Fail closed if profile, stock evidence, or any planned input has drifted."""
     if plan.schema_version != 1:
         raise BootImageError("unsupported boot build plan schema")
     contract = boot_build_contract(profile)
@@ -135,13 +132,27 @@ def verify_boot_build_plan(
         raise BootImageError("boot build plan input set/order does not match profile")
 
     for planned in plan.inputs:
-        # Paths are deliberately reduced to basenames in plans; reject traversal
-        # or aliases before resolving them against the controlled input directory.
         if Path(planned.path).name != planned.path or planned.path in {"", ".", ".."}:
             raise BootImageError(f"unsafe planned input path: {planned.name}")
         current = _input(planned.name, input_dir / planned.path)
         if current.size != planned.size or current.sha256 != planned.sha256:
             raise BootImageError(f"planned build input changed: {planned.name}")
+
+
+def source_locked_assembler_prefix(
+    plan: BootBuildPlan,
+    *,
+    lock_manifest: Path,
+    exact_checkout: Path,
+) -> tuple[str, str]:
+    """Resolve only an explicitly source-locked assembler for this plan's header.
+
+    Checkout acquisition/commit verification is intentionally a separate pipeline
+    gate. This function never falls back to a host PATH copy of mkbootimg.
+    """
+    locks = load_boot_tool_locks(lock_manifest)
+    lock = require_assembler_for_header(locks, plan.header_version)
+    return lock.argv(exact_checkout)
 
 
 def write_boot_build_plan(plan: BootBuildPlan, destination: Path) -> str:
