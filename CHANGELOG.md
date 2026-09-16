@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.21-dev — source-locked reproducible ARM64 rescue payload
+
+- Added a device-independent rescue payload contract around BusyBox 1.38.0, pinned to exact source archive SHA-256 `34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2`, plus SHA-256 locks for the reviewed rescue miniconfig and `/init` template.
+- Added fail-closed static ARM64 ELF validation, required recovery/diagnostic applet inventory, forbidden remote-access/network applets, bounded binary size and explicit `network=disabled` / `ssh=disabled` defaults.
+- Added two independent ARM64 cross-builds in `rescue-payload-repro`; binaries must match byte-for-byte and their applet inventories are executed under `qemu-aarch64-static`, sorted and compared before candidate staging is allowed.
+- Diagnosed the first real workflow failures rather than weakening the contract: `allnoconfig` had disabled the BusyBox management applet used by `--list`, then the miniconfig omitted separate `poweroff` and `reboot` applets. The lock now explicitly enables `CONFIG_BUSYBOX`, `CONFIG_HALT`, `CONFIG_POWEROFF` and `CONFIG_REBOOT` while disabling external telinit handoff.
+- `rescue-payload-repro` run `35107467164` passed the complete exact-source fetch, source checksum, independent static ARM64 builds, QEMU applet inventory, reproducibility evidence, profile-formatted LZ4 rescue candidate and offline-policy cross-check chain.
+- Added regression coverage ensuring the repository miniconfig cannot silently lose BusyBox inventory support, static linking, the local shell or rescue power controls; repository tests run `35107502480` passed.
+- Diagnosed real rootfs run `35098070478`: the signed repository snapshot and first ARM64 build succeeded, but package-manifest extraction rejected the pinned builder's legitimate single top-level archive directory. The parser now accepts only archive-root `var/lib/dpkg/status` or exactly one safe top-level prefix and rejects traversal, deeper suffix tricks and ambiguous duplicates. A new `main` double-build is still required before any rootfs reproducibility claim.
+- Advanced the conservative project completion indicator to 50% for the verified host-side rescue payload milestone. No AC2003 hardware or Beta gate is credited; physical rescue, temporary boot, early Kali userspace, storage/charging and recovery remain unverified.
+
 ## 0.6.20-dev — deterministic LZ4 rescue ramdisk and stricter multi-device profile contracts
 
 - Closed the `oneplus/avicii` rescue-format gap without hardcoding AC2003 into the core: the profile continues to declare `ramdisk_compression: lz4`, while the common initramfs layer now supports that policy generically.
