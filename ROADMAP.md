@@ -4,9 +4,9 @@ The roadmap separates **device-independent studio work** from **per-phone bring-
 
 ## Overall project progress
 
-**48% complete**
+**49% complete**
 
-`██████████░░░░░░░░░░ 48%`
+`██████████░░░░░░░░░░ 49%`
 
 This percentage is deliberately weighted toward real-device boot, hardware validation, recovery and release readiness. Host-side implementation and CI are important, but they do not count the same as verified phone hardware milestones.
 
@@ -37,19 +37,23 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Make boot-image build planning fully profile-driven and bind all inputs to exact stock provenance/SHA-256
 - [x] Revalidate build plan/profile/provenance/input hashes immediately before assembly
 - [x] Full-commit source lock for authoritative mkbootimg/unpack_bootimg backend with no PATH fallback
-- [ ] Deterministic boot-v2 image assembly from the validated build plan
-- [ ] Verify assembled output by locked unpacker + structural invariant round-trip
+- [x] Deterministic boot-v2 image assembly from the validated build plan
+- [x] Verify assembled output by locked unpacker + structural invariant round-trip
+- [x] Fail-closed temporary-boot authorization binding device identity, stock provenance, plan, reproducible assembly and round-trip evidence
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery steps
 - [ ] GUI profile selector for offline builds without a connected phone
 
 ## Phase B — Common Kali Phone Userspace
 
-- [x] Kali rolling ARM64 rootfs builder foundation
-- [x] Phosh phone UI stage
-- [x] Safe minimal rescue initramfs foundation
-- [x] SSH disabled by default
-- [ ] Reproducible rootfs artifact in CI
+- [x] Pin official Kali/NetHunter ARM64 rootfs builder source to an exact upstream commit
+- [x] Define fail-closed rootfs source/repository/reproducibility evidence contract
+- [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
+- [ ] Build a real reproducible ARM64 rootfs artifact in CI from pinned source + repository evidence
+- [ ] Bind verified rootfs evidence into first-boot/release candidate manifests
 - [ ] Generic first-boot provisioning independent of device name
+- [ ] Phosh phone UI stage on the verified common rootfs
+- [ ] Safe minimal rescue initramfs artifact with reproducibility evidence
+- [ ] SSH disabled by default
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
 - [ ] Update/rollback metadata format
 
