@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "compressors": {
+    "lz4": {
+      "source": {
+        "url": "https://github.com/lz4/lz4",
+        "tag": "v1.10.0",
+        "commit": "ebb370ca83af193212df4dcbadcc5d87bc0de2f0"
+      },
+      "build": {
+        "target": "programs/lz4-release",
+        "toolchain": "gcc-make",
+        "cflags": "-O2 -g0 -fno-ident"
+      },
+      "invocation": [
+        "-l",
+        "-12",
+        "--favor-decSpeed"
+      ],
+      "format": "lz4-legacy",
+      "legacy_magic_hex": "02214c18",
+      "android_build_reference": "BOARD_RAMDISK_USE_LZ4 uses lz4 -l -12 --favor-decSpeed; -l selects the legacy Linux-kernel ramdisk format",
+      "artifacts": {}
+    }
+  }
+}
