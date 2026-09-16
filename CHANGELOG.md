@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.20-dev — deterministic LZ4 rescue ramdisk and stricter multi-device profile contracts
+
+- Closed the `oneplus/avicii` rescue-format gap without hardcoding AC2003 into the core: the profile continues to declare `ramdisk_compression: lz4`, while the common initramfs layer now supports that policy generically.
+- Added a small audited pure-Python LZ4 legacy-frame implementation. It emits deterministic literal-only blocks under the Linux-kernel legacy magic, uses the legacy 8 MiB block contract, and includes a bounded decoder so generated output is independently decoded rather than trusted by hash alone.
+- Pinned the ramdisk-format references in `tools/ramdisk-format-locks.json`: AOSP `platform/build` commit `5db2b8fa45a8ba9e90f76f583bc46ffdcf6c3c57` for the `lz4 -l` kernel-ramdisk policy and upstream `lz4` v1.10.0 commit `ebb370ca83af193212df4dcbadcc5d87bc0de2f0` for legacy framing semantics.
+- Refactored rescue initramfs construction so gzip and LZ4 both originate from the same normalized `newc` payload and both still require two byte-identical independent builds.
+- Added independent post-compression structural verification: decompression is followed by a native `newc` parser that rechecks canonical inode/order/uid/gid/mtime/device metadata, entry types, trailer/padding, manifest SHA-256, entry count and executable `/init` SHA-256.
+- Tightened rescue staging by rejecting world-writable regular files in addition to the existing setuid/setgid, special-file, unsafe-path and resource-limit gates.
+- Extended rescue-to-boot binding so `lz4-legacy-literal-v1` maps only to boot plans whose profile policy is exactly `lz4`; exact artifact SHA-256/size and plan digest still have to match.
+- Made the offline rescue CLI profile-aware: `--profile-id oneplus/avicii` derives LZ4 from `devices/oneplus/avicii/profile.json`, while an explicit conflicting compression choice fails closed.
+- Hardened the versioned multi-device profile contract: strictly typed boot header/page/kernel/DTB/DTBO/compression fields, power-of-two page sizes, safe/unique A/B partition identifiers, required A/B boot partition, credential-free HTTPS source URLs, full commit locks, safe lowercase `profile_id` components and `profile_id` ↔ repository path binding.
+- Added focused regression coverage for LZ4 block/stream decoding, malformed legacy frames, multi-block round-trips, format-lock consistency, deterministic LZ4 rescue output, structural inspection, world-writable rejection, LZ4 boot-plan binding and stricter profile validation.
+- Overall completion remains 49%: this is substantial host-side safety/format work but does not satisfy any physical AC2003 Beta gate. The repaired real ARM64 rootfs run is still not considered reproducible until its full double-build evidence passes and is reviewed.
+
 ## 0.6.19-dev — rootfs execution hardening and deterministic rescue initramfs
 
 - Diagnosed the first real post-merge ARM64 rootfs reproducibility run `35090859764` instead of treating ordinary Python CI as sufficient. The pinned upstream builder's Debian dependency helper installed `qemu-user`/`qemu-user-binfmt`, removed `qemu-user-static`, and left the foreign ARM64 debootstrap second stage unable to enter chroot.
