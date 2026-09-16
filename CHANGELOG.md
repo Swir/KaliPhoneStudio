@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.19-dev — rootfs execution hardening and deterministic rescue initramfs
+
+- Diagnosed the first real post-merge ARM64 rootfs reproducibility run `35090859764` instead of treating ordinary Python CI as sufficient. The pinned upstream builder's Debian dependency helper installed `qemu-user`/`qemu-user-binfmt`, removed `qemu-user-static`, and left the foreign ARM64 debootstrap second stage unable to enter chroot.
+- Added a fail-closed rootfs host preflight that requires `qemu-aarch64-static`, rejects an ambiguous competing dynamic `qemu-aarch64`, verifies the exact checkout is clean, and only then creates the upstream untracked `.dep_check` sentinel so the pinned builder cannot replace the validated static emulator.
+- Bound every real rootfs build invocation to the previously GPG-verified repository snapshot: the runner re-fetches the live HTTPS `InRelease` and requires its SHA-256 to remain identical immediately before build execution.
+- Carried the reviewed Kali archive keyring into the build job so debootstrap validates Kali repository signatures itself rather than relying only on the earlier snapshot-capture step.
+- Added focused rootfs-runner regression tests for missing static QEMU, dynamic-QEMU precedence, exact snapshot acceptance and repository-state drift. PR #9 passed Python CI and the signed-snapshot rootfs contract before merge as `efbc8bee1d5abd2f71835d5ef7331fdd9dd37dcd`.
+- Added a device-independent deterministic rescue initramfs contract: native gzip/newc construction with normalized uid/gid/mtime/order, two-pass byte-for-byte reproducibility, executable `/init` requirement, canonical artifact/entry evidence and post-build drift verification.
+- Rescue-initramfs staging now rejects unsafe paths, setuid/setgid entries, special files and bounded-resource violations; the offline CLI refuses output overwrite and never accesses a phone.
+- PR #10 passed the complete Python 3.11/3.12/3.13/3.14 test/compile matrix before merge as `f359fdb272abd5c300b5cac8fb42c027662c38f4`.
+- The repaired full `main` ARM64 double-build run `35098070478` is intentionally not declared reproducible until both real builds finish, byte/package equality passes and the resulting evidence is reviewed.
+- Overall project completion remains 49%; the initramfs work is a host artifact contract only and no AC2003 hardware/Beta gate is credited.
+
 ## 0.6.18-dev — signed repository snapshots and real ARM64 rootfs reproducibility CI
 
 - Upgraded the common rootfs lock to schema v2, switched the Kali mirror to HTTPS, and pinned the Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5` alongside the exact NetHunter rootfs source commit.
