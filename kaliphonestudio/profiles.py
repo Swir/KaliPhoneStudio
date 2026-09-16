@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Iterable
 from urllib.parse import urlparse
@@ -13,6 +13,9 @@ PROFILE_SCHEMA_VERSION = 2
 _SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SAFE_PARTITION_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SAFE_FASTBOOT_VAR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+_SAFE_KERNEL_CONFIG_RE = re.compile(r"^CONFIG_[A-Z0-9_]+$")
+_SAFE_MAKE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_KERNEL_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _ALLOWED_RAMDISK_COMPRESSION = {"gzip", "lz4", "none"}
 
 
@@ -49,7 +52,7 @@ REQUIRED = {
     "schema_version", "profile_id", "vendor", "display_name", "codename", "model",
     "confirmation_text", "arch", "soc", "board", "boot", "partition_limits",
     "ab_device", "avb_enabled", "firmware_hints", "sources", "recovery_notes",
-    "test_contract", "fastboot_probe",
+    "test_contract", "fastboot_probe", "kernel",
 }
 
 
@@ -63,6 +66,17 @@ def _require_plain_int(value: Any, field: str, *, minimum: int = 0) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
         raise ProfileError(f"{field} must be an integer >= {minimum}")
     return value
+
+
+def _safe_relative_posix_path(value: Any, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ProfileError(f"{field} must be a non-empty relative path")
+    path = PurePosixPath(value)
+    if path.is_absolute() or "." in path.parts or ".." in path.parts:
+        raise ProfileError(f"{field} must be a safe relative POSIX path")
+    if any(not part or "\\" in part or any(ord(ch) < 0x20 for ch in part) for part in path.parts):
+        raise ProfileError(f"{field} contains unsafe path data")
+    return path.as_posix()
 
 
 def _validate_profile_id(data: dict[str, Any]) -> None:
@@ -180,6 +194,60 @@ def _validate_fastboot_probe(data: dict[str, Any]) -> None:
             )
 
 
+def _validate_kernel_contract(data: dict[str, Any]) -> None:
+    contract = data["kernel"]
+    if not isinstance(contract, dict):
+        raise ProfileError("kernel must be an object")
+    required_fields = {
+        "source_name", "expected_version", "arch", "image_name", "defconfig",
+        "config_fragments", "make_flags", "required_configs",
+    }
+    missing = sorted(required_fields - contract.keys())
+    if missing:
+        raise ProfileError(f"missing kernel contract fields: {', '.join(missing)}")
+
+    source_name = contract["source_name"]
+    if not isinstance(source_name, str) or not source_name.strip():
+        raise ProfileError("kernel.source_name must be non-empty")
+    matches = [source for source in data["sources"] if source.get("name") == source_name]
+    if len(matches) != 1:
+        raise ProfileError("kernel.source_name must resolve exactly one pinned profile source")
+
+    version = contract["expected_version"]
+    if not isinstance(version, str) or not _KERNEL_VERSION_RE.fullmatch(version):
+        raise ProfileError("kernel.expected_version must be major.minor.patch")
+    if contract["arch"] != data["arch"]:
+        raise ProfileError("kernel.arch must match profile arch")
+    if contract["image_name"] != data["boot"]["kernel_image"]:
+        raise ProfileError("kernel.image_name must match boot.kernel_image")
+
+    _safe_relative_posix_path(contract["defconfig"], "kernel.defconfig")
+    fragments = contract["config_fragments"]
+    if not isinstance(fragments, list) or any(not isinstance(item, str) for item in fragments):
+        raise ProfileError("kernel.config_fragments must be a list of relative paths")
+    normalized_fragments = [_safe_relative_posix_path(item, "kernel.config_fragments") for item in fragments]
+    if len(normalized_fragments) != len(set(normalized_fragments)):
+        raise ProfileError("kernel.config_fragments must not contain duplicates")
+
+    make_flags = contract["make_flags"]
+    if not isinstance(make_flags, dict):
+        raise ProfileError("kernel.make_flags must be an object")
+    for key, value in make_flags.items():
+        if not isinstance(key, str) or not _SAFE_MAKE_KEY_RE.fullmatch(key):
+            raise ProfileError("kernel.make_flags contains an unsafe variable name")
+        if not isinstance(value, str) or not value or any(ord(ch) < 0x20 for ch in value):
+            raise ProfileError(f"kernel.make_flags.{key} must be safe non-empty text")
+
+    configs = contract["required_configs"]
+    if not isinstance(configs, dict) or not configs:
+        raise ProfileError("kernel.required_configs must be a non-empty object")
+    for name, state in configs.items():
+        if not isinstance(name, str) or not _SAFE_KERNEL_CONFIG_RE.fullmatch(name):
+            raise ProfileError("kernel.required_configs contains an invalid CONFIG_ name")
+        if state not in {"y", "m", "n"}:
+            raise ProfileError(f"kernel.required_configs.{name} must be y, m or n")
+
+
 def validate_profile(data: dict[str, Any]) -> None:
     missing = sorted(REQUIRED - data.keys())
     if missing:
@@ -202,15 +270,21 @@ def validate_profile(data: dict[str, Any]) -> None:
     sources = data["sources"]
     if not isinstance(sources, list) or not sources:
         raise ProfileError("sources must contain at least one pinned upstream source")
+    source_names: list[str] = []
     for source in sources:
         if not isinstance(source, dict) or not all(isinstance(source.get(k), str) and source[k].strip() for k in ("name", "url", "commit")):
             raise ProfileError("each source requires name, url and commit")
+        source_names.append(source["name"])
         parsed = urlparse(source["url"])
         if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
             raise ProfileError("source url must be an HTTPS URL without embedded credentials")
         commit = source["commit"].lower()
         if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
             raise ProfileError("source commit must be a full 40-character git SHA")
+    if len(source_names) != len(set(source_names)):
+        raise ProfileError("source names must be unique within a profile")
+
+    _validate_kernel_contract(data)
 
     contract = data["test_contract"]
     if not isinstance(contract, dict):
