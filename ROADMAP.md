@@ -53,6 +53,9 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
 - [x] Bind verified rootfs evidence and temporary-boot authorization into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
+- [x] Add fail-closed ARM64 execution-host preflight for QEMU binfmt fix-binary semantics and locked Kali archive keyring
+- [x] Guard both independent builds against signed Kali repository-snapshot drift before and after execution
+- [x] Run the expensive real double-build on relevant PRs so execution regressions are caught before merge
 - [ ] Obtain the first green real double-build run and review/archive its evidence
 - [ ] Mark a concrete ARM64 rootfs artifact reproducible only after that run passes
 - [ ] Promote first-boot evidence into a release-candidate manifest only after hardware gates exist
