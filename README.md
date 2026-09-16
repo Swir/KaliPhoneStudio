@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.18-dev** — the verified host boot chain is in place and the rootfs path now has signed Kali repository-snapshot evidence plus a real two-build ARM64 reproducibility workflow. A rootfs is **not** accepted merely because the workflow exists: both independent builds must be byte-identical, their normalized installed-package manifest must match, and the evidence must bind the exact source commit and signed repository state. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.19-dev** — the verified host boot chain is in place and the common ARM64 rootfs path is being exercised by real two-build CI. The first real post-merge run exposed an ARM64 chroot/binfmt host failure rather than producing a rootfs; 0.6.19 adds fail-closed QEMU/binfmt + Kali-keyring preflight and signed repository-snapshot drift guards around both builds. A rootfs is **not** accepted until both independent builds finish byte-identically with matching normalized installed-package evidence. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -50,14 +50,16 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Linux amd64 and Windows amd64 extractor reproducibility passed in GitHub Actions run `35018283145`.
 - Authorized extractor SHA-256: Linux amd64 `a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0`; Windows amd64 `35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5`.
 - Kali ARM64 rootfs source lock pinned to official NetHunter rootfs tag `2026.2`, commit `20238a2f2d547d7989a4dec287d4f5ef528ed701`.
-- Rootfs lock schema v2 forces the Kali mirror to HTTPS and pins the current Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5`.
-- `scripts/capture_kali_snapshot.py` requires a successful `gpgv` validation of `InRelease` by that fingerprint, then records the exact `InRelease` SHA-256 and ARM64 package-index paths/sizes/SHA-256 values.
+- Rootfs lock schema v2 forces the Kali mirror to HTTPS and pins the Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5`.
+- `scripts/capture_kali_snapshot.py` requires successful `gpgv` validation of `InRelease` by that fingerprint, then records the exact `InRelease` SHA-256 and ARM64 package-index paths/sizes/SHA-256 values.
 - Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from `var/lib/dpkg/status` inside the archive.
-- `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and is designed to execute two real pinned ARM64 builds after merge to `main`; the result is fail-closed if bytes or package evidence diverge.
+- `kaliphonestudio/rootfs_host.py` + `scripts/check_rootfs_host.py` fail closed unless the ARM64 binfmt handler is enabled with fix-binary semantics, required build commands exist and the installed Kali keyring contains the locked archive fingerprint.
+- `.github/workflows/rootfs-repro.yml` installs the QEMU userspace/binfmt packages expected by the pinned upstream builder before execution, installs the exact verified Kali archive keyring, and revalidates the signed `InRelease`/canonical repository snapshot immediately before and after **each** independent build.
+- Relevant pull requests now run the real two-build ARM64 job before merge, so execution-host regressions are caught before landing on `main`.
 - First-boot candidate manifest schema v2 binds the verified boot authorization, rootfs evidence, package-manifest digest/count, source lock and repository snapshot.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. `rootfs_reproducible_artifact` remains false until a real double-build run passes and its evidence is reviewed.
+The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. The first real post-merge execution (`35090859764`) failed at the ARM64 debootstrap second-stage boundary after the QEMU package transition changed the binfmt runtime. `rootfs_reproducible_artifact` remains false until the repaired real double-build passes and its evidence is reviewed.
 
 ## Safety model
 
@@ -75,7 +77,7 @@ python main.py
 python -m pytest -q
 ```
 
-`rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, independent builds second, canonical evidence only after equality.
+`rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, fail-closed ARM64 execution-host preflight and repository-drift guards second, independent builds third, canonical evidence only after equality.
 
 See `ROADMAP.md`, `BUILD_STATUS.json`, `CHANGELOG.md` and `BETA_RELEASE_GATE.md` for the source-of-truth development state.
 
