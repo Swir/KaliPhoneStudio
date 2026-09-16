@@ -36,8 +36,9 @@ def parse_binfmt_status(text: str) -> BinfmtStatus:
         raise RootfsError("qemu-aarch64 binfmt handler is not enabled")
     if not interpreter:
         raise RootfsError("qemu-aarch64 binfmt handler has no interpreter")
-    # F (fix-binary) pins the interpreter at registration time, which is required
-    # for reliable execution after chroot/mount-namespace transitions.
+    # F (fix-binary) pins the interpreter at registration time. This is required
+    # here because the second-stage debootstrap executes after crossing a chroot
+    # boundary; a dynamic, non-F handler can disappear or resolve target libs.
     if "F" not in flags:
         raise RootfsError("qemu-aarch64 binfmt handler must use the F flag for chroot builds")
     return BinfmtStatus(True, interpreter, flags)
@@ -86,19 +87,21 @@ def preflight_rootfs_host(
 ) -> BinfmtStatus:
     """Verify the host can safely enter an ARM64 chroot before the expensive build starts.
 
-    Registration itself is deliberately backend-agnostic: Debian/Ubuntu may use
-    systemd-binfmt or binfmt-support depending on the QEMU package generation.
-    The security contract cares about the kernel-visible handler that will
-    actually execute the foreign binaries, not which package registered it.
+    Registration is backend-agnostic: the contract checks the kernel-visible
+    handler actually used for foreign binaries. KaliPhoneStudio additionally
+    requires the static QEMU binary because the locked NetHunter builder copies
+    the host interpreter into the target rootfs for second-stage debootstrap.
     """
     validate_rootfs_source_lock(lock)
     _require_commands(
         (
             "curl",
             "debootstrap",
+            "git",
             "gpg",
             "gpgv",
             "qemu-aarch64",
+            "qemu-aarch64-static",
             "xz",
         )
     )
