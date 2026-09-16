@@ -85,3 +85,15 @@ def test_binding_rejects_path_escape(tmp_path: Path):
         bind_kernel_plan_to_toolchain(
             _plan(), _lock(), checkout, build_config_relative="../build.config.common"
         )
+
+
+def test_binding_rejects_backslash_in_declared_compiler_path(tmp_path: Path):
+    checkout = tmp_path / "kernel"
+    checkout.mkdir()
+    (checkout / "build.config.common").write_text(
+        "LLVM=1\n"
+        "CLANG_PREBUILT_BIN=unsafe\\prefix/clang-r416183b/bin\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(KernelContractError, match="unsafe path data"):
+        bind_kernel_plan_to_toolchain(_plan(), _lock(), checkout)
