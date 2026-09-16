@@ -58,6 +58,11 @@
     "make_flags": {
       "ARCH": "arm64",
       "LLVM": "1",
+      "LLVM_IAS": "1",
+      "CROSS_COMPILE": "aarch64-linux-gnu-",
+      "CROSS_COMPILE_COMPAT": "arm-linux-gnueabi-",
+      "HOSTCC": "clang",
+      "HOSTCXX": "clang++",
       "BRAND_SHOW_FLAG": "oneplus"
     },
     "required_configs": {
@@ -117,7 +122,8 @@
       "boot layout and partition limit checks",
       "manifest and SHA-256 checks",
       "offline fastboot baseline transcript validation",
-      "exact kernel source/config/image evidence validation"
+      "exact kernel source/config/image evidence validation",
+      "source-locked compiler kernel build and two-build reproducibility verification"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",
