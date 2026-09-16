@@ -3,7 +3,7 @@ import copy
 
 import pytest
 
-from kaliphonestudio.boot_builder import create_boot_build_plan, source_locked_assembler_prefix, verify_boot_build_plan, write_boot_build_plan
+from kaliphonestudio.boot_builder import create_boot_build_plan, mkbootimg_argv, source_locked_assembler_prefix, verify_boot_build_plan, write_boot_build_plan
 from kaliphonestudio.boot_image import BootImageError
 from kaliphonestudio.profiles import DeviceProfile, get_profile
 from kaliphonestudio.provenance import StockBootProvenance
@@ -112,14 +112,39 @@ def test_plan_persistence_is_canonical_and_hash_bound(tmp_path):
     assert not destination.with_name("boot-plan.json.tmp").exists()
 
 
-def test_plan_resolves_only_source_locked_mkbootimg(tmp_path):
-    plan, _ = make_plan(tmp_path)
+def locked_checkout(tmp_path):
     checkout = tmp_path / "mkbootimg-checkout"
     checkout.mkdir()
     (checkout / "mkbootimg.py").write_text("# exact locked checkout fixture\n", encoding="utf-8")
-    prefix = source_locked_assembler_prefix(
-        plan,
-        lock_manifest=ROOT / "tools" / "boot-tool-locks.json",
-        exact_checkout=checkout,
-    )
+    return checkout
+
+
+def test_plan_resolves_only_source_locked_mkbootimg(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    checkout = locked_checkout(tmp_path)
+    prefix = source_locked_assembler_prefix(plan, lock_manifest=ROOT / "tools" / "boot-tool-locks.json", exact_checkout=checkout)
     assert prefix == ("python", str(checkout / "mkbootimg.py"))
+
+
+def test_mkbootimg_argv_is_deterministic_profile_driven_and_excludes_separate_dtbo(tmp_path):
+    plan, _ = make_plan(tmp_path)
+    checkout = locked_checkout(tmp_path)
+    kwargs = dict(input_dir=tmp_path, output=tmp_path / "candidate.img", lock_manifest=ROOT / "tools" / "boot-tool-locks.json", exact_checkout=checkout)
+    one = mkbootimg_argv(plan, PROFILE, provenance(), **kwargs)
+    two = mkbootimg_argv(plan, PROFILE, provenance(), **kwargs)
+    assert one == two
+    assert one[:2] == ("python", str(checkout / "mkbootimg.py"))
+    assert ("--header_version", "2") == one[2:4]
+    assert "--pagesize" in one and "4096" in one
+    assert "--kernel" in one and "--ramdisk" in one and "--dtb" in one
+    assert "--recovery_dtbo" not in one
+    assert "dtbo" not in [Path(x).name for x in one]
+    assert one[-2:] == ("--output", str(tmp_path / "candidate.img"))
+
+
+def test_mkbootimg_argv_revalidates_inputs_at_invocation_boundary(tmp_path):
+    plan, p = make_plan(tmp_path)
+    checkout = locked_checkout(tmp_path)
+    p["ramdisk"].write_bytes(b"changed-after-plan")
+    with pytest.raises(BootImageError, match="changed: ramdisk"):
+        mkbootimg_argv(plan, PROFILE, provenance(), input_dir=tmp_path, output=tmp_path / "candidate.img", lock_manifest=ROOT / "tools" / "boot-tool-locks.json", exact_checkout=checkout)
