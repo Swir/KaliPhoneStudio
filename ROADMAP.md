@@ -10,20 +10,19 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.35-dev
+## Current development line — 0.6.36-dev
 
 - [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
 - [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
 - [x] Add offline CLI/JSON profile inspection (`--list-profiles`, `--profile-id`, `--json`) with explicit `hardware_verified=false` and `beta_gate_credit=false` semantics.
-- [x] Keep PySide6 lazy-loaded so the core and minimal Python 3.11/3.12/3.13/3.14 CI matrix remain independent of GUI availability.
+- [x] Add generic fail-closed profile hooks for explicitly registered host `build`/`verify`/`recovery` stages; no profile-driven shell/module auto-execution and recovery requires extra authorization.
 - [x] Bind rootfs A/B canonicalization audit records and raw-input hashes to the strict accepted artifact, exact signed repository snapshot and source lock.
 - [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
-- [x] Exact-source kernel runner applies the profile-required `CONFIG_*` policy deterministically before build.
-- [x] `oneplus/avicii` kernel policy explicitly requires LZ4 initramfs support and disables engineering module signing for deterministic bring-up builds.
-- [x] Independent kernel source/output host paths are compiler-prefix-mapped to fixed virtual roots and the remap policy is evidence-bound.
-- [x] Rootfs canonicalization removes only reviewed volatile state before strict A/B comparison, with audit evidence and no Beta credit.
-- [ ] Accept a concrete reproducible kernel only after a post-fix exact-source A/B build passes strict `.config` + `Image` equality and execution-provenance review.
-- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after a post-fix real A/B build passes strict byte equality, package-evidence equality and canonicalization-provenance review.
+- [x] Exact-source kernel runner applies profile-required `CONFIG_*` policy, fixed build identity/time values and canonical path remapping before strict comparison.
+- [x] Record the latest real kernel authority failure rather than granting partial credit: final `.config` is byte-identical and Image size matches, but Image bytes differ.
+- [x] Add bounded streaming kernel Image divergence diagnostics that report exact differing-byte/range counts and offsets without relaxing strict equality.
+- [ ] Use the next real A/B kernel run diagnostics to identify and remove the remaining Image nondeterminism, then obtain strict byte-identical evidence.
+- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after the active post-fix real A/B build passes strict byte equality, package-evidence equality and canonicalization-provenance review.
 
 ## Phase A — Multi-device Studio Core
 
@@ -37,7 +36,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Versioned fail-closed profile schema and CI contract.
 - [x] Typed boot/kernel contracts, safe A/B identifiers and full-commit HTTPS source requirements.
 - [x] Recovery notes and host/hardware test contract required by supported-profile schema.
-- [ ] Generic plugin hooks for profile-specific build/verify/recovery stages.
+- [x] Generic plugin hooks for profile-specific host build/verify/recovery stages, with explicit in-process registration and fail-closed recovery authorization.
 - [x] GUI profile selector for offline builds without a connected phone.
 - [x] Machine-readable offline profile catalog/inspection for scripts and diagnostics.
 
@@ -76,6 +75,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] `CONFIG_RD_LZ4=y` compatibility for the avicii LZ4 ramdisk policy.
 - [x] Deterministic engineering module-signing policy.
 - [x] Canonical compiler source/output path remapping with `KBUILD_ABS_SRCTREE=0`, `-fdebug-prefix-map` and `-fmacro-prefix-map`.
+- [x] Fixed `KBUILD_BUILD_USER`, `KBUILD_BUILD_HOST`, `KBUILD_BUILD_TIMESTAMP`, `KBUILD_BUILD_VERSION`, `SOURCE_DATE_EPOCH`, locale and timezone in the evidence-bearing build environment.
+- [x] Non-release bounded Image divergence diagnostics integrated after strict mismatch.
 - [x] Source-locked FDT and Android DT table format references.
 - [x] Structural DTB and DTBO verification bound to the exact boot plan.
 - [ ] Review and accept first real byte-identical kernel A/B evidence.

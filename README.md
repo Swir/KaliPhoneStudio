@@ -10,7 +10,7 @@
 
 Progress is deliberately weighted toward **real device bring-up, hardware validation, recovery and release readiness**. Host-side CI, reproducibility and safety infrastructure are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> Current development line: **0.6.35-dev**. The missing desktop application entrypoint has been restored and now provides a safe **offline multi-device profile selector** plus CLI/JSON profile inspection. The GUI performs no ADB/Fastboot calls and exposes no flash/write controls. The boot/provenance chain, locked kernel/toolchain pipeline, DTB/DTBO validation, deterministic rescue path and strict Kali ARM64 rootfs reproducibility gate remain fail-closed. **No concrete kernel/rootfs artifact or AC2003 hardware feature receives Beta credit until its strict evidence and physical gate pass.**
+> Current development line: **0.6.36-dev**. The safe offline profile studio is in place and the core now has an explicit, fail-closed **profile hook registry** for profile-specific host build/verify/recovery stages without arbitrary shell/module auto-execution. The latest real kernel A/B authority run built both exact-source candidates successfully with the same final `.config` and Image size, but the Image bytes were different, so kernel reproducibility remains **unaccepted**. Bounded non-release byte-range diagnostics are now wired into the next strict run. The Kali ARM64 rootfs A/B authority run is still in progress. **No concrete kernel/rootfs artifact or AC2003 hardware feature receives Beta credit until its strict evidence and physical gate pass.**
 
 ## Source of truth and architecture
 
@@ -21,6 +21,8 @@ devices/<vendor>/<codename>/profile.json
 ```
 
 A profile does **not** mean a phone is hardware-supported. A profile must define identity, confirmation token, boot/partition constraints, firmware hints, recovery notes, pinned sources and host/hardware test contracts before destructive actions can even become eligible.
+
+Optional profile hooks are also profile-driven. Profile JSON may declare stable hook IDs for `build`, `verify` and `recovery`, but it cannot inject shell commands or Python module paths. Trusted callbacks must be registered explicitly by host code; recovery hooks additionally require explicit runtime authorization. Hook evidence always has `hardware_verified=false` and `beta_gate_credit=false`.
 
 ### Active device profiles
 
@@ -54,6 +56,8 @@ Profile JSON inspection explicitly reports `hardware_verified=false` and `beta_g
 - Runtime profile registry with profile/path binding and profile-based device identity.
 - Verified serial bound to `profile_id`.
 - Profile-specific destructive confirmation token.
+- Optional schema-validated host hook IDs for `build`, `verify` and `recovery`, resolved only through an explicit trusted in-process registry.
+- Hook execution fails closed on unknown IDs, stage mismatch, callback exceptions, malformed/negative results or missing recovery authorization; there is no shell expansion or automatic module loading from profile data.
 - A/B slot-aware planning, dry-run defaults and guarded inactive-slot writes.
 - Temporary `fastboot boot` path before persistent boot-slot testing.
 - Offline `fastboot getvar all` baseline importer with exact transcript SHA-256, identity/A-B/security checks and exact firmware build/fingerprint binding.
@@ -69,11 +73,11 @@ Profile JSON inspection explicitly reports `hardware_verified=false` and `beta_g
 - Exact executed A/B kernel build records bound to strict reproducibility evidence.
 - Deterministic required-kernel-config application before build and fail-closed final `.config` verification.
 - `oneplus/avicii` requires `CONFIG_RD_LZ4=y`; engineering module signing is disabled in the reproducibility-sensitive bring-up policy.
-- Independent kernel source/output roots are mapped to fixed virtual roots with `-fdebug-prefix-map`, `-fmacro-prefix-map` and `KBUILD_ABS_SRCTREE=0`.
+- Independent kernel source/output roots are mapped to fixed virtual roots with `-fdebug-prefix-map`, `-fmacro-prefix-map` and `KBUILD_ABS_SRCTREE=0`; build user/host/timestamp/version and `SOURCE_DATE_EPOCH` are fixed and evidence-bound.
 - Source-locked FDT/Android DT table references and structural DTB/DTBO verification bound to the approved boot plan.
 - First-boot candidate schema v8 binds exact firmware, boot plan, kernel execution/compiler provenance, DTB/DTBO and rootfs evidence without claiming hardware success.
 
-The current real post-fix kernel A/B authority run is tracked in `BUILD_STATUS.json`. Kernel reproducibility stays unaccepted until strict final `.config` + `Image` equality and executed-build provenance are reviewed.
+Real kernel authority run `35157574186` is a **strict failure**, not a partial pass. Both exact-source builds finished with identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `b1af9baccb4ddbcbfff4b82e433c2c87e70c660d2b3d4770a5d5954c05ac6fab` differed from Image B SHA-256 `e0e434f3ed7c063121913dcb160aec3b6ec193261cfe3cb90824d4958b08db23`. Kernel reproducibility therefore remains false. The next real run records exact differing byte counts, contiguous ranges and first/last offsets while preserving the same strict acceptance rule.
 
 ### Kali ARM64 rootfs
 
@@ -84,7 +88,7 @@ The current real post-fix kernel A/B authority run is tracked in `BUILD_STATUS.j
 - Failed strict comparisons emit non-release diagnostic evidence only; the acceptance rule is never relaxed.
 - Diagnostic schema v2 prioritizes content/type/add/remove/order before metadata and compares normalized package manifests.
 - A reviewed deterministic canonicalization stage removes only the volatile state proven by prior real A/B diagnostics before strict comparison.
-- Canonicalization provenance is now bound end-to-end: both A/B audit records and raw-input hashes are tied to the exact signed repository snapshot, source lock and strict accepted canonical artifact.
+- Canonicalization provenance is bound end-to-end: both A/B audit records and raw-input hashes are tied to the exact signed repository snapshot, source lock and strict accepted canonical artifact.
 - `rootfs_reproducible_artifact` remains **false** until the current real post-fix A/B run passes strict equality and evidence review.
 
 ### Rescue / recovery foundations
@@ -141,6 +145,7 @@ Selected offline engineering entry points:
 
 ```powershell
 python scripts/verify_kernel_toolchain_upstream.py --lock tools/kernel-toolchain-lock.json --out evidence/kernel-toolchain-source.json
+python scripts/diagnose_kernel_image_repro.py --image-a build-a/arch/arm64/boot/Image --image-b build-b/arch/arm64/boot/Image --out evidence/kernel-image-divergence.json
 python scripts/import_fastboot_baseline.py --profile-id oneplus/avicii --transcript fastboot-getvar-all.txt --firmware-build "EXACT_BUILD" --firmware-fingerprint "EXACT_FINGERPRINT" --out evidence/fastboot-baseline.json
 python scripts/diagnose_rootfs_repro.py --archive-a rootfs-a.tar.xz --archive-b rootfs-b.tar.xz --out evidence/rootfs-repro-diagnostic.json
 ```
