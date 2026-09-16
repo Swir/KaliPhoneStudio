@@ -10,17 +10,20 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.33-dev
+## Current development line — 0.6.35-dev
 
+- [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
+- [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
+- [x] Add offline CLI/JSON profile inspection (`--list-profiles`, `--profile-id`, `--json`) with explicit `hardware_verified=false` and `beta_gate_credit=false` semantics.
+- [x] Keep PySide6 lazy-loaded so the core and minimal Python 3.11/3.12/3.13/3.14 CI matrix remain independent of GUI availability.
+- [x] Bind rootfs A/B canonicalization audit records and raw-input hashes to the strict accepted artifact, exact signed repository snapshot and source lock.
 - [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
 - [x] Exact-source kernel runner applies the profile-required `CONFIG_*` policy deterministically before build.
 - [x] `oneplus/avicii` kernel policy explicitly requires LZ4 initramfs support and disables engineering module signing for deterministic bring-up builds.
-- [x] Real kernel A/B failure was narrowed to different `Image` bytes despite identical final `.config`, toolchain, recipe and Image size.
 - [x] Independent kernel source/output host paths are compiler-prefix-mapped to fixed virtual roots and the remap policy is evidence-bound.
-- [x] Rootfs diagnostics isolated the latest pre-fix run to identical 269-package manifests, five volatile payload files and 4817 mtime-only metadata differences.
-- [x] Rootfs canonicalization now removes only that reviewed volatile state before strict A/B comparison, with audit evidence and no Beta credit.
+- [x] Rootfs canonicalization removes only reviewed volatile state before strict A/B comparison, with audit evidence and no Beta credit.
 - [ ] Accept a concrete reproducible kernel only after a post-fix exact-source A/B build passes strict `.config` + `Image` equality and execution-provenance review.
-- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after a post-fix real A/B build passes strict byte equality and package-evidence equality.
+- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after a post-fix real A/B build passes strict byte equality, package-evidence equality and canonicalization-provenance review.
 
 ## Phase A — Multi-device Studio Core
 
@@ -35,7 +38,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Typed boot/kernel contracts, safe A/B identifiers and full-commit HTTPS source requirements.
 - [x] Recovery notes and host/hardware test contract required by supported-profile schema.
 - [ ] Generic plugin hooks for profile-specific build/verify/recovery stages.
-- [ ] GUI profile selector for offline builds without a connected phone.
+- [x] GUI profile selector for offline builds without a connected phone.
+- [x] Machine-readable offline profile catalog/inspection for scripts and diagnostics.
 
 ### Device identification / firmware baseline
 
@@ -81,6 +85,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 
 - [x] First-boot candidate manifest binds firmware baseline, temporary-boot authorization, boot plan, kernel source/config/Image, compiler evidence, DTB/DTBO and rootfs evidence.
 - [x] Schema v8 additionally binds exact executed A/B kernel build records, canonical recipe/environment and execution-binding digest.
+- [x] Rootfs canonicalization provenance can be bound to the strict reproducible rootfs artifact, source lock and signed repository snapshot.
 - [ ] Promote host candidate evidence to a release-candidate manifest only after required physical gates exist.
 
 ## Phase B — Common Kali Phone Userspace
@@ -95,9 +100,10 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Real main CI executes two exact-source ARM64 builds concurrently from one verified repository start state.
 - [x] Fail-closed rootfs divergence diagnostics for failed strict comparisons.
 - [x] Diagnostic v2 prioritizes content/type/add/remove/order before metadata, counts mtime-only/field drift and compares package manifests.
-- [x] Latest pre-fix real A/B divergence reduced to five reviewed volatile payloads plus 4817 mtime-only differences while package manifests remain identical.
+- [x] Reviewed pre-fix A/B divergence reduced to five volatile payloads plus 4817 mtime-only differences while package manifests remained identical.
 - [x] Device-independent canonicalization normalizes tar mtimes, machine identity/fake-clock state, generated password hash state and the regenerable ldconfig auxiliary cache before strict comparison.
-- [x] Canonicalization emits per-build non-release audit evidence; it never substitutes for strict byte equality.
+- [x] Canonicalization emits per-build non-release audit evidence and never substitutes for strict byte equality.
+- [x] Canonicalization binding ties both A/B audit records/raw hashes to exact source/snapshot and the strict accepted canonical artifact.
 - [ ] Produce and review the first byte-identical ARM64 rootfs artifact.
 - [ ] Generic first-boot provisioning independent of device name.
 - [ ] Phosh stage on the verified common rootfs.
