@@ -7,6 +7,7 @@ import pytest
 
 from kaliphonestudio.rootfs import RootfsError, load_rootfs_source_lock
 from scripts import run_locked_rootfs_build as builder
+from scripts import verify_live_kali_snapshot as snapshot_guard
 
 ROOT = Path(__file__).parents[1]
 LOCK_PATH = ROOT / "tools" / "rootfs-source-lock.json"
@@ -48,11 +49,15 @@ def _snapshot_file(tmp_path: Path, inrelease: bytes) -> Path:
     return path
 
 
+def _inrelease_file(tmp_path: Path, payload: bytes) -> Path:
+    path = tmp_path / "InRelease"
+    path.write_bytes(payload)
+    return path
+
+
 def test_host_preflight_preserves_static_qemu_and_creates_upstream_sentinel(tmp_path, monkeypatch):
     checkout = tmp_path / "builder"
     checkout.mkdir()
-    tools = _tool_map(tmp_path / "tools") if False else None
-
     tool_dir = tmp_path / "tools"
     tool_dir.mkdir()
     tools = _tool_map(tool_dir)
@@ -99,18 +104,39 @@ def test_host_preflight_rejects_dynamic_qemu_precedence(tmp_path, monkeypatch):
         builder._prepare_host_environment(checkout)
 
 
-def test_repository_guard_accepts_exact_signed_snapshot_state(tmp_path, monkeypatch):
+def test_captured_repository_guard_accepts_exact_signed_snapshot_state(tmp_path):
     lock = load_rootfs_source_lock(LOCK_PATH)
     inrelease = b"signed-kali-inrelease\n"
     snapshot = _snapshot_file(tmp_path, inrelease)
+    raw = _inrelease_file(tmp_path, inrelease)
+
+    digest = snapshot_guard.verify_captured_inrelease(lock, snapshot, raw)
+    assert digest == sha256(inrelease).hexdigest()
+
+
+def test_captured_repository_guard_rejects_tampered_inrelease(tmp_path):
+    lock = load_rootfs_source_lock(LOCK_PATH)
+    snapshot = _snapshot_file(tmp_path, b"captured-state\n")
+    raw = _inrelease_file(tmp_path, b"tampered-state\n")
+
+    with pytest.raises(RootfsError, match="does not match repository snapshot"):
+        snapshot_guard.verify_captured_inrelease(lock, snapshot, raw)
+
+
+def test_pair_start_guard_accepts_live_state_equal_to_capture(tmp_path, monkeypatch):
+    lock = load_rootfs_source_lock(LOCK_PATH)
+    inrelease = b"signed-kali-inrelease\n"
+    snapshot = _snapshot_file(tmp_path, inrelease)
+    raw = _inrelease_file(tmp_path, inrelease)
     calls = []
 
     def fake_run(argv, **kwargs):
         calls.append((argv, kwargs))
         return SimpleNamespace(stdout=inrelease, stderr=b"")
 
-    monkeypatch.setattr(builder.subprocess, "run", fake_run)
-    builder._verify_live_repository_snapshot(lock, snapshot)
+    monkeypatch.setattr(snapshot_guard.subprocess, "run", fake_run)
+    digest = snapshot_guard.verify_live_snapshot(lock, snapshot, raw)
+    assert digest == sha256(inrelease).hexdigest()
     assert calls
     assert calls[0][0][0] == "curl"
     assert "=https" in calls[0][0]
@@ -118,14 +144,16 @@ def test_repository_guard_accepts_exact_signed_snapshot_state(tmp_path, monkeypa
     assert calls[0][1]["shell"] is False
 
 
-def test_repository_guard_rejects_mirror_drift(tmp_path, monkeypatch):
+def test_pair_start_guard_rejects_mirror_drift(tmp_path, monkeypatch):
     lock = load_rootfs_source_lock(LOCK_PATH)
-    snapshot = _snapshot_file(tmp_path, b"captured-state\n")
+    captured = b"captured-state\n"
+    snapshot = _snapshot_file(tmp_path, captured)
+    raw = _inrelease_file(tmp_path, captured)
     monkeypatch.setattr(
-        builder.subprocess,
+        snapshot_guard.subprocess,
         "run",
         lambda *args, **kwargs: SimpleNamespace(stdout=b"new-state\n", stderr=b""),
     )
 
-    with pytest.raises(RootfsError, match="InRelease changed"):
-        builder._verify_live_repository_snapshot(lock, snapshot)
+    with pytest.raises(RootfsError, match="refusing to start the reproducibility pair"):
+        snapshot_guard.verify_live_snapshot(lock, snapshot, raw)
