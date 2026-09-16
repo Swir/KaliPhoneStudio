@@ -10,10 +10,17 @@ import os
 from pathlib import Path, PurePosixPath
 import stat
 
+from .lz4_legacy import Lz4LegacyError, compress_legacy, decompress_legacy
+
 
 _MAX_ENTRIES = 4096
 _MAX_FILE_BYTES = 64 * 1024 * 1024
 _MAX_TOTAL_PAYLOAD_BYTES = 128 * 1024 * 1024
+_MAX_CPIO_BYTES = 192 * 1024 * 1024
+_COMPRESSION_CONTRACTS = {
+    "gzip": "gzip-mtime0-level9",
+    "lz4": "lz4-legacy-literal-v1",
+}
 
 
 class InitramfsError(ValueError):
@@ -49,6 +56,15 @@ class InitramfsEvidence:
 
 
 @dataclass(frozen=True)
+class InitramfsInspection:
+    compression: str
+    uncompressed_size: int
+    entry_manifest_sha256: str
+    entry_count: int
+    init_sha256: str
+
+
+@dataclass(frozen=True)
 class _Entry:
     path: str
     kind: str
@@ -65,12 +81,19 @@ class _Entry:
         )
 
 
-def _safe_archive_path(relative: Path) -> str:
+def _safe_archive_path(relative: Path | PurePosixPath) -> str:
     value = relative.as_posix()
     pure = PurePosixPath(value)
     if not value or value == "." or pure.is_absolute() or ".." in pure.parts or "\x00" in value:
         raise InitramfsError(f"unsafe initramfs path: {value!r}")
     return value
+
+
+def _validate_entry_permissions(path: str, kind: str, permissions: int) -> None:
+    if permissions & (stat.S_ISUID | stat.S_ISGID):
+        raise InitramfsError(f"setuid/setgid bits are forbidden in rescue initramfs: {path}")
+    if kind == "file" and permissions & 0o002:
+        raise InitramfsError(f"world-writable regular files are forbidden in rescue initramfs: {path}")
 
 
 def _snapshot_staging(staging: Path) -> tuple[_Entry, ...]:
@@ -95,8 +118,6 @@ def _snapshot_staging(staging: Path) -> tuple[_Entry, ...]:
         except OSError as exc:
             raise InitramfsError(f"cannot stat initramfs entry {archive_path}: {exc}") from exc
         permissions = stat.S_IMODE(metadata.st_mode)
-        if permissions & (stat.S_ISUID | stat.S_ISGID):
-            raise InitramfsError(f"setuid/setgid bits are forbidden in rescue initramfs: {archive_path}")
 
         if stat.S_ISDIR(metadata.st_mode):
             entry = _Entry(archive_path, "directory", permissions, b"")
@@ -122,6 +143,7 @@ def _snapshot_staging(staging: Path) -> tuple[_Entry, ...]:
             raise InitramfsError(
                 f"special files are forbidden in reproducible rescue initramfs staging: {archive_path}"
             )
+        _validate_entry_permissions(entry.path, entry.kind, entry.mode)
         total_payload += len(entry.payload)
         if total_payload > _MAX_TOTAL_PAYLOAD_BYTES:
             raise InitramfsError("initramfs staging tree exceeds total payload safety limit")
@@ -184,7 +206,7 @@ def _manifest_payload(entries: tuple[_Entry, ...]) -> bytes:
     return (json.dumps(items, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
-def _build_archive(entries: tuple[_Entry, ...]) -> bytes:
+def _build_cpio(entries: tuple[_Entry, ...]) -> bytes:
     cpio = io.BytesIO()
     for inode, entry in enumerate(entries, start=1):
         _write_newc_entry(
@@ -195,22 +217,178 @@ def _build_archive(entries: tuple[_Entry, ...]) -> bytes:
             payload=entry.payload,
         )
     _write_newc_entry(cpio, inode=len(entries) + 1, name="TRAILER!!!", mode=0, payload=b"")
+    payload = cpio.getvalue()
+    if len(payload) > _MAX_CPIO_BYTES:
+        raise InitramfsError("cpio payload exceeds the initramfs safety limit")
+    return payload
 
-    compressed = io.BytesIO()
-    with gzip.GzipFile(filename="", mode="wb", fileobj=compressed, compresslevel=9, mtime=0) as handle:
-        handle.write(cpio.getvalue())
-    return compressed.getvalue()
+
+def _build_archive(entries: tuple[_Entry, ...], compression: str) -> bytes:
+    raw = _build_cpio(entries)
+    if compression == "gzip":
+        compressed = io.BytesIO()
+        with gzip.GzipFile(filename="", mode="wb", fileobj=compressed, compresslevel=9, mtime=0) as handle:
+            handle.write(raw)
+        return compressed.getvalue()
+    if compression == "lz4":
+        try:
+            return compress_legacy(raw)
+        except Lz4LegacyError as exc:
+            raise InitramfsError(f"cannot encode LZ4 legacy initramfs: {exc}") from exc
+    raise InitramfsError(f"unsupported initramfs compression policy: {compression}")
 
 
-def build_reproducible_initramfs(staging: Path, destination: Path) -> InitramfsEvidence:
-    """Build twice from staging and publish only a byte-identical gzip/newc archive."""
+def _decompress_archive(compression: str, payload: bytes) -> bytes:
+    if compression == "gzip-mtime0-level9":
+        try:
+            raw = gzip.decompress(payload)
+        except (OSError, EOFError) as exc:
+            raise InitramfsError(f"invalid gzip initramfs artifact: {exc}") from exc
+    elif compression == "lz4-legacy-literal-v1":
+        try:
+            raw, _ = decompress_legacy(payload, max_output_bytes=_MAX_CPIO_BYTES)
+        except Lz4LegacyError as exc:
+            raise InitramfsError(f"invalid LZ4 legacy initramfs artifact: {exc}") from exc
+    else:
+        raise InitramfsError("unsupported initramfs artifact contract")
+    if len(raw) > _MAX_CPIO_BYTES:
+        raise InitramfsError("decompressed cpio exceeds the initramfs safety limit")
+    return raw
+
+
+def _parse_newc(payload: bytes) -> tuple[_Entry, ...]:
+    cursor = 0
+    entries: list[_Entry] = []
+    expected_inode = 1
+    previous_path = ""
+    while True:
+        if cursor + 110 > len(payload):
+            raise InitramfsError("truncated cpio newc header")
+        header = payload[cursor : cursor + 110]
+        if header[:6] != b"070701":
+            raise InitramfsError("unsupported or corrupt cpio header magic")
+        try:
+            fields = [int(header[6 + index * 8 : 14 + index * 8], 16) for index in range(13)]
+        except ValueError as exc:
+            raise InitramfsError("invalid hexadecimal cpio header field") from exc
+        (
+            inode,
+            mode,
+            uid,
+            gid,
+            nlink,
+            mtime,
+            filesize,
+            devmajor,
+            devminor,
+            rdevmajor,
+            rdevminor,
+            namesize,
+            check,
+        ) = fields
+        if inode != expected_inode:
+            raise InitramfsError("cpio inode sequence is not canonical")
+        if uid != 0 or gid != 0 or nlink != 1 or mtime != 0:
+            raise InitramfsError("cpio metadata is not normalized")
+        if any(value != 0 for value in (devmajor, devminor, rdevmajor, rdevminor, check)):
+            raise InitramfsError("cpio device/check metadata is not canonical")
+        if namesize <= 0 or namesize > 4096:
+            raise InitramfsError("invalid cpio entry name size")
+
+        name_start = cursor + 110
+        name_end = name_start + namesize
+        if name_end > len(payload) or payload[name_end - 1] != 0:
+            raise InitramfsError("truncated or unterminated cpio entry name")
+        try:
+            name = payload[name_start : name_end - 1].decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise InitramfsError("cpio entry name is not valid UTF-8") from exc
+        data_start = (name_end + 3) & ~3
+        data_end = data_start + filesize
+        if data_end > len(payload):
+            raise InitramfsError("truncated cpio entry payload")
+        data = payload[data_start:data_end]
+        cursor = (data_end + 3) & ~3
+
+        if name == "TRAILER!!!":
+            if filesize != 0 or mode != 0 or expected_inode != len(entries) + 1:
+                raise InitramfsError("invalid cpio trailer")
+            if any(payload[cursor:]):
+                raise InitramfsError("non-zero bytes follow the cpio trailer")
+            break
+
+        archive_path = _safe_archive_path(PurePosixPath(name))
+        if archive_path <= previous_path:
+            raise InitramfsError("cpio entries are not in canonical lexical order")
+        previous_path = archive_path
+        kind_bits = stat.S_IFMT(mode)
+        kind = {
+            stat.S_IFREG: "file",
+            stat.S_IFDIR: "directory",
+            stat.S_IFLNK: "symlink",
+        }.get(kind_bits)
+        if kind is None:
+            raise InitramfsError(f"special file type found in cpio: {archive_path}")
+        permissions = stat.S_IMODE(mode)
+        _validate_entry_permissions(archive_path, kind, permissions)
+        if kind == "directory" and data:
+            raise InitramfsError(f"directory carries unexpected payload: {archive_path}")
+        entries.append(_Entry(archive_path, kind, permissions, data))
+        if len(entries) > _MAX_ENTRIES:
+            raise InitramfsError("cpio entry count exceeds the safety limit")
+        expected_inode += 1
+
+    return tuple(entries)
+
+
+def _inspect_payload(evidence: InitramfsEvidence, payload: bytes) -> InitramfsInspection:
+    if evidence.schema_version != 1 or not evidence.reproducible:
+        raise InitramfsError("initramfs artifact lacks reproducibility evidence")
+    if evidence.archive_format != "cpio-newc" or evidence.compression not in set(_COMPRESSION_CONTRACTS.values()):
+        raise InitramfsError("unsupported initramfs artifact contract")
+    if evidence.entry_count <= 0 or evidence.artifact_size <= 0:
+        raise InitramfsError("invalid initramfs evidence size/count")
+    if len(payload) != evidence.artifact_size or sha256(payload).hexdigest() != evidence.artifact_sha256:
+        raise InitramfsError("initramfs artifact changed after reproducibility verification")
+
+    raw = _decompress_archive(evidence.compression, payload)
+    entries = _parse_newc(raw)
+    manifest_sha = sha256(_manifest_payload(entries)).hexdigest()
+    init = next((entry for entry in entries if entry.path == "init"), None)
+    if init is None or init.kind != "file" or not init.payload or init.mode & 0o111 == 0:
+        raise InitramfsError("verified cpio does not contain an executable regular /init")
+    init_sha = sha256(init.payload).hexdigest()
+    if len(entries) != evidence.entry_count:
+        raise InitramfsError("initramfs entry count does not match evidence")
+    if manifest_sha != evidence.entry_manifest_sha256:
+        raise InitramfsError("initramfs entry manifest does not match evidence")
+    if init_sha != evidence.init_sha256:
+        raise InitramfsError("initramfs /init does not match evidence")
+    return InitramfsInspection(
+        compression=evidence.compression,
+        uncompressed_size=len(raw),
+        entry_manifest_sha256=manifest_sha,
+        entry_count=len(entries),
+        init_sha256=init_sha,
+    )
+
+
+def build_reproducible_initramfs(
+    staging: Path,
+    destination: Path,
+    *,
+    compression: str = "gzip",
+) -> InitramfsEvidence:
+    """Build twice and publish only a structurally verified byte-identical archive."""
+    if compression not in _COMPRESSION_CONTRACTS:
+        raise InitramfsError(f"unsupported initramfs compression policy: {compression}")
     first_entries = _snapshot_staging(staging)
     first_manifest = _manifest_payload(first_entries)
-    first_archive = _build_archive(first_entries)
+    first_archive = _build_archive(first_entries, compression)
 
     second_entries = _snapshot_staging(staging)
     second_manifest = _manifest_payload(second_entries)
-    second_archive = _build_archive(second_entries)
+    second_archive = _build_archive(second_entries, compression)
     if first_manifest != second_manifest or first_archive != second_archive:
         raise InitramfsError("rescue initramfs staging/build changed between reproducibility passes")
 
@@ -218,7 +396,7 @@ def build_reproducible_initramfs(staging: Path, destination: Path) -> InitramfsE
     evidence = InitramfsEvidence(
         schema_version=1,
         archive_format="cpio-newc",
-        compression="gzip-mtime0-level9",
+        compression=_COMPRESSION_CONTRACTS[compression],
         artifact_sha256=sha256(first_archive).hexdigest(),
         artifact_size=len(first_archive),
         entry_manifest_sha256=sha256(first_manifest).hexdigest(),
@@ -226,6 +404,7 @@ def build_reproducible_initramfs(staging: Path, destination: Path) -> InitramfsE
         init_sha256=sha256(init.payload).hexdigest(),
         reproducible=True,
     )
+    _inspect_payload(evidence, first_archive)
     if destination.exists():
         raise InitramfsError("refusing to overwrite an existing initramfs artifact")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -238,18 +417,14 @@ def build_reproducible_initramfs(staging: Path, destination: Path) -> InitramfsE
     return evidence
 
 
-def verify_initramfs_artifact(evidence: InitramfsEvidence, artifact: Path) -> None:
-    if evidence.schema_version != 1 or not evidence.reproducible:
-        raise InitramfsError("initramfs artifact lacks reproducibility evidence")
-    if evidence.archive_format != "cpio-newc" or evidence.compression != "gzip-mtime0-level9":
-        raise InitramfsError("unsupported initramfs artifact contract")
-    if evidence.entry_count <= 0 or evidence.artifact_size <= 0:
-        raise InitramfsError("invalid initramfs evidence size/count")
+def inspect_initramfs_artifact(evidence: InitramfsEvidence, artifact: Path) -> InitramfsInspection:
     if not artifact.is_file():
         raise InitramfsError("initramfs artifact is missing")
-    payload = artifact.read_bytes()
-    if len(payload) != evidence.artifact_size or sha256(payload).hexdigest() != evidence.artifact_sha256:
-        raise InitramfsError("initramfs artifact changed after reproducibility verification")
+    return _inspect_payload(evidence, artifact.read_bytes())
+
+
+def verify_initramfs_artifact(evidence: InitramfsEvidence, artifact: Path) -> None:
+    inspect_initramfs_artifact(evidence, artifact)
 
 
 def write_initramfs_evidence(evidence: InitramfsEvidence, destination: Path) -> str:
