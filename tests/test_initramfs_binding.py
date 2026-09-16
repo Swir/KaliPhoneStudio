@@ -5,7 +5,7 @@ import pytest
 
 from kaliphonestudio.boot_builder import BootBuildPlan, BuildInput
 from kaliphonestudio.boot_image import BootImageError
-from kaliphonestudio.initramfs import build_reproducible_initramfs
+from kaliphonestudio.initramfs import InitramfsError, build_reproducible_initramfs
 from kaliphonestudio.initramfs_binding import (
     bind_initramfs_to_boot_plan,
     write_initramfs_boot_binding,
@@ -84,5 +84,5 @@ def test_binding_rejects_tampering_after_initramfs_verification(tmp_path):
     plan = _plan(artifact, evidence.artifact_sha256)
     artifact.write_bytes(artifact.read_bytes() + b"tampered")
 
-    with pytest.raises(Exception, match="changed after reproducibility verification"):
+    with pytest.raises(InitramfsError, match="changed after reproducibility verification"):
         bind_initramfs_to_boot_plan(plan, evidence, artifact=artifact)
