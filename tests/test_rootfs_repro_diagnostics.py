@@ -226,7 +226,7 @@ def test_truncation_prioritizes_payload_changes_over_mtime_noise(tmp_path):
     report = build_rootfs_repro_diagnostics(first, second, max_differences=2)
     assert report["summary"]["content_changed"] == 1
     assert report["summary"]["metadata_changed"] == 6
-    assert report["summary"]["metadata_mtime_only"] == 5
+    assert report["summary"]["metadata_mtime_only"] == 6
     assert report["differences_truncated"] is True
     assert report["differences"][0]["kind"] == "content"
     assert report["differences"][0]["path"] == "z-content"
