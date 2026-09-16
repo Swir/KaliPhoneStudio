@@ -2,6 +2,26 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.32-dev — actionable rootfs divergence diagnostics
+
+- Upgraded non-release rootfs divergence diagnostics to schema v2 after the real A/B rootfs run exposed a small number of payload changes mixed with thousands of metadata differences.
+- Bounded diagnostic output now prioritizes type/content/add/remove/order differences ahead of metadata noise so changed payload files cannot be hidden merely by earlier path-sorted mtime differences.
+- Added explicit per-field metadata counters plus an `mtime`-only counter to separate broad build-time timestamp drift from ownership/mode/link/PAX differences.
+- Added reported/omitted counts by difference kind so a truncated diagnostic is itself auditable and operators know exactly which classes were omitted.
+- Added regression coverage proving content changes remain visible under a strict output cap even when many files differ only by mtime.
+- Strict rootfs acceptance is unchanged: only byte-identical independent builds plus matching package evidence can produce reproducibility evidence; diagnostics always keep `beta_gate_credit=false`.
+- Project completion remains 52% because this is host-side diagnosis/hardening and does not satisfy a physical AC2003 gate.
+
+## 0.6.31-dev — deterministic profile-required kernel config policy
+
+- Made the exact-source kernel runner apply the profile-bound required `CONFIG_*` policy before the guarded build rather than only validating the final `.config` afterward.
+- Added `CONFIG_RD_LZ4=y` for the `oneplus/avicii` profile so a future accepted kernel is capable of consuming the profile-required LZ4 rescue/initramfs payload.
+- Disabled engineering module signing in the host bring-up policy (`CONFIG_MODULE_SIG=n`, `CONFIG_MODULE_SIG_FORCE=n`) to remove an unsourced build-time signing-key path from reproducibility-sensitive output.
+- Added deterministic required-config fragment generation, `scripts/config` application and `olddefconfig` normalization with fail-closed checks for invalid/duplicate policy entries.
+- Added focused compatibility/policy tests. The first test revision exposed a bad `DeviceProfile` accessor and was corrected in the same development iteration before merge.
+- Full Python 3.11/3.12/3.13/3.14 CI passed before PR #28 was merged as `e7cadeaad668a1794d224ccd83456eb4579a04e1`.
+- The expensive real post-merge A/B kernel build remains non-release evidence until strict equality and execution-provenance binding finish and are reviewed.
+
 ## 0.6.30-dev — first-boot execution provenance binding
 
 - Upgraded the host-side first-boot candidate contract to schema v8.
