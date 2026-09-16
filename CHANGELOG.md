@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.18-dev — signed repository snapshots and real ARM64 rootfs reproducibility CI
+
+- Upgraded the common rootfs lock to schema v2, switched the Kali mirror to HTTPS, and pinned the Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5` alongside the exact NetHunter rootfs source commit.
+- Added `gpgv`-verified Kali `InRelease` capture; snapshot evidence now records the exact `InRelease` SHA-256 and ARM64 package-index path/size/SHA-256 entries published by the signed repository metadata.
+- Corrected the evidence model so repository snapshot state is separate from the installed-package manifest produced by a concrete rootfs artifact.
+- Added safe tar inspection of `var/lib/dpkg/status` and a normalized package/version/architecture manifest with digest and package count in rootfs evidence.
+- Hardened first-boot candidate schema v2 so it carries the package-manifest digest/count and strictly validates all boot-side SHA-256 fields before binding evidence.
+- Added a direct exact-checkout rootfs build runner that verifies the locked Git commit, invokes the locked argv without a shell, validates the resulting archive and refuses ambiguous/missing ARM64 outputs.
+- Added `.github/workflows/rootfs-repro.yml`: PRs verify signed repository snapshot contracts; pushes to `main` prepare two independent exact-source ARM64 builds and fail closed unless rootfs bytes and package evidence match.
+- Added direct-run CLI regression coverage after the first `rootfs-repro` PR run exposed missing repository import paths; the failure was diagnosed from Actions logs and fixed in the same development iteration.
+- Python 3.11–3.14 tests, the source-lock workflow and the repaired PR rootfs snapshot workflow are green before merge. The real expensive double-build is intentionally not claimed until the post-merge `main` job completes.
+- Overall project completion remains 49%; no physical AC2003 gate is credited for this host-side work.
+
 ## 0.6.17-dev — rootfs source and reproducibility evidence contract
 
 - Pinned the official Kali Linux NetHunter rootfs builder tag `2026.2` to full commit `20238a2f2d547d7989a4dec287d4f5ef528ed701` instead of trusting a moving branch/tag at runtime.
