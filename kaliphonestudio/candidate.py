@@ -10,6 +10,7 @@ import re
 from .boot_authorization import TemporaryBootAuthorization
 from .boot_builder import BootBuildPlan
 from .device_tree import DeviceTreeCandidateEvidence
+from .kernel_build_binding import KernelReproducibilityBindingEvidence
 from .kernel_bundle import KernelCandidateEvidence
 from .kernel_repro import KernelReproducibilityEvidence
 from .kernel_toolchain_bundle import KernelToolchainCandidateEvidence
@@ -45,6 +46,11 @@ class FirstBootCandidateManifest:
     kernel_image_sha256: str
     kernel_image_size: int
     kernel_reproducibility_evidence_sha256: str
+    kernel_reproducibility_binding_evidence_sha256: str
+    kernel_build_recipe_sha256: str
+    kernel_reproducible_environment_sha256: str
+    kernel_build_a_run_evidence_sha256: str
+    kernel_build_b_run_evidence_sha256: str
     kernel_reproducible: bool
     kernel_distinct_build_roots_verified: bool
     kernel_toolchain_evidence_sha256: str
@@ -165,6 +171,47 @@ def _verify_kernel_toolchain_binding(
         raise RootfsError("kernel toolchain candidate contains invalid clang revision")
 
 
+def _verify_kernel_execution_binding(
+    kernel: KernelCandidateEvidence,
+    reproducibility: KernelReproducibilityEvidence,
+    toolchain: KernelToolchainCandidateEvidence,
+    execution: KernelReproducibilityBindingEvidence,
+) -> None:
+    if execution.schema_version != 1:
+        raise RootfsError("unsupported kernel reproducibility binding schema")
+    if execution.profile_id != kernel.profile_id:
+        raise RootfsError("kernel execution binding profile does not match kernel candidate")
+    if execution.kernel_plan_sha256 != kernel.kernel_plan_sha256:
+        raise RootfsError("kernel execution binding does not match kernel plan digest")
+    if execution.source_commit != kernel.source_commit:
+        raise RootfsError("kernel execution binding source commit drifted")
+    if execution.toolchain_lock_sha256 != toolchain.toolchain_lock_sha256:
+        raise RootfsError("kernel execution binding toolchain lock drifted")
+    if execution.reproducibility_evidence_sha256 != reproducibility.evidence_sha256():
+        raise RootfsError("kernel execution binding does not match reproducibility evidence")
+    if execution.config_sha256 != reproducibility.config_sha256 or execution.config_size != reproducibility.config_size:
+        raise RootfsError("kernel execution binding config does not match reproducibility evidence")
+    if execution.image_sha256 != kernel.image_sha256 or execution.image_sha256 != reproducibility.image_sha256:
+        raise RootfsError("kernel execution binding Image does not match kernel candidate")
+    if execution.image_size != kernel.image_size or execution.image_size != reproducibility.image_size:
+        raise RootfsError("kernel execution binding Image size does not match kernel candidate")
+    if execution.byte_identical is not True or execution.distinct_build_roots_verified is not True:
+        raise RootfsError("kernel execution binding does not prove independent byte-identical builds")
+    if execution.beta_gate_credit is not False:
+        raise RootfsError("host kernel execution binding cannot claim hardware Beta credit")
+    for value, label in (
+        (execution.evidence_sha256(), "kernel execution binding evidence SHA-256"),
+        (execution.toolchain_lock_sha256, "kernel execution binding toolchain lock SHA-256"),
+        (execution.build_recipe_sha256, "kernel build recipe SHA-256"),
+        (execution.reproducible_environment_sha256, "kernel reproducible environment SHA-256"),
+        (execution.build_a_run_evidence_sha256, "kernel build A run evidence SHA-256"),
+        (execution.build_b_run_evidence_sha256, "kernel build B run evidence SHA-256"),
+        (execution.reproducibility_evidence_sha256, "kernel reproducibility evidence SHA-256"),
+    ):
+        if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
+            raise RootfsError(f"kernel execution binding contains invalid {label}")
+
+
 def _verify_device_tree_binding(plan: BootBuildPlan, evidence: DeviceTreeCandidateEvidence) -> None:
     if evidence.schema_version != 1:
         raise RootfsError("unsupported device-tree candidate evidence schema")
@@ -217,11 +264,12 @@ def create_first_boot_candidate_manifest(
     rootfs_evidence: RootfsArtifactEvidence,
     *,
     kernel_reproducibility_evidence: KernelReproducibilityEvidence,
+    kernel_reproducibility_binding_evidence: KernelReproducibilityBindingEvidence,
     kernel_toolchain_evidence: KernelToolchainCandidateEvidence,
     device_tree_evidence: DeviceTreeCandidateEvidence,
     rootfs_artifact: Path,
 ) -> FirstBootCandidateManifest:
-    """Bind verified boot, reproducible kernel+compiler, DTB/DTBO and rootfs evidence.
+    """Bind verified boot, executed reproducible kernel+compiler, DTB/DTBO and rootfs evidence.
 
     The result is host-side evidence only. It is deliberately not hardware-success
     evidence and does not execute fastboot or write any phone partition.
@@ -270,6 +318,12 @@ def create_first_boot_candidate_manifest(
 
     _verify_kernel_reproducibility_binding(kernel_evidence, kernel_reproducibility_evidence)
     _verify_kernel_toolchain_binding(kernel_evidence, kernel_toolchain_evidence)
+    _verify_kernel_execution_binding(
+        kernel_evidence,
+        kernel_reproducibility_evidence,
+        kernel_toolchain_evidence,
+        kernel_reproducibility_binding_evidence,
+    )
     _verify_device_tree_binding(boot_plan, device_tree_evidence)
 
     verify_rootfs_artifact(
@@ -279,7 +333,7 @@ def create_first_boot_candidate_manifest(
         artifact=rootfs_artifact,
     )
     return FirstBootCandidateManifest(
-        schema_version=7,
+        schema_version=8,
         profile_id=boot.profile_id,
         device_serial=boot.device_serial,
         fastboot_baseline_sha256=boot.fastboot_baseline_sha256,
@@ -297,6 +351,11 @@ def create_first_boot_candidate_manifest(
         kernel_image_sha256=kernel_evidence.image_sha256,
         kernel_image_size=kernel_evidence.image_size,
         kernel_reproducibility_evidence_sha256=kernel_reproducibility_evidence.evidence_sha256(),
+        kernel_reproducibility_binding_evidence_sha256=kernel_reproducibility_binding_evidence.evidence_sha256(),
+        kernel_build_recipe_sha256=kernel_reproducibility_binding_evidence.build_recipe_sha256,
+        kernel_reproducible_environment_sha256=kernel_reproducibility_binding_evidence.reproducible_environment_sha256,
+        kernel_build_a_run_evidence_sha256=kernel_reproducibility_binding_evidence.build_a_run_evidence_sha256,
+        kernel_build_b_run_evidence_sha256=kernel_reproducibility_binding_evidence.build_b_run_evidence_sha256,
         kernel_reproducible=True,
         kernel_distinct_build_roots_verified=True,
         kernel_toolchain_evidence_sha256=kernel_toolchain_evidence.evidence_sha256(),
