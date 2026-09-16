@@ -11,6 +11,7 @@ from .boot_authorization import TemporaryBootAuthorization
 from .boot_builder import BootBuildPlan
 from .device_tree import DeviceTreeCandidateEvidence
 from .kernel_bundle import KernelCandidateEvidence
+from .kernel_repro import KernelReproducibilityEvidence
 from .rootfs import (
     RepositorySnapshotEvidence,
     RootfsArtifactEvidence,
@@ -42,6 +43,9 @@ class FirstBootCandidateManifest:
     kernel_config_sha256: str
     kernel_image_sha256: str
     kernel_image_size: int
+    kernel_reproducibility_evidence_sha256: str
+    kernel_reproducible: bool
+    kernel_distinct_build_roots_verified: bool
     device_tree_evidence_sha256: str
     device_tree_format_lock_sha256: str
     dtb_sha256: str | None
@@ -86,6 +90,38 @@ def _single_plan_input(plan: BootBuildPlan, name: str, *, required: bool):
     if not required and len(matches) > 1:
         raise RootfsError(f"boot build plan contains duplicate {name} inputs")
     return matches[0] if matches else None
+
+
+def _verify_kernel_reproducibility_binding(
+    kernel: KernelCandidateEvidence,
+    reproducibility: KernelReproducibilityEvidence,
+) -> None:
+    if reproducibility.schema_version != 1:
+        raise RootfsError("unsupported kernel reproducibility evidence schema")
+    if reproducibility.profile_id != kernel.profile_id:
+        raise RootfsError("kernel reproducibility evidence profile does not match kernel candidate")
+    if reproducibility.kernel_plan_sha256 != kernel.kernel_plan_sha256:
+        raise RootfsError("kernel reproducibility evidence does not match kernel plan digest")
+    if reproducibility.source_commit != kernel.source_commit:
+        raise RootfsError("kernel reproducibility evidence source commit drifted")
+    if reproducibility.kernel_version != kernel.kernel_version:
+        raise RootfsError("kernel reproducibility evidence version drifted")
+    if reproducibility.config_sha256 != kernel.config_sha256:
+        raise RootfsError("reproducible kernel config does not match kernel candidate")
+    if reproducibility.image_sha256 != kernel.image_sha256:
+        raise RootfsError("reproducible kernel Image does not match kernel candidate")
+    if reproducibility.image_size != kernel.image_size:
+        raise RootfsError("reproducible kernel Image size does not match kernel candidate")
+    if reproducibility.config_size <= 0:
+        raise RootfsError("kernel reproducibility evidence contains invalid config size")
+    if reproducibility.distinct_build_roots_verified is not True:
+        raise RootfsError("kernel reproducibility evidence lacks distinct build-root verification")
+    if reproducibility.byte_identical is not True:
+        raise RootfsError("kernel reproducibility evidence is not byte-identical")
+    if reproducibility.beta_gate_credit is not False:
+        raise RootfsError("host kernel reproducibility evidence cannot claim hardware Beta credit")
+    if not _SHA256_RE.fullmatch(reproducibility.evidence_sha256()):
+        raise RootfsError("kernel reproducibility evidence digest is invalid")
 
 
 def _verify_device_tree_binding(plan: BootBuildPlan, evidence: DeviceTreeCandidateEvidence) -> None:
@@ -139,10 +175,11 @@ def create_first_boot_candidate_manifest(
     repository_snapshot: RepositorySnapshotEvidence,
     rootfs_evidence: RootfsArtifactEvidence,
     *,
+    kernel_reproducibility_evidence: KernelReproducibilityEvidence,
     device_tree_evidence: DeviceTreeCandidateEvidence,
     rootfs_artifact: Path,
 ) -> FirstBootCandidateManifest:
-    """Bind already-verified boot, kernel, DTB/DTBO and rootfs evidence.
+    """Bind verified boot, reproducible kernel, DTB/DTBO and rootfs evidence.
 
     The result is host-side evidence only. It is deliberately not hardware-success
     evidence and does not execute fastboot or write any phone partition.
@@ -189,6 +226,7 @@ def create_first_boot_candidate_manifest(
     if boot_kernel.sha256 != kernel_evidence.image_sha256 or boot_kernel.size != kernel_evidence.image_size:
         raise RootfsError("verified kernel evidence does not match the kernel embedded in the boot plan")
 
+    _verify_kernel_reproducibility_binding(kernel_evidence, kernel_reproducibility_evidence)
     _verify_device_tree_binding(boot_plan, device_tree_evidence)
 
     verify_rootfs_artifact(
@@ -198,7 +236,7 @@ def create_first_boot_candidate_manifest(
         artifact=rootfs_artifact,
     )
     return FirstBootCandidateManifest(
-        schema_version=5,
+        schema_version=6,
         profile_id=boot.profile_id,
         device_serial=boot.device_serial,
         fastboot_baseline_sha256=boot.fastboot_baseline_sha256,
@@ -215,6 +253,9 @@ def create_first_boot_candidate_manifest(
         kernel_config_sha256=kernel_evidence.config_sha256,
         kernel_image_sha256=kernel_evidence.image_sha256,
         kernel_image_size=kernel_evidence.image_size,
+        kernel_reproducibility_evidence_sha256=kernel_reproducibility_evidence.evidence_sha256(),
+        kernel_reproducible=True,
+        kernel_distinct_build_roots_verified=True,
         device_tree_evidence_sha256=device_tree_evidence.evidence_sha256(),
         device_tree_format_lock_sha256=device_tree_evidence.format_lock_sha256,
         dtb_sha256=device_tree_evidence.dtb_sha256,
