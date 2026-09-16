@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
+from .rootfs import RootfsError, package_manifest_from_rootfs
+
 
 class RootfsReproDiagnosticError(ValueError):
     """Raised when a rootfs archive cannot be diagnosed safely."""
@@ -302,9 +304,6 @@ def _compare_scans(
             }
         )
 
-    # Actionable differences come first. In particular, a small number of
-    # content changes must remain visible even when thousands of timestamps
-    # differ and the JSON report has a strict output limit.
     differences.sort(
         key=lambda item: (
             _DIFFERENCE_PRIORITY.get(str(item.get("kind", "")), 99),
@@ -352,6 +351,40 @@ def _reporting_summary(
     }
 
 
+def _package_manifest_snapshot(path: Path) -> dict[str, Any]:
+    try:
+        payload, count = package_manifest_from_rootfs(Path(path))
+    except RootfsError as exc:
+        return {
+            "available": False,
+            "error": str(exc),
+        }
+    return {
+        "available": True,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "package_count": count,
+    }
+
+
+def _package_manifest_comparison(
+    archive_a: Path,
+    archive_b: Path,
+) -> dict[str, Any]:
+    left = _package_manifest_snapshot(archive_a)
+    right = _package_manifest_snapshot(archive_b)
+    equal: bool | None = None
+    if left["available"] and right["available"]:
+        equal = (
+            left["sha256"] == right["sha256"]
+            and left["package_count"] == right["package_count"]
+        )
+    return {
+        "equal": equal,
+        "left": left,
+        "right": right,
+    }
+
+
 def build_rootfs_repro_diagnostics(
     archive_a: Path,
     archive_b: Path,
@@ -374,8 +407,10 @@ def build_rootfs_repro_diagnostics(
             "max_differences must be an integer >= 1"
         )
 
-    left = _scan_archive(Path(archive_a))
-    right = _scan_archive(Path(archive_b))
+    archive_a = Path(archive_a)
+    archive_b = Path(archive_b)
+    left = _scan_archive(archive_a)
+    right = _scan_archive(archive_b)
     summary, all_differences = _compare_scans(left, right)
     reported = all_differences[:max_differences]
 
@@ -392,6 +427,7 @@ def build_rootfs_repro_diagnostics(
         ),
         "left": left.summary(),
         "right": right.summary(),
+        "package_manifest": _package_manifest_comparison(archive_a, archive_b),
         "summary": summary,
         "reporting": _reporting_summary(all_differences, reported),
         "differences": reported,
