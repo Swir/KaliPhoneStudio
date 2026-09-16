@@ -7,6 +7,7 @@ on:
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_repro_diagnostics.py"
       - "scripts/capture_kali_snapshot.py"
+      - "scripts/verify_live_kali_snapshot.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
       - "scripts/diagnose_rootfs_repro.py"
@@ -20,6 +21,7 @@ on:
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_repro_diagnostics.py"
       - "scripts/capture_kali_snapshot.py"
+      - "scripts/verify_live_kali_snapshot.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
       - "scripts/diagnose_rootfs_repro.py"
@@ -98,6 +100,7 @@ jobs:
           kaliphonestudio/rootfs.py
           kaliphonestudio/rootfs_repro_diagnostics.py
           scripts/capture_kali_snapshot.py
+          scripts/verify_live_kali_snapshot.py
           scripts/run_locked_rootfs_build.py
           scripts/verify_rootfs_pair.py
           scripts/diagnose_rootfs_repro.py
@@ -175,27 +178,56 @@ jobs:
             test "$(git -C "$checkout" rev-parse HEAD)" = "$SOURCE_COMMIT"
           done
 
-      - name: Build rootfs A from locked source and signed snapshot
+      - name: Verify live repository once at the A/B pair start boundary
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
+          python scripts/verify_live_kali_snapshot.py \
+            --lock tools/rootfs-source-lock.json \
+            --snapshot evidence/repository-snapshot.json \
+            --inrelease evidence/InRelease
+
+      - name: Build rootfs A and B concurrently from the same signed start state
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set +e
+          mkdir -p artifacts evidence/build-logs
           python scripts/run_locked_rootfs_build.py \
             --lock tools/rootfs-source-lock.json \
             --snapshot evidence/repository-snapshot.json \
+            --inrelease evidence/InRelease \
             --checkout builder-a \
             --out artifacts/rootfs-a.tar.xz \
-            --sudo
-
-      - name: Build rootfs B independently from the same signed snapshot
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
+            --sudo >evidence/build-logs/rootfs-a.log 2>&1 &
+          pid_a=$!
           python scripts/run_locked_rootfs_build.py \
             --lock tools/rootfs-source-lock.json \
             --snapshot evidence/repository-snapshot.json \
+            --inrelease evidence/InRelease \
             --checkout builder-b \
             --out artifacts/rootfs-b.tar.xz \
-            --sudo
+            --sudo >evidence/build-logs/rootfs-b.log 2>&1 &
+          pid_b=$!
+
+          wait "$pid_a"
+          rc_a=$?
+          wait "$pid_b"
+          rc_b=$?
+          set -e
+
+          echo "===== rootfs A ====="
+          cat evidence/build-logs/rootfs-a.log
+          echo "===== rootfs B ====="
+          cat evidence/build-logs/rootfs-b.log
+
+          if [ "$rc_a" -ne 0 ] || [ "$rc_b" -ne 0 ]; then
+            echo "Independent rootfs build failed: A=$rc_a B=$rc_b" >&2
+            exit 1
+          fi
+          test -s artifacts/rootfs-a.tar.xz
+          test -s artifacts/rootfs-b.tar.xz
 
       - name: Verify strict byte-identical rootfs and package evidence
         id: strict_verify
