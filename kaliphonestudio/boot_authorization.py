@@ -8,6 +8,12 @@ from pathlib import Path
 
 from .boot_builder import BootAssemblyEvidence, BootBuildPlan, BootRoundTripEvidence
 from .boot_image import BootImageError, boot_build_contract
+from .fastboot_baseline import (
+    FastbootBaselineEvidence,
+    FastbootBaselineError,
+    require_baseline_matches_stock_provenance,
+    require_device_matches_baseline,
+)
 from .profiles import DeviceProfile
 from .provenance import StockBootProvenance
 from .safety import VerifiedDevice, require_verified_device, validate_image
@@ -18,6 +24,9 @@ class TemporaryBootAuthorization:
     schema_version: int
     profile_id: str
     device_serial: str
+    fastboot_baseline_sha256: str
+    firmware_build: str
+    firmware_fingerprint: str
     plan_sha256: str
     stock_boot_sha256: str
     stock_ota_sha256: str
@@ -39,16 +48,25 @@ def authorize_temporary_boot(
     provenance: StockBootProvenance,
     assembly: BootAssemblyEvidence,
     round_trip: BootRoundTripEvidence,
+    baseline: FastbootBaselineEvidence,
     device: VerifiedDevice,
     *,
     image: Path,
 ) -> TemporaryBootAuthorization:
     """Bind the complete verified host-side chain to one verified physical device.
 
-    This does not execute fastboot. It only creates the evidence required before a
-    caller may offer a temporary boot operation.
+    This does not execute fastboot. It creates the evidence required before a
+    caller may offer a temporary boot operation. The captured device/firmware
+    baseline must match both the later verified serial and the exact stock OTA
+    provenance used to construct the candidate.
     """
     require_verified_device(profile, device)
+    require_device_matches_baseline(profile, baseline, device)
+    try:
+        require_baseline_matches_stock_provenance(profile, baseline, provenance)
+    except FastbootBaselineError as exc:
+        raise BootImageError(str(exc)) from exc
+
     contract = boot_build_contract(profile)
     plan_digest = plan.plan_sha256()
     if plan.profile_id != profile.profile_id or provenance.profile_id != profile.profile_id:
@@ -70,9 +88,19 @@ def authorize_temporary_boot(
     if digest != assembly.image_sha256 or size != assembly.image_size:
         raise BootImageError("temporary boot image changed after verification")
     return TemporaryBootAuthorization(
-        1, profile.profile_id, device.serial, plan_digest,
-        provenance.boot_sha256, provenance.ota_sha256,
-        digest, size, True, True,
+        schema_version=2,
+        profile_id=profile.profile_id,
+        device_serial=device.serial,
+        fastboot_baseline_sha256=baseline.evidence_sha256(),
+        firmware_build=baseline.firmware_build,
+        firmware_fingerprint=baseline.firmware_fingerprint,
+        plan_sha256=plan_digest,
+        stock_boot_sha256=provenance.boot_sha256,
+        stock_ota_sha256=provenance.ota_sha256,
+        image_sha256=digest,
+        image_size=size,
+        reproducible=True,
+        structurally_verified=True,
     )
 
 
