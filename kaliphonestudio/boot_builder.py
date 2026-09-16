@@ -145,14 +145,52 @@ def source_locked_assembler_prefix(
     lock_manifest: Path,
     exact_checkout: Path,
 ) -> tuple[str, str]:
-    """Resolve only an explicitly source-locked assembler for this plan's header.
-
-    Checkout acquisition/commit verification is intentionally a separate pipeline
-    gate. This function never falls back to a host PATH copy of mkbootimg.
-    """
+    """Resolve only an explicitly source-locked assembler for this plan's header."""
     locks = load_boot_tool_locks(lock_manifest)
     lock = require_assembler_for_header(locks, plan.header_version)
     return lock.argv(exact_checkout)
+
+
+def mkbootimg_argv(
+    plan: BootBuildPlan,
+    profile: DeviceProfile,
+    provenance: StockBootProvenance,
+    *,
+    input_dir: Path,
+    output: Path,
+    lock_manifest: Path,
+    exact_checkout: Path,
+) -> tuple[str, ...]:
+    """Return the deterministic argv for a verified legacy Android boot image build.
+
+    This is deliberately an invocation planner, not an executor. It revalidates
+    every input immediately before constructing argv, never uses a PATH mkbootimg,
+    and never treats the profile's separate DTBO as an in-boot recovery_dtbo.
+    """
+    verify_boot_build_plan(plan, profile, provenance, input_dir=input_dir)
+    contract = boot_build_contract(profile)
+    if plan.header_version not in {0, 1, 2}:
+        raise BootImageError("legacy mkbootimg invocation supports header versions 0-2 only")
+    if not output.name or output.name in {".", ".."}:
+        raise BootImageError("invalid boot image output path")
+
+    by_name = {item.name: item for item in plan.inputs}
+    prefix = source_locked_assembler_prefix(
+        plan, lock_manifest=lock_manifest, exact_checkout=exact_checkout
+    )
+    argv = [
+        *prefix,
+        "--header_version", str(plan.header_version),
+        "--pagesize", str(plan.page_size),
+        "--kernel", str(input_dir / by_name["kernel"].path),
+        "--ramdisk", str(input_dir / by_name["ramdisk"].path),
+    ]
+    if contract.include_dtb:
+        argv.extend(("--dtb", str(input_dir / by_name["dtb"].path)))
+    if plan.kernel_cmdline:
+        argv.extend(("--cmdline", " ".join(plan.kernel_cmdline)))
+    argv.extend(("--output", str(output)))
+    return tuple(argv)
 
 
 def write_boot_build_plan(plan: BootBuildPlan, destination: Path) -> str:
