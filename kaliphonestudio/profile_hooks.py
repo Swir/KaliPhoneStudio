@@ -19,7 +19,7 @@ import re
 from types import MappingProxyType
 from typing import Any, Callable, Mapping
 
-from .profiles import DeviceProfile, ProfileError
+from .profiles import DeviceProfile, validate_profile_hooks_contract
 
 
 HOOK_SCHEMA_VERSION = 1
@@ -129,29 +129,6 @@ def _validate_hook_id(hook_id: str) -> None:
         raise ProfileHookError(f"unsafe profile hook id: {hook_id!r}")
 
 
-def validate_profile_hooks_contract(raw: Any) -> None:
-    """Validate the optional profile `hooks` object.
-
-    The accepted shape is strictly stage -> ordered list of unique stable IDs. Empty
-    stage lists are allowed; unknown keys are rejected so profile intent is explicit.
-    """
-    if raw is None:
-        return
-    if not isinstance(raw, dict):
-        raise ProfileError("hooks must be an object")
-    unknown = sorted(set(raw) - _ALLOWED_STAGES)
-    if unknown:
-        raise ProfileError(f"hooks contains unsupported stages: {', '.join(unknown)}")
-    for stage, hook_ids in raw.items():
-        if not isinstance(hook_ids, list):
-            raise ProfileError(f"hooks.{stage} must be a list")
-        if len(hook_ids) != len(set(hook_ids)):
-            raise ProfileError(f"hooks.{stage} must not contain duplicates")
-        for hook_id in hook_ids:
-            if not isinstance(hook_id, str) or not _SAFE_HOOK_ID_RE.fullmatch(hook_id):
-                raise ProfileError(f"hooks.{stage} contains an unsafe hook id")
-
-
 def declared_profile_hooks(profile: DeviceProfile, stage: str) -> tuple[str, ...]:
     _validate_stage(stage)
     raw = profile.data.get("hooks")
@@ -169,7 +146,9 @@ def _canonical_result_digest(result: HookResult) -> str:
         "stage": result.stage,
         "summary": result.summary,
     }
-    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str) + "\n").encode("utf-8")
+    encoded = (
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str) + "\n"
+    ).encode("utf-8")
     return sha256(encoded).hexdigest()
 
 
