@@ -71,6 +71,9 @@ def _validate_profile_id(data: dict[str, Any]) -> None:
     vendor_id, codename_id = pid.split("/", 1)
     if not _SAFE_ID_RE.fullmatch(vendor_id) or not _SAFE_ID_RE.fullmatch(codename_id):
         raise ProfileError("profile_id components must use lowercase safe identifier characters")
+    vendor = data.get("vendor")
+    if not isinstance(vendor, str) or vendor.strip().lower() != vendor_id:
+        raise ProfileError("profile_id vendor must match the profile vendor")
     codename = data.get("codename")
     if not isinstance(codename, str) or codename.strip().lower() != codename_id:
         raise ProfileError("profile_id codename must match the profile codename")
