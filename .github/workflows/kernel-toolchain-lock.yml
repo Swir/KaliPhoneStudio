@@ -7,6 +7,7 @@ on:
       - "kaliphonestudio/kernel_toolchain.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
       - "scripts/verify_kernel_toolchain_upstream.py"
+      - "scripts/verify_kernel_toolchain_binding.py"
       - "tests/test_kernel_toolchain.py"
       - "tests/test_kernel_toolchain_binding.py"
       - ".github/workflows/kernel-toolchain-lock.yml"
@@ -17,6 +18,7 @@ on:
       - "kaliphonestudio/kernel_toolchain.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
       - "scripts/verify_kernel_toolchain_upstream.py"
+      - "scripts/verify_kernel_toolchain_binding.py"
       - "tests/test_kernel_toolchain.py"
       - "tests/test_kernel_toolchain_binding.py"
       - ".github/workflows/kernel-toolchain-lock.yml"
@@ -50,12 +52,13 @@ jobs:
           python scripts/verify_kernel_toolchain_upstream.py
           --lock tools/kernel-toolchain-lock.json
           --out evidence/kernel-toolchain-source.json
-      - name: Compile verifier
+      - name: Compile verifiers
         run: >-
           python -m py_compile
           kaliphonestudio/kernel_toolchain.py
           kaliphonestudio/kernel_toolchain_binding.py
           scripts/verify_kernel_toolchain_upstream.py
+          scripts/verify_kernel_toolchain_binding.py
       - name: Upload non-hardware source-lock evidence
         uses: actions/upload-artifact@v4
         with:
