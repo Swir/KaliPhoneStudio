@@ -8,6 +8,7 @@ on:
       - "scripts/capture_kali_snapshot.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
+      - "tests/test_rootfs_builder.py"
       - ".github/workflows/rootfs-repro.yml"
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "scripts/capture_kali_snapshot.py"
       - "scripts/run_locked_rootfs_build.py"
       - "scripts/verify_rootfs_pair.py"
+      - "tests/test_rootfs_builder.py"
       - ".github/workflows/rootfs-repro.yml"
   workflow_dispatch:
 
@@ -85,7 +87,7 @@ jobs:
       - name: Run rootfs contract tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m pytest -q tests/test_rootfs.py tests/test_candidate.py
+        run: python -m pytest -q tests/test_rootfs.py tests/test_rootfs_builder.py tests/test_candidate.py
 
       - name: Upload signed repository snapshot evidence
         uses: actions/upload-artifact@v4
@@ -93,6 +95,7 @@ jobs:
           name: kali-repository-snapshot
           path: |
             evidence/InRelease
+            evidence/kali-archive-keyring.gpg
             evidence/repository-snapshot.json
           if-no-files-found: error
           retention-days: 7
@@ -121,6 +124,18 @@ jobs:
           name: kali-repository-snapshot
           path: evidence
 
+      - name: Install the GPG-reviewed Kali archive keyring for debootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s evidence/kali-archive-keyring.gpg
+          sudo install -m 0644 evidence/kali-archive-keyring.gpg /usr/share/keyrings/kali-archive-keyring.gpg
+          test -x /usr/bin/qemu-aarch64-static
+          if command -v qemu-aarch64 >/dev/null 2>&1; then
+            echo "Refusing dynamic qemu-aarch64; qemu-aarch64-static must remain authoritative" >&2
+            exit 1
+          fi
+
       - name: Prepare two independent exact-source checkouts
         shell: bash
         env:
@@ -137,22 +152,24 @@ jobs:
             test "$(git -C "$checkout" rev-parse HEAD)" = "$SOURCE_COMMIT"
           done
 
-      - name: Build rootfs A from locked source and snapshot
+      - name: Build rootfs A from locked source and signed snapshot
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/run_locked_rootfs_build.py \
             --lock tools/rootfs-source-lock.json \
+            --snapshot evidence/repository-snapshot.json \
             --checkout builder-a \
             --out artifacts/rootfs-a.tar.xz \
             --sudo
 
-      - name: Build rootfs B independently
+      - name: Build rootfs B independently from the same signed snapshot
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/run_locked_rootfs_build.py \
             --lock tools/rootfs-source-lock.json \
+            --snapshot evidence/repository-snapshot.json \
             --checkout builder-b \
             --out artifacts/rootfs-b.tar.xz \
             --sudo
@@ -176,6 +193,7 @@ jobs:
           name: kali-arm64-rootfs-reproducible
           path: |
             artifacts/rootfs-a.tar.xz
+            evidence/InRelease
             evidence/repository-snapshot.json
             evidence/rootfs-artifact.json
             evidence/rootfs.sha256
