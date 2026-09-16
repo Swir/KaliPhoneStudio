@@ -2,6 +2,16 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.38-dev — deterministic generic first-boot provisioning
+
+- Added a device-independent `FirstBootProvisioningPlan` bound to typed, reproducible ARM64 rootfs evidence; malformed hashes/counts/sizes, unsafe hostname/locale/timezone values and non-reproducible/non-ARM64 evidence fail closed.
+- Added a deterministic USTAR provisioning overlay containing only hostname, locale, timezone, a systemd preset disabling Dropbear/OpenSSH units and the canonical provisioning manifest.
+- Provisioning requires interactive local user creation, keeps the root password locked, accepts/embeds no password/hash/private key and keeps remote access disabled by default.
+- Added independent bundle verification for exact SHA-256/size, rootfs/plan binding, member set/order, canonical uid/gid/owner/mode/mtime and exact payload bytes; bundle/evidence outputs refuse overwrite.
+- Added `scripts/build_first_boot_provisioning.py` for offline generation with machine-readable safety output and direct-script import hardening.
+- Initial CI correctly exposed two regression assumptions (the manifest legitimately contains the `root_password_locked` policy field and `PurePosixPath` normalizes duplicate slashes); both were repaired in the same iteration and the regression suite was expanded.
+- Added end-to-end CLI coverage and synchronized README, ROADMAP, BUILD_STATUS and package version. Project completion remains 52% because no physical AC2003 hardware gate is credited.
+
 ## 0.6.37-dev — candidate-level rootfs canonicalization provenance
 
 - Added `FirstBootRootfsProvenanceEvidence`, a fail-closed host-side link from the exact schema-v8 first-boot manifest digest to the strict rootfs evidence and accepted canonicalization binding.

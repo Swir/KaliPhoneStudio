@@ -10,7 +10,7 @@
 
 Progress is deliberately weighted toward **real device bring-up, hardware validation, recovery and release readiness**. Host-side CI, reproducibility and safety infrastructure are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> Current development line: **0.6.37-dev**. The safe offline profile studio and fail-closed profile hook registry are in place. Candidate-level rootfs provenance now binds the exact schema-v8 first-boot manifest digest to the strict rootfs evidence, reviewed canonicalization policy/binding, both A/B canonicalization records and both raw rootfs input hashes/sizes, preventing transformation provenance from being detached during release preparation. A fresh real kernel A/B authority run is exercising the fixed build identity/path-remap policy plus bounded divergence diagnostics, while the real Kali ARM64 rootfs A/B authority run remains in progress. **No concrete kernel/rootfs artifact or AC2003 hardware feature receives Beta credit until strict artifact evidence and the physical gate pass.**
+> Current development line: **0.6.38-dev**. Candidate-level rootfs provenance is now attached to the exact schema-v8 first-boot manifest, and a generic deterministic first-boot provisioning foundation is implemented for an accepted ARM64 rootfs. The provisioning bundle contains only non-secret hostname/locale/timezone and remote-service policy, requires interactive local user setup, keeps the root password locked and disables Dropbear/OpenSSH services by default. A fresh real kernel A/B authority run is exercising fixed build identity/path remapping plus bounded divergence diagnostics, while the real Kali ARM64 rootfs A/B authority run remains in progress. **No concrete kernel/rootfs artifact, provisioning bundle or AC2003 hardware feature receives Beta credit until strict artifact evidence and the physical gate pass.**
 
 ## Source of truth and architecture
 
@@ -77,7 +77,7 @@ Profile JSON inspection explicitly reports `hardware_verified=false` and `beta_g
 - Source-locked FDT/Android DT table references and structural DTB/DTBO verification bound to the approved boot plan.
 - First-boot candidate schema v8 binds exact firmware, boot plan, kernel execution/compiler provenance, DTB/DTBO and rootfs evidence without claiming hardware success.
 
-Real kernel authority run `35157574186` was a **strict failure**, not a partial pass. Both exact-source builds finished with identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `b1af9baccb4ddbcbfff4b82e433c2c87e70c660d2b3d4770a5d5954c05ac6fab` differed from Image B SHA-256 `e0e434f3ed7c063121913dcb160aec3b6ec193261cfe3cb90824d4958b08db23`. Kernel reproducibility therefore remains false. Fresh authority run `35161227840` is now exercising the fixed reproducibility environment; if strict equality still fails, schema-v1 diagnostics record exact differing byte counts, contiguous ranges and first/last offsets without relaxing acceptance.
+Real kernel authority run `35157574186` was a **strict failure**, not a partial pass. Both exact-source builds finished with identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `b1af9baccb4ddbcbfff4b82e433c2c87e70c660d2b3d4770a5d5954c05ac6fab` differed from Image B SHA-256 `e0e434f3ed7c063121913dcb160aec3b6ec193261cfe3cb90824d4958b08db23`. Kernel reproducibility therefore remains false. Fresh authority run `35161227840` is exercising the fixed reproducibility environment; if strict equality still fails, schema-v1 diagnostics record exact differing byte counts, contiguous ranges and first/last offsets without relaxing acceptance.
 
 ### Kali ARM64 rootfs
 
@@ -91,6 +91,15 @@ Real kernel authority run `35157574186` was a **strict failure**, not a partial 
 - Canonicalization provenance is bound end-to-end: both A/B audit records and raw-input hashes are tied to the exact signed repository snapshot, source lock and strict accepted canonical artifact.
 - Candidate-level schema-v1 rootfs provenance evidence additionally binds the exact first-boot manifest digest to that canonicalization binding/policy, both transformation-evidence digests and both raw input hashes/sizes; all of it remains `beta_gate_credit=false` and `hardware_verified=false`.
 - `rootfs_reproducible_artifact` remains **false** until the current real post-fix A/B run `35158577624` passes strict equality and evidence review.
+
+### Generic first-boot provisioning
+
+- `FirstBootProvisioningPlan` accepts only typed **reproducible ARM64 rootfs evidence** and binds the plan to that exact evidence digest.
+- The deterministic USTAR overlay contains only `hostname`, locale, timezone, a systemd preset disabling `dropbear.service`, `ssh.service` and `sshd.service`, plus its canonical provisioning manifest.
+- Root account policy remains locked; no password, password hash, private key or remote-access credential is accepted or embedded. Local user setup remains explicitly interactive.
+- All bundle members are regular files with canonical uid/gid, owner/group, mode, order and zero mtime. The bundle is re-opened and independently verified against its exact SHA-256/size/evidence before acceptance.
+- `scripts/build_first_boot_provisioning.py` exposes the flow as an offline CLI and prints machine-readable safety evidence with `credentials_embedded=false`, `remote_access_enabled=false`, `hardware_verified=false` and `beta_gate_credit=false`.
+- This is a host-side common-userspace foundation only. It does not prove that systemd, locale, timezone, login or any UI path works on the physical AC2003.
 
 ### Rescue / recovery foundations
 
@@ -132,7 +141,7 @@ The first public Beta remains **BLOCKED** until the exact physical AC2003 provid
 - exercised OxygenOS recovery/rollback path;
 - release compatibility matrix, manifest and SHA-256 checksums.
 
-Passing host CI alone can never publish a Beta. See [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+Passing host CI or generating a provisioning overlay alone can never publish a Beta. See [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Development
 
@@ -149,6 +158,7 @@ python scripts/verify_kernel_toolchain_upstream.py --lock tools/kernel-toolchain
 python scripts/diagnose_kernel_image_repro.py --image-a build-a/arch/arm64/boot/Image --image-b build-b/arch/arm64/boot/Image --out evidence/kernel-image-divergence.json
 python scripts/import_fastboot_baseline.py --profile-id oneplus/avicii --transcript fastboot-getvar-all.txt --firmware-build "EXACT_BUILD" --firmware-fingerprint "EXACT_FINGERPRINT" --out evidence/fastboot-baseline.json
 python scripts/diagnose_rootfs_repro.py --archive-a rootfs-a.tar.xz --archive-b rootfs-b.tar.xz --out evidence/rootfs-repro-diagnostic.json
+python scripts/build_first_boot_provisioning.py --rootfs-evidence evidence/rootfs-repro.json --out build/firstboot-provisioning.tar --evidence evidence/firstboot-provisioning.json --hostname kali-phone --locale pl_PL.UTF-8 --timezone Europe/Oslo
 ```
 
 ## Release policy
