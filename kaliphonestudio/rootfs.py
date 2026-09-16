@@ -18,6 +18,7 @@ _PACKAGE_INDEX_RE = re.compile(
     r"^(?:main|contrib|non-free|non-free-firmware)/binary-(?P<arch>[a-z0-9]+)/(?:Packages)(?:\.(?:xz|gz))?$"
 )
 _MAX_DPKG_STATUS_BYTES = 64 * 1024 * 1024
+_DPKG_STATUS_SUFFIX = ("var", "lib", "dpkg", "status")
 
 
 class RootfsError(ValueError):
@@ -355,14 +356,40 @@ def _parse_dpkg_status(data: bytes) -> tuple[bytes, int]:
     return payload, len(records)
 
 
+def _classify_dpkg_status_member(name: str) -> bool:
+    """Recognize the dpkg status member without accepting arbitrary path suffixes.
+
+    The pinned Kali rootfs builder currently emits a tarball with one top-level
+    directory (for example ``kali-arm64/var/lib/dpkg/status``), while unit
+    fixtures and other builders may put ``var/lib/dpkg/status`` at archive root.
+    Both layouts are accepted. Anything deeper, absolute or traversal-based is
+    rejected when it targets the protected dpkg status suffix.
+    """
+    normalized = name
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    path = PurePosixPath(normalized)
+    parts = path.parts
+    targets_status = len(parts) >= 4 and tuple(parts[-4:]) == _DPKG_STATUS_SUFFIX
+    if not targets_status:
+        return False
+    if path.is_absolute() or ".." in parts or len(parts) not in {4, 5}:
+        raise RootfsError("rootfs contains an unsafe or unexpected dpkg status path")
+    if len(parts) == 5 and parts[0] in {"", "."}:
+        raise RootfsError("rootfs contains an invalid top-level dpkg status prefix")
+    return True
+
+
 def package_manifest_from_rootfs(artifact: Path) -> tuple[bytes, int]:
     """Extract a normalized installed-package manifest from a rootfs tar archive."""
     try:
         with tarfile.open(artifact, mode="r:*") as archive:
-            candidates = [
-                member for member in archive.getmembers()
-                if member.isfile() and member.name.lstrip("./") == "var/lib/dpkg/status"
-            ]
+            candidates = []
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                if _classify_dpkg_status_member(member.name):
+                    candidates.append(member)
             if len(candidates) != 1:
                 raise RootfsError("rootfs must contain exactly one var/lib/dpkg/status file")
             member = candidates[0]

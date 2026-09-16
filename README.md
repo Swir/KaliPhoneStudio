@@ -4,13 +4,13 @@
 
 ## Project progress
 
-**49% complete**
+**50% complete**
 
-`██████████░░░░░░░░░░ 49%`
+`██████████░░░░░░░░░░ 50%`
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.20-dev** — the verified host boot chain is in place, the rootfs path uses a GPG-verified Kali repository snapshot and exact-source double-build workflow, and the rescue-initramfs contract now supports a deterministic Linux-kernel-compatible **LZ4 legacy** ramdisk path required by the first `oneplus/avicii` profile. LZ4 output is structurally decoded and its normalized `newc` contents are independently re-verified before it can bind to a boot plan. The long-running repaired real ARM64 rootfs double-build is still being validated and is **not** counted as reproducible until its evidence passes and is reviewed. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.21-dev** — the verified host boot chain is in place and the rescue path now has a source-locked, independently double-built static ARM64 BusyBox payload plus deterministic profile-formatted initramfs evidence. The payload is built from exact BusyBox 1.38.0 source bytes, its applet inventory is executed under ARM64 QEMU and checked against an allow/deny contract, and network/SSH remain disabled by default. The previous real ARM64 rootfs run reached a concrete archive but failed because the pinned upstream tarball uses one safe top-level directory before `var/lib/dpkg/status`; the parser has been repaired with traversal/ambiguity regression tests, but the artifact is **not** counted reproducible until a new `main` double-build passes. The first active target remains **OnePlus Nord AC2003 (`oneplus/avicii`)**. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -53,18 +53,21 @@ The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_a
 - Kali ARM64 rootfs source lock pinned to official NetHunter rootfs tag `2026.2`, commit `20238a2f2d547d7989a4dec287d4f5ef528ed701`.
 - Rootfs lock schema v2 forces the Kali mirror to HTTPS and pins the current Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5`.
 - `scripts/capture_kali_snapshot.py` requires a successful `gpgv` validation of `InRelease` by that fingerprint, then records the exact `InRelease` SHA-256 and ARM64 package-index paths/sizes/SHA-256 values.
-- Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from `var/lib/dpkg/status` inside the archive.
+- Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from the archive's single safe `var/lib/dpkg/status` location, accepting the pinned builder's one-top-level-directory layout while rejecting traversal, deeper suffix tricks and ambiguous duplicates.
 - Rootfs build execution performs a fail-closed host preflight requiring `qemu-aarch64-static`, rejecting a competing dynamic `qemu-aarch64`, preventing the pinned upstream dependency helper from replacing the static emulator, and revalidating the signed HTTPS `InRelease` state immediately before each build.
 - The reviewed Kali archive keyring used for snapshot verification is carried into the rootfs job so debootstrap can validate Kali repository signatures itself.
 - `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and executes two real pinned ARM64 builds on relevant `main` pushes; the result is fail-closed if bytes or package evidence diverge.
 - Device-independent deterministic rescue-initramfs construction normalizes uid/gid/mtime and entry ordering, builds twice, requires byte equality, emits canonical SHA-256 evidence, and rejects setuid/setgid, world-writable regular files, special files and unsafe paths.
-- Rescue initramfs now supports deterministic LZ4 legacy framing for profiles whose boot policy requires `lz4`. The implementation is pinned to reviewed AOSP/LZ4 format references in `tools/ramdisk-format-locks.json`, uses bounded 8 MiB legacy blocks and independently decodes the resulting stream before acceptance.
+- Rescue initramfs supports deterministic LZ4 legacy framing for profiles whose boot policy requires `lz4`. The implementation is pinned to reviewed AOSP/LZ4 format references in `tools/ramdisk-format-locks.json`, uses bounded 8 MiB legacy blocks and independently decodes the resulting stream before acceptance.
+- Source-locked ARM64 rescue payload contract pins BusyBox 1.38.0 source URL/SHA-256, the reviewed local miniconfig and `/init` hashes, ARM64 static-ELF policy, required rescue applets and forbidden remote-access applets.
+- Dedicated `rescue-payload-repro` CI cross-builds the static ARM64 BusyBox payload twice, requires byte-for-byte equality, executes each binary under QEMU to collect an independently matching applet inventory, then stages and builds the profile-formatted deterministic rescue ramdisk. Run `35107467164` passed the entire chain.
+- The rescue payload keeps `poweroff`/`reboot` explicitly compiled while external telinit handoff is disabled; network and SSH remain disabled by default and the init script enters only a local physical-console rescue shell.
 - The rescue verifier independently parses normalized `newc` metadata, canonical ordering/trailer, file types, manifest digest and executable `/init`; artifact SHA-256 alone is not sufficient.
 - Verified rescue-initramfs evidence can bind to a boot plan only when the exact ramdisk bytes, size, compression policy and plan digest agree. This host-side binding is not a physical rescue claim.
 - First-boot candidate manifest schema v2 binds the verified boot authorization, rootfs evidence, package-manifest digest/count, source lock and repository snapshot.
 - CI on Python **3.11, 3.12, 3.13 and 3.14**.
 
-The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. `rootfs_reproducible_artifact` remains false until a real double-build run passes and its evidence is reviewed.
+The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. `rootfs_reproducible_artifact` remains false until a new real double-build run passes and its evidence is reviewed.
 
 ## Safety model
 
@@ -84,7 +87,7 @@ python -m pytest -q
 
 `rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, independent builds second, canonical evidence only after equality.
 
-A rescue artifact can be built with its profile-driven compression policy without touching a phone, for example:
+A rescue artifact can be built with its profile-driven compression policy without touching a phone. The release-oriented rescue path should use the locked reproducibility workflow rather than an arbitrary local BusyBox binary; the lower-level initramfs builder remains useful for development fixtures:
 
 ```powershell
 python scripts/build_rescue_initramfs.py --profile-id oneplus/avicii --staging staging/rescue --out build/rescue.cpio.lz4 --evidence build/rescue-initramfs.json

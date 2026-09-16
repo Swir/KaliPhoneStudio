@@ -1,0 +1,35 @@
+#!/bin/sh
+# KaliPhoneStudio minimal early rescue userspace.
+# Deliberately no network/SSH bring-up. Physical-console diagnostics only.
+
+export PATH=/bin:/sbin
+export HOME=/
+export TERM=linux
+umask 022
+
+mkdir -p /proc /sys /dev /dev/pts /run /tmp
+mount -t proc proc /proc || echo "KPS: failed to mount /proc"
+mount -t sysfs sysfs /sys || echo "KPS: failed to mount /sys"
+mount -t devtmpfs devtmpfs /dev || echo "KPS: devtmpfs mount unavailable"
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts || echo "KPS: devpts mount unavailable"
+
+if [ -w /dev/kmsg ]; then
+    echo "KaliPhoneStudio rescue userspace reached /init" > /dev/kmsg
+fi
+
+echo ""
+echo "KaliPhoneStudio rescue userspace"
+echo "network=disabled ssh=disabled"
+if [ -r /proc/cmdline ]; then
+    echo "cmdline: $(cat /proc/cmdline)"
+fi
+if [ -r /proc/version ]; then
+    echo "kernel: $(cat /proc/version)"
+fi
+
+dmesg | tail -n 40 2>/dev/null || true
+sync
+
+echo "Entering local rescue shell. Persistent storage is not mounted automatically."
+exec cttyhack sh
