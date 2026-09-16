@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.26-dev — strict rootfs reproducibility diagnostics
+
+- Added device-independent `kaliphonestudio/rootfs_repro_diagnostics.py` for safe, bounded analysis of two failed rootfs `tar.xz` candidates without extracting either archive.
+- Diagnostics reject absolute paths, traversal, NUL names and duplicate normalized members; they normalize one synthetic builder top-level directory and compare canonical member sets, ordering, type, mode/uid/gid/name metadata, timestamps, links, PAX metadata and streamed SHA-256 for regular-file content.
+- Added an explicit `container_only_difference` result so XZ/tar-container divergence can be distinguished from semantic archive divergence without treating semantic equality as release reproducibility.
+- Added `scripts/diagnose_rootfs_repro.py` and canonical schema-v1 reports with `beta_gate_credit=false` plus a bounded difference list to prevent unbounded CI evidence.
+- Updated `rootfs-repro` so a failed strict verifier runs the diagnostic layer, uploads only a non-release diagnostic artifact, then explicitly fails the workflow. The byte-for-byte acceptance criterion is unchanged and verified release artifacts remain gated on strict success.
+- Added focused tests for identical archives, compression-only differences, content/metadata/order/member divergence, top-level-prefix normalization, traversal/duplicate rejection and bounded canonical output. Branch test workflow passed before PR creation.
+- Reconciled project version/status to 0.6.26-dev while keeping the conservative progress indicator at 52%. The latest real ARM64 double-build completed both independent builds but failed strict final reproducibility verification, so `rootfs_reproducible_artifact` remains false and Beta remains blocked.
+
+## 0.6.25-dev — kernel reproducibility and first-boot schema v6
+
+- Added a fail-closed, device-independent kernel reproducibility contract requiring two independent build roots for the same profile-driven kernel plan.
+- Both final `.config` and ARM64 `Image` outputs are revalidated against the approved kernel plan and must be byte-identical before canonical reproducibility evidence is accepted.
+- Canonical kernel reproducibility evidence intentionally omits host-specific build paths and does not grant hardware/Beta credit.
+- Upgraded the first-boot candidate manifest to schema v6 so exact kernel reproducibility evidence is required alongside the existing firmware, boot, kernel, DTB/DTBO and rootfs evidence chain.
+- Kept project completion at 52% because this is host-side hardening and does not replace a concrete physical AC2003 temporary boot or any hardware gate.
+
 ## 0.6.24-dev — source-locked DTB/DTBO structural evidence and first-boot binding
 
 - Added a device-independent `kaliphonestudio/device_tree.py` evidence layer for flattened DTB bundles and Android DT table images; no AC2003-specific parser logic was introduced into the common core.
