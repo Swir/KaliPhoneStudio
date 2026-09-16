@@ -31,6 +31,9 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
       - name: Validate repository rootfs lock contract
         id: lock
         shell: bash
@@ -71,4 +74,4 @@ jobs:
       - name: Run focused rootfs/candidate contract tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m unittest discover -s tests -p 'test_rootfs.py' || python -m pytest -q tests/test_rootfs.py tests/test_candidate.py
+        run: python -m pytest -q tests/test_rootfs.py tests/test_candidate.py
