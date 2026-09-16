@@ -29,12 +29,11 @@ def test_apply_and_verify_busybox_miniconfig(tmp_path: Path) -> None:
 
 
 def test_repository_rescue_miniconfig_keeps_inventory_and_static_contract() -> None:
-    """The evidence workflow needs the BusyBox applet itself for ``--list``.
+    """Keep inventory and local power controls explicit under ``allnoconfig``.
 
-    ``allnoconfig`` disables CONFIG_BUSYBOX unless we lock it explicitly.  If it
-    disappears, QEMU can execute the binary but ``busybox --list`` degenerates
-    into the cryptic ``applet not found`` path and we lose an independently
-    verified applet manifest.
+    The evidence workflow needs the BusyBox applet itself for ``--list``. The
+    rescue shell also promises local recovery controls, so halt/poweroff/reboot
+    must stay compiled while external telinit handoff stays disabled.
     """
 
     locked = load_miniconfig(Path("rescue/busybox-minimal.config"))
@@ -42,6 +41,10 @@ def test_repository_rescue_miniconfig_keeps_inventory_and_static_contract() -> N
     assert locked["CONFIG_STATIC"] == "y"
     assert locked["CONFIG_ASH"] == "y"
     assert locked["CONFIG_SH_IS_ASH"] == "y"
+    assert locked["CONFIG_HALT"] == "y"
+    assert locked["CONFIG_POWEROFF"] == "y"
+    assert locked["CONFIG_REBOOT"] == "y"
+    assert locked["CONFIG_FEATURE_CALL_TELINIT"] == "n"
 
 
 def test_rejects_unknown_locked_symbol(tmp_path: Path) -> None:
