@@ -125,6 +125,11 @@ def bind_kernel_plan_to_toolchain(
     normalized = PurePosixPath(declared)
     if normalized.is_absolute() or ".." in normalized.parts or "." in normalized.parts:
         raise KernelContractError("CLANG_PREBUILT_BIN must be a safe relative path")
+    if any(
+        not part or "\\" in part or any(ord(ch) < 0x20 for ch in part)
+        for part in normalized.parts
+    ):
+        raise KernelContractError("CLANG_PREBUILT_BIN contains unsafe path data")
     expected_suffix = PurePosixPath(lock.subtree) / "bin"
     if tuple(normalized.parts[-len(expected_suffix.parts):]) != expected_suffix.parts:
         raise KernelContractError(
