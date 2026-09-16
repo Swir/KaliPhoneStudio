@@ -1,0 +1,77 @@
+name: rootfs-source-lock
+
+on:
+  push:
+    paths:
+      - "tools/rootfs-source-lock.json"
+      - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/candidate.py"
+      - "scripts/verify_rootfs_pair.py"
+      - ".github/workflows/rootfs-source-lock.yml"
+  pull_request:
+    paths:
+      - "tools/rootfs-source-lock.json"
+      - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/candidate.py"
+      - "scripts/verify_rootfs_pair.py"
+      - ".github/workflows/rootfs-source-lock.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-upstream-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
+      - name: Validate repository rootfs lock contract
+        id: lock
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.rootfs import load_rootfs_source_lock
+
+          lock = load_rootfs_source_lock(Path("tools/rootfs-source-lock.json"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"url={lock.source_url}", file=out)
+              print(f"commit={lock.source_commit}", file=out)
+              print(f"tag={lock.release_tag}", file=out)
+              print(f"lock_sha256={lock.lock_sha256()}", file=out)
+          print(f"rootfs source lock: {lock.source_url}@{lock.source_commit} ({lock.release_tag})")
+          print(f"rootfs lock sha256: {lock.lock_sha256()}")
+          PY
+
+      - name: Verify exact commit and release tag exist upstream
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.lock.outputs.url }}
+          SOURCE_COMMIT: ${{ steps.lock.outputs.commit }}
+          RELEASE_TAG: ${{ steps.lock.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream
+          git -C upstream remote add origin "$SOURCE_URL"
+          git -C upstream fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream fetch --quiet --depth=1 origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git -C upstream rev-list -n1 "refs/tags/$RELEASE_TAG")" = "$SOURCE_COMMIT"
+          git -C upstream checkout --quiet --detach "$SOURCE_COMMIT"
+          test -f upstream/build-fs.sh
+          grep -q "arm64" upstream/build-fs.sh
+
+      - name: Run focused rootfs/candidate contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_rootfs.py tests/test_candidate.py

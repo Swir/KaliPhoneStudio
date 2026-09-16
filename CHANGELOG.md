@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.17-dev — rootfs source and reproducibility evidence contract
+
+- Pinned the official Kali Linux NetHunter rootfs builder tag `2026.2` to full commit `20238a2f2d547d7989a4dec287d4f5ef528ed701` instead of trusting a moving branch/tag at runtime.
+- Added a strict schema-v1 rootfs source lock for `kali-rolling`, ARM64 and the selected minimal build recipe.
+- Added repository snapshot evidence binding the exact mirror, suite, architecture, `InRelease` SHA-256, package-index SHA-256 values and package-manifest SHA-256.
+- Added streaming rootfs artifact hashing and mandatory independent double-build byte equality before an artifact can receive reproducibility evidence.
+- Added post-build drift verification and atomic canonical evidence output.
+- Added `scripts/verify_rootfs_pair.py` so future CI can verify two real rootfs builds without embedding device-specific knowledge in the core.
+- Added focused negative tests for moving source refs, missing repository evidence requirements, mismatched repository snapshots, non-identical builds, malformed hashes and post-build artifact mutation.
+- Reconciled README/ROADMAP/BUILD_STATUS with already merged boot assembly, locked round-trip and temporary-boot authorization work; project progress moves conservatively to 49%.
+- No real Kali ARM64 rootfs artifact or AC2003 hardware milestone is claimed yet.
+
+## 0.6.16-dev — source-locked boot assembly and authorization
+
+- Added a full-commit source lock for LineageOS `android_system_tools_mkbootimg` commit `808ecd09666ffe0ff5800f02af693abce56eb395` with no fallback to a host `mkbootimg` from `PATH`.
+- Added deterministic profile-driven `mkbootimg` argv generation from the approved boot build plan.
+- Added real source-locked assembly execution with two independent builds and mandatory byte-for-byte equality before publishing a candidate image.
+- Added source-locked `unpack_bootimg` round-trip verification of kernel, ramdisk and required in-boot DTB against the approved plan.
+- Added fail-closed `TemporaryBootAuthorization` tying the verified physical-device identity to exact stock provenance, plan digest, reproducible assembly and structural verification.
+- These are host-side safety milestones only; they do not prove AC2003 boot or hardware functionality.
+
+## 0.6.15-dev — deterministic boot build planning
+
+- Added deterministic schema-v1 boot build plans binding exact stock-boot provenance to profile-driven header/page/compression/cmdline policy and kernel/ramdisk/DTB/DTBO SHA-256 inputs.
+- Added pre-assembly TOCTOU revalidation so profile policy, provenance or input-file drift fails closed immediately before assembly.
+- Added safe canonical boot-plan serialization and path checks.
+- Added tests for deterministic plans, profile/provenance mismatch, mandatory DTB/DTBO handling and changed build inputs.
+
 ## 0.6.14-dev — exact OTA to stock boot provenance
 
 - Investigated the 0.6.13 Python CI regression: the old test still expected an empty extractor artifact map after Linux/Windows hashes had intentionally been authorized; all four Python jobs failed on that stale assertion.
