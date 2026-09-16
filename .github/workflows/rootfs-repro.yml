@@ -137,8 +137,10 @@ jobs:
         run: |
           set -euo pipefail
           sudo install -m 0644 evidence/kali-archive-keyring.gpg /usr/share/keyrings/kali-archive-keyring.gpg
-          sudo update-binfmts --disable qemu-aarch64 || true
-          sudo update-binfmts --enable qemu-aarch64
+          if ! sudo systemctl restart systemd-binfmt.service; then
+            sudo /usr/lib/systemd/systemd-binfmt
+          fi
+          test -r /proc/sys/fs/binfmt_misc/qemu-aarch64
           python scripts/check_rootfs_host.py --lock tools/rootfs-source-lock.json
 
       - name: Prepare two independent exact-source checkouts
