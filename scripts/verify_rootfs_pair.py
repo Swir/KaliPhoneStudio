@@ -9,6 +9,7 @@ from kaliphonestudio.rootfs import (
     create_reproducible_rootfs_evidence,
     load_repository_snapshot,
     load_rootfs_source_lock,
+    write_package_manifest,
     write_rootfs_artifact_evidence,
 )
 
@@ -22,6 +23,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--first", type=Path, required=True, help="first independently built rootfs artifact")
     result.add_argument("--second", type=Path, required=True, help="second independently built rootfs artifact")
     result.add_argument("--out", type=Path, required=True, help="destination evidence JSON")
+    result.add_argument("--package-manifest-out", type=Path, help="optional normalized installed-package manifest")
     return result
 
 
@@ -36,8 +38,14 @@ def main() -> int:
         second_artifact=args.second,
     )
     evidence_digest = write_rootfs_artifact_evidence(evidence, args.out)
+    if args.package_manifest_out:
+        manifest_digest = write_package_manifest(args.first, args.package_manifest_out)
+        if manifest_digest != evidence.package_manifest_sha256:
+            raise RuntimeError("package manifest digest changed after rootfs evidence creation")
     print(f"rootfs_sha256={evidence.artifact_sha256}")
     print(f"rootfs_size={evidence.artifact_size}")
+    print(f"package_manifest_sha256={evidence.package_manifest_sha256}")
+    print(f"package_count={evidence.package_count}")
     print(f"evidence_sha256={evidence_digest}")
     return 0
 
