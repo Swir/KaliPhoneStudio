@@ -60,6 +60,7 @@ def test_identical_archive_is_strict_and_semantic(tmp_path):
     copy.write_bytes(archive.read_bytes())
 
     report = build_rootfs_repro_diagnostics(archive, copy)
+    assert report["schema_version"] == 2
     assert report["strict_reproducible"] is True
     assert report["semantic_equal"] is True
     assert report["container_only_difference"] is False
@@ -126,6 +127,25 @@ def test_metadata_changes_are_field_specific(tmp_path):
     ][0]
     assert set(metadata["fields"]) >= {"mode", "uid", "gid", "mtime"}
     assert report["summary"]["metadata_changed"] == 1
+    assert report["summary"]["metadata_mtime_only"] == 0
+    assert report["summary"]["metadata_field_changes"] == {
+        "mode": 1,
+        "uid": 1,
+        "gid": 1,
+        "mtime": 1,
+    }
+
+
+def test_mtime_only_metadata_is_counted_separately(tmp_path):
+    first = tmp_path / "a.tar.xz"
+    second = tmp_path / "b.tar.xz"
+    _write_xz(first, _tar_bytes([("etc/config", b"x", {"mtime": 10})]))
+    _write_xz(second, _tar_bytes([("etc/config", b"x", {"mtime": 20})]))
+
+    report = build_rootfs_repro_diagnostics(first, second)
+    assert report["summary"]["metadata_changed"] == 1
+    assert report["summary"]["metadata_mtime_only"] == 1
+    assert report["summary"]["metadata_field_changes"] == {"mtime": 1}
 
 
 def test_added_removed_and_order_are_reported(tmp_path):
@@ -191,6 +211,29 @@ def test_duplicate_normalized_path_is_rejected(tmp_path):
         build_rootfs_repro_diagnostics(first, first)
 
 
+def test_truncation_prioritizes_payload_changes_over_mtime_noise(tmp_path):
+    first = tmp_path / "a.tar.xz"
+    second = tmp_path / "b.tar.xz"
+    left_entries = [
+        (f"a{i}", b"same", {"mtime": 10}) for i in range(5)
+    ] + [("z-content", b"before", {"mtime": 10})]
+    right_entries = [
+        (f"a{i}", b"same", {"mtime": 20}) for i in range(5)
+    ] + [("z-content", b"after!", {"mtime": 20})]
+    _write_xz(first, _tar_bytes(left_entries))
+    _write_xz(second, _tar_bytes(right_entries))
+
+    report = build_rootfs_repro_diagnostics(first, second, max_differences=2)
+    assert report["summary"]["content_changed"] == 1
+    assert report["summary"]["metadata_changed"] == 6
+    assert report["summary"]["metadata_mtime_only"] == 6
+    assert report["differences_truncated"] is True
+    assert report["differences"][0]["kind"] == "content"
+    assert report["differences"][0]["path"] == "z-content"
+    assert report["reporting"]["reported_by_kind"]["content"] == 1
+    assert report["reporting"]["omitted_by_kind"]["metadata"] == 5
+
+
 def test_difference_output_is_bounded_and_file_is_canonical(tmp_path):
     first = tmp_path / "a.tar.xz"
     second = tmp_path / "b.tar.xz"
@@ -213,6 +256,8 @@ def test_difference_output_is_bounded_and_file_is_canonical(tmp_path):
     assert report["summary"]["difference_count_total"] == 5
     assert report["differences_truncated"] is True
     assert len(report["differences"]) == 2
+    assert report["reporting"]["reported_by_kind"]["content"] == 2
+    assert report["reporting"]["omitted_by_kind"]["content"] == 3
     text = out.read_text(encoding="utf-8")
     assert text.endswith("\n")
     assert '"beta_gate_credit":false' in text
