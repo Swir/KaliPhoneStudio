@@ -15,8 +15,10 @@ _SAFE_PARTITION_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SAFE_FASTBOOT_VAR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 _SAFE_KERNEL_CONFIG_RE = re.compile(r"^CONFIG_[A-Z0-9_]+$")
 _SAFE_MAKE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_SAFE_HOOK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$")
 _KERNEL_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _ALLOWED_RAMDISK_COMPRESSION = {"gzip", "lz4", "none"}
+_ALLOWED_HOOK_STAGES = frozenset({"build", "verify", "recovery"})
 _RAMDISK_DECOMPRESSOR_CONFIG = {
     "gzip": "CONFIG_RD_GZIP",
     "lz4": "CONFIG_RD_LZ4",
@@ -199,6 +201,25 @@ def _validate_fastboot_probe(data: dict[str, Any]) -> None:
             )
 
 
+def validate_profile_hooks_contract(raw: Any) -> None:
+    """Validate optional stage -> ordered hook-ID declarations in profile JSON."""
+    if raw is None:
+        return
+    if not isinstance(raw, dict):
+        raise ProfileError("hooks must be an object")
+    unknown = sorted(set(raw) - _ALLOWED_HOOK_STAGES)
+    if unknown:
+        raise ProfileError(f"hooks contains unsupported stages: {', '.join(unknown)}")
+    for stage, hook_ids in raw.items():
+        if not isinstance(hook_ids, list):
+            raise ProfileError(f"hooks.{stage} must be a list")
+        if len(hook_ids) != len(set(hook_ids)):
+            raise ProfileError(f"hooks.{stage} must not contain duplicates")
+        for hook_id in hook_ids:
+            if not isinstance(hook_id, str) or not _SAFE_HOOK_ID_RE.fullmatch(hook_id):
+                raise ProfileError(f"hooks.{stage} contains an unsafe hook id")
+
+
 def _validate_kernel_contract(data: dict[str, Any]) -> None:
     contract = data["kernel"]
     if not isinstance(contract, dict):
@@ -280,6 +301,7 @@ def validate_profile(data: dict[str, Any]) -> None:
     _validate_boot_contract(data["boot"])
     _validate_partition_contract(data)
     _validate_fastboot_probe(data)
+    validate_profile_hooks_contract(data.get("hooks"))
     _nonempty_strings(data["firmware_hints"], "firmware_hints")
     _nonempty_strings(data["recovery_notes"], "recovery_notes")
 
