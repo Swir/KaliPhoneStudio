@@ -11,6 +11,7 @@ from kaliphonestudio.candidate import (
     write_first_boot_candidate_manifest,
 )
 from kaliphonestudio.device_tree import DeviceTreeCandidateEvidence
+from kaliphonestudio.kernel_build_binding import KernelReproducibilityBindingEvidence
 from kaliphonestudio.kernel_bundle import KernelCandidateEvidence
 from kaliphonestudio.kernel_repro import KernelReproducibilityEvidence
 from kaliphonestudio.kernel_toolchain_bundle import KernelToolchainCandidateEvidence
@@ -127,6 +128,33 @@ def kernel_toolchain_evidence(kernel=None, **changes):
     return KernelToolchainCandidateEvidence(**values)
 
 
+def kernel_execution_binding_evidence(kernel=None, repro=None, toolchain=None, **changes):
+    kernel = kernel or kernel_evidence()
+    repro = repro or kernel_repro_evidence(kernel)
+    toolchain = toolchain or kernel_toolchain_evidence(kernel)
+    values = {
+        "schema_version": 1,
+        "profile_id": kernel.profile_id,
+        "kernel_plan_sha256": kernel.kernel_plan_sha256,
+        "source_commit": kernel.source_commit,
+        "toolchain_lock_sha256": toolchain.toolchain_lock_sha256,
+        "build_recipe_sha256": "2" * 64,
+        "reproducible_environment_sha256": "3" * 64,
+        "build_a_run_evidence_sha256": "4" * 64,
+        "build_b_run_evidence_sha256": "5" * 64,
+        "reproducibility_evidence_sha256": repro.evidence_sha256(),
+        "config_sha256": repro.config_sha256,
+        "config_size": repro.config_size,
+        "image_sha256": repro.image_sha256,
+        "image_size": repro.image_size,
+        "byte_identical": True,
+        "distinct_build_roots_verified": True,
+        "beta_gate_credit": False,
+    }
+    values.update(changes)
+    return KernelReproducibilityBindingEvidence(**values)
+
+
 def boot_plan(kernel=None):
     kernel = kernel or kernel_evidence()
     return BootBuildPlan(
@@ -201,7 +229,11 @@ def create_candidate(
     trees=None,
     repro=None,
     toolchain=None,
+    execution=None,
 ):
+    repro = repro or kernel_repro_evidence(kernel)
+    toolchain = toolchain or kernel_toolchain_evidence(kernel)
+    execution = execution or kernel_execution_binding_evidence(kernel, repro, toolchain)
     return create_first_boot_candidate_manifest(
         boot,
         plan,
@@ -209,14 +241,25 @@ def create_candidate(
         lock,
         snapshot,
         evidence,
-        kernel_reproducibility_evidence=repro or kernel_repro_evidence(kernel),
-        kernel_toolchain_evidence=toolchain or kernel_toolchain_evidence(kernel),
+        kernel_reproducibility_evidence=repro,
+        kernel_reproducibility_binding_evidence=execution,
+        kernel_toolchain_evidence=toolchain,
         device_tree_evidence=trees or device_tree_evidence(plan),
         rootfs_artifact=rootfs,
     )
 
 
-def make_candidate(tmp_path, *, kernel=None, plan=None, boot=None, trees=None, repro=None, toolchain=None):
+def make_candidate(
+    tmp_path,
+    *,
+    kernel=None,
+    plan=None,
+    boot=None,
+    trees=None,
+    repro=None,
+    toolchain=None,
+    execution=None,
+):
     lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
     kernel = kernel or kernel_evidence()
     plan = plan or boot_plan(kernel)
@@ -224,6 +267,7 @@ def make_candidate(tmp_path, *, kernel=None, plan=None, boot=None, trees=None, r
     trees = trees or device_tree_evidence(plan)
     repro = repro or kernel_repro_evidence(kernel)
     toolchain = toolchain or kernel_toolchain_evidence(kernel)
+    execution = execution or kernel_execution_binding_evidence(kernel, repro, toolchain)
     manifest = create_candidate(
         boot,
         plan,
@@ -235,13 +279,40 @@ def make_candidate(tmp_path, *, kernel=None, plan=None, boot=None, trees=None, r
         trees=trees,
         repro=repro,
         toolchain=toolchain,
+        execution=execution,
     )
-    return manifest, lock, snapshot, evidence, rootfs, kernel, plan, boot, trees, repro, toolchain
+    return (
+        manifest,
+        lock,
+        snapshot,
+        evidence,
+        rootfs,
+        kernel,
+        plan,
+        boot,
+        trees,
+        repro,
+        toolchain,
+        execution,
+    )
 
 
-def test_candidate_binds_boot_kernel_toolchain_repro_device_tree_firmware_and_rootfs_evidence(tmp_path):
-    manifest, _lock, _snapshot, evidence, _rootfs, kernel, plan, boot, trees, repro, toolchain = make_candidate(tmp_path)
-    assert manifest.schema_version == 7
+def test_candidate_binds_boot_kernel_execution_toolchain_repro_device_tree_firmware_and_rootfs_evidence(tmp_path):
+    (
+        manifest,
+        _lock,
+        _snapshot,
+        evidence,
+        _rootfs,
+        kernel,
+        plan,
+        boot,
+        trees,
+        repro,
+        toolchain,
+        execution,
+    ) = make_candidate(tmp_path)
+    assert manifest.schema_version == 8
     assert manifest.profile_id == "oneplus/avicii"
     assert manifest.device_serial == "SERIAL123"
     assert manifest.fastboot_baseline_sha256 == "0" * 64
@@ -254,6 +325,11 @@ def test_candidate_binds_boot_kernel_toolchain_repro_device_tree_firmware_and_ro
     assert manifest.kernel_config_sha256 == kernel.config_sha256
     assert manifest.kernel_image_sha256 == kernel.image_sha256
     assert manifest.kernel_reproducibility_evidence_sha256 == repro.evidence_sha256()
+    assert manifest.kernel_reproducibility_binding_evidence_sha256 == execution.evidence_sha256()
+    assert manifest.kernel_build_recipe_sha256 == execution.build_recipe_sha256
+    assert manifest.kernel_reproducible_environment_sha256 == execution.reproducible_environment_sha256
+    assert manifest.kernel_build_a_run_evidence_sha256 == execution.build_a_run_evidence_sha256
+    assert manifest.kernel_build_b_run_evidence_sha256 == execution.build_b_run_evidence_sha256
     assert manifest.kernel_reproducible is True
     assert manifest.kernel_distinct_build_roots_verified is True
     assert manifest.kernel_toolchain_evidence_sha256 == toolchain.evidence_sha256()
@@ -371,6 +447,114 @@ def test_candidate_rejects_kernel_reproducibility_hardware_credit(tmp_path):
     with pytest.raises(RootfsError, match="cannot claim hardware Beta credit"):
         create_candidate(
             boot_authorization(plan), plan, kernel, lock, snapshot, evidence, rootfs, repro=repro
+        )
+
+
+def test_candidate_rejects_execution_binding_reproducibility_digest_drift(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    kernel = kernel_evidence()
+    plan = boot_plan(kernel)
+    repro = kernel_repro_evidence(kernel)
+    toolchain = kernel_toolchain_evidence(kernel)
+    execution = kernel_execution_binding_evidence(
+        kernel,
+        repro,
+        toolchain,
+        reproducibility_evidence_sha256="0" * 64,
+    )
+    with pytest.raises(RootfsError, match="does not match reproducibility evidence"):
+        create_candidate(
+            boot_authorization(plan),
+            plan,
+            kernel,
+            lock,
+            snapshot,
+            evidence,
+            rootfs,
+            repro=repro,
+            toolchain=toolchain,
+            execution=execution,
+        )
+
+
+def test_candidate_rejects_execution_binding_toolchain_drift(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    kernel = kernel_evidence()
+    plan = boot_plan(kernel)
+    repro = kernel_repro_evidence(kernel)
+    toolchain = kernel_toolchain_evidence(kernel)
+    execution = kernel_execution_binding_evidence(
+        kernel,
+        repro,
+        toolchain,
+        toolchain_lock_sha256="0" * 64,
+    )
+    with pytest.raises(RootfsError, match="execution binding toolchain lock drifted"):
+        create_candidate(
+            boot_authorization(plan),
+            plan,
+            kernel,
+            lock,
+            snapshot,
+            evidence,
+            rootfs,
+            repro=repro,
+            toolchain=toolchain,
+            execution=execution,
+        )
+
+
+def test_candidate_rejects_execution_binding_without_independent_byte_equality(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    kernel = kernel_evidence()
+    plan = boot_plan(kernel)
+    repro = kernel_repro_evidence(kernel)
+    toolchain = kernel_toolchain_evidence(kernel)
+    execution = kernel_execution_binding_evidence(
+        kernel,
+        repro,
+        toolchain,
+        byte_identical=False,
+    )
+    with pytest.raises(RootfsError, match="does not prove independent byte-identical builds"):
+        create_candidate(
+            boot_authorization(plan),
+            plan,
+            kernel,
+            lock,
+            snapshot,
+            evidence,
+            rootfs,
+            repro=repro,
+            toolchain=toolchain,
+            execution=execution,
+        )
+
+
+def test_candidate_rejects_execution_binding_hardware_credit(tmp_path):
+    lock, snapshot, evidence, rootfs = fixture_rootfs(tmp_path)
+    kernel = kernel_evidence()
+    plan = boot_plan(kernel)
+    repro = kernel_repro_evidence(kernel)
+    toolchain = kernel_toolchain_evidence(kernel)
+    execution = kernel_execution_binding_evidence(
+        kernel,
+        repro,
+        toolchain,
+        beta_gate_credit=True,
+    )
+    with pytest.raises(RootfsError, match="execution binding cannot claim hardware Beta credit"):
+        create_candidate(
+            boot_authorization(plan),
+            plan,
+            kernel,
+            lock,
+            snapshot,
+            evidence,
+            rootfs,
+            repro=repro,
+            toolchain=toolchain,
+            execution=execution,
         )
 
 
