@@ -1,0 +1,95 @@
+name: device-tree-format-lock
+
+on:
+  push:
+    paths:
+      - "tools/device-tree-format-locks.json"
+      - "kaliphonestudio/device_tree.py"
+      - "kaliphonestudio/candidate.py"
+      - "scripts/verify_device_tree_candidate.py"
+      - "tests/test_device_tree.py"
+      - "tests/test_candidate.py"
+      - ".github/workflows/device-tree-format-lock.yml"
+  pull_request:
+    paths:
+      - "tools/device-tree-format-locks.json"
+      - "kaliphonestudio/device_tree.py"
+      - "kaliphonestudio/candidate.py"
+      - "scripts/verify_device_tree_candidate.py"
+      - "tests/test_device_tree.py"
+      - "tests/test_candidate.py"
+      - ".github/workflows/device-tree-format-lock.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-format-locks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
+      - name: Load exact DTB and DTBO format locks
+        id: locks
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.device_tree import load_device_tree_format_locks
+
+          data, digest = load_device_tree_format_locks(Path("tools/device-tree-format-locks.json"))
+          refs = {item["kind"]: item for item in data["references"]}
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              for kind in ("dtb", "dtbo"):
+                  print(f"{kind}_url={refs[kind]['url']}", file=out)
+                  print(f"{kind}_commit={refs[kind]['commit']}", file=out)
+                  print(f"{kind}_path={refs[kind]['path']}", file=out)
+          print(f"device-tree format lock sha256={digest}")
+          PY
+
+      - name: Fetch exact DTB format reference
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.locks.outputs.dtb_url }}
+          SOURCE_COMMIT: ${{ steps.locks.outputs.dtb_commit }}
+          SOURCE_PATH: ${{ steps.locks.outputs.dtb_path }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream-dtb
+          git -C upstream-dtb remote add origin "$SOURCE_URL"
+          git -C upstream-dtb fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream-dtb rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream-dtb checkout --quiet --detach "$SOURCE_COMMIT"
+          test -f "upstream-dtb/$SOURCE_PATH"
+          grep -q 'FDT_MAGIC' "upstream-dtb/$SOURCE_PATH"
+
+      - name: Fetch exact Android DT table reference
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.locks.outputs.dtbo_url }}
+          SOURCE_COMMIT: ${{ steps.locks.outputs.dtbo_commit }}
+          SOURCE_PATH: ${{ steps.locks.outputs.dtbo_path }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream-dtbo
+          git -C upstream-dtbo remote add origin "$SOURCE_URL"
+          git -C upstream-dtbo fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream-dtbo rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream-dtbo checkout --quiet --detach "$SOURCE_COMMIT"
+          test -f "upstream-dtbo/$SOURCE_PATH"
+          grep -q 'DT_TABLE_MAGIC' "upstream-dtbo/$SOURCE_PATH"
+
+      - name: Run device-tree and first-boot binding tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_device_tree.py tests/test_candidate.py
