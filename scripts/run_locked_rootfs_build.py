@@ -6,8 +6,17 @@ import argparse
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
-from kaliphonestudio.rootfs import RootfsError, load_rootfs_source_lock, package_manifest_from_rootfs
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from kaliphonestudio.rootfs import (  # noqa: E402
+    RootfsError,
+    load_rootfs_source_lock,
+    package_manifest_from_rootfs,
+)
 
 
 def _git_output(checkout: Path, *args: str) -> str:
