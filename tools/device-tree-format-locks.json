@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "references": [
+    {
+      "kind": "dtb",
+      "url": "https://android.googlesource.com/platform/external/dtc",
+      "commit": "295e585a34339f6280e561278288e4490d9390f7",
+      "path": "libfdt/fdt.h"
+    },
+    {
+      "kind": "dtbo",
+      "url": "https://android.googlesource.com/platform/system/libufdt",
+      "commit": "1ebea487f96b2a4d1a4e1a28ea338591c36a4f8b",
+      "path": "utils/src/dt_table_core.h"
+    }
+  ]
+}
