@@ -60,6 +60,20 @@ def test_verified_initramfs_binds_exactly_to_planned_ramdisk(tmp_path):
     assert output.read_text(encoding="utf-8") == binding.canonical_json()
 
 
+def test_verified_lz4_initramfs_binds_to_lz4_boot_plan(tmp_path):
+    artifact = tmp_path / "rescue.cpio.lz4"
+    evidence = build_reproducible_initramfs(
+        _stage(tmp_path / "stage"), artifact, compression="lz4"
+    )
+    plan = _plan(artifact, evidence.artifact_sha256, compression="lz4")
+
+    binding = bind_initramfs_to_boot_plan(plan, evidence, artifact=artifact)
+    assert binding.verified is True
+    assert binding.ramdisk_compression == "lz4"
+    assert binding.ramdisk_sha256 == evidence.artifact_sha256
+    assert binding.initramfs_evidence_sha256 == evidence.evidence_sha256()
+
+
 def test_binding_rejects_ramdisk_bytes_not_approved_by_plan(tmp_path):
     artifact = tmp_path / "rescue.cpio.gz"
     evidence = build_reproducible_initramfs(_stage(tmp_path / "stage"), artifact)
