@@ -20,7 +20,15 @@ def _add_file(archive: tarfile.TarFile, name: str, data: bytes, mtime: int) -> N
     archive.addfile(info, io.BytesIO(data))
 
 
-def _fixture(path: Path, *, mtime: int, machine_id: bytes, password_hash: bytes, cache: bytes) -> None:
+def _fixture(
+    path: Path,
+    *,
+    mtime: int,
+    machine_id: bytes,
+    password_hash: bytes,
+    cache: bytes,
+    fake_clock: bytes,
+) -> None:
     prefix = "kali-arm64"
     with tarfile.open(path, "w:xz", format=tarfile.PAX_FORMAT) as archive:
         _add_file(
@@ -31,7 +39,7 @@ def _fixture(path: Path, *, mtime: int, machine_id: bytes, password_hash: bytes,
         )
         _add_file(archive, f"{prefix}/etc/machine-id", machine_id, mtime + 1)
         _add_file(archive, f"{prefix}/var/lib/dbus/machine-id", machine_id, mtime + 2)
-        _add_file(archive, f"{prefix}/etc/fake-hwclock.data", b"2026-09-16 20:00:00\n", mtime + 3)
+        _add_file(archive, f"{prefix}/etc/fake-hwclock.data", fake_clock, mtime + 3)
         _add_file(
             archive,
             f"{prefix}/etc/shadow",
@@ -61,6 +69,7 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         machine_id=b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
         password_hash=b"$y$random-salt-a$hash-a",
         cache=b"cache-a",
+        fake_clock=b"2026-09-16 20:00:00\n",
     )
     _fixture(
         second,
@@ -68,6 +77,7 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         machine_id=b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
         password_hash=b"$y$random-salt-b$hash-b",
         cache=b"cache-b",
+        fake_clock=b"2026-09-16 20:01:00\n",
     )
 
     evidence_a = canonicalize_rootfs_archive(first, out_a)
@@ -77,9 +87,9 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
     assert evidence_a.output_sha256 == evidence_b.output_sha256
     assert evidence_a.beta_gate_credit is False
     assert evidence_a.zeroed_volatile_files == 3
-    assert evidence_a.locked_password_entries == 1
+    assert evidence_a.locked_password_entries == 2
     assert evidence_a.dropped_cache_entries == 1
-    assert evidence_a.normalized_mtime_count == 7
+    assert evidence_a.normalized_mtime_count == 6
 
     prefix = "kali-arm64"
     assert _member_bytes(out_a, f"{prefix}/etc/machine-id") == b""
@@ -105,9 +115,10 @@ def test_canonicalization_rejects_ambiguous_dpkg_status_layout(tmp_path):
 
     with pytest.raises(RootfsError, match="exactly one"):
         canonicalize_rootfs_archive(source, destination)
+    assert not destination.exists()
 
 
-def test_canonicalization_rejects_path_traversal(tmp_path):
+def test_canonicalization_rejects_path_traversal_and_cleans_partial_output(tmp_path):
     source = tmp_path / "bad.tar.xz"
     destination = tmp_path / "out.tar.xz"
     with tarfile.open(source, "w:xz") as archive:
@@ -116,3 +127,4 @@ def test_canonicalization_rejects_path_traversal(tmp_path):
 
     with pytest.raises(RootfsError, match="traversal"):
         canonicalize_rootfs_archive(source, destination)
+    assert not destination.exists()
