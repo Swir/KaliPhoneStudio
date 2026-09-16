@@ -65,8 +65,16 @@ def load_boot_tool_locks(path: Path) -> dict[str, BootToolLock]:
     return locks
 
 
-def require_assembler_for_header(locks: dict[str, BootToolLock], header_version: int) -> BootToolLock:
-    lock = locks.get("mkbootimg")
+def _require_tool_for_header(locks: dict[str, BootToolLock], name: str, header_version: int) -> BootToolLock:
+    lock = locks.get(name)
     if lock is None or header_version not in lock.supported_header_versions:
-        raise BootImageError(f"no source-locked assembler authorized for boot header v{header_version}")
+        raise BootImageError(f"no source-locked {name} authorized for boot header v{header_version}")
     return lock
+
+
+def require_assembler_for_header(locks: dict[str, BootToolLock], header_version: int) -> BootToolLock:
+    return _require_tool_for_header(locks, "mkbootimg", header_version)
+
+
+def require_inspector_for_header(locks: dict[str, BootToolLock], header_version: int) -> BootToolLock:
+    return _require_tool_for_header(locks, "unpack_bootimg", header_version)
