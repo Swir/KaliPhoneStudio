@@ -61,7 +61,13 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [ ] Promote first-boot evidence into a release-candidate manifest only after hardware gates exist
 - [ ] Generic first-boot provisioning independent of device name
 - [ ] Phosh phone UI stage on the verified common rootfs
-- [ ] Safe minimal rescue initramfs artifact with reproducibility evidence
+- [x] Deterministic uncompressed `newc` rescue-initramfs serializer with independent double-build equality and canonical SHA-256 evidence
+- [x] Fail-closed rescue source policy: executable `/init`, no special files/setuid/setgid/world-writable regular files, bounded input sizes and no root-escaping symlinks
+- [x] Strict rescue evidence reload + post-build artifact SHA-256/size revalidation
+- [ ] Source-lock and reproduce the profile-required ramdisk compression stage (LZ4 for `oneplus/avicii`)
+- [ ] Source-lock and audit the static ARM64 rescue runtime/payload before it is accepted into a candidate
+- [ ] Integrate the compressed rescue ramdisk into the existing boot-plan/round-trip/temporary-boot authorization chain
+- [ ] Verify rescue/logging on physical target hardware
 - [ ] SSH disabled by default
 - [ ] Common mobile defaults: scaling, keyboard, lock/power integration
 - [ ] Update/rollback metadata format
