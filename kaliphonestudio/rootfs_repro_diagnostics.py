@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
 import lzma
@@ -26,6 +27,18 @@ _METADATA_FIELDS = (
     "linkname",
     "pax_headers",
 )
+# When a report has to be truncated, preserve the differences that are most
+# useful for fixing a failed reproducibility run. Thousands of build-time mtime
+# changes must not hide a small number of changed payload files.
+_DIFFERENCE_PRIORITY = {
+    "type": 0,
+    "content": 1,
+    "added": 2,
+    "removed": 3,
+    "order": 4,
+    "metadata": 5,
+}
+_DIFFERENCE_KINDS = tuple(_DIFFERENCE_PRIORITY)
 
 
 def _sha256_file(path: Path) -> tuple[str, int]:
@@ -130,8 +143,6 @@ def _scan_archive(path: Path) -> _ArchiveScan:
             for member in archive:
                 parts = _safe_parts(member.name)
                 if not parts:
-                    # A root './' directory record carries no useful
-                    # cross-build signal.
                     continue
                 if parts in raw_seen:
                     raise RootfsReproDiagnosticError(
@@ -155,7 +166,6 @@ def _scan_archive(path: Path) -> _ArchiveScan:
                 canonical_parts = parts
                 if prefix is not None:
                     if parts == (prefix,):
-                        # Ignore the synthetic archive top directory itself.
                         continue
                     canonical_parts = parts[1:]
                 if not canonical_parts:
@@ -233,6 +243,8 @@ def _compare_scans(
 
     type_changed = 0
     metadata_changed = 0
+    metadata_mtime_only = 0
+    metadata_field_changes: Counter[str] = Counter()
     content_changed = 0
 
     for path in sorted(left_paths & right_paths):
@@ -252,12 +264,15 @@ def _compare_scans(
         changed_fields: dict[str, dict[str, Any]] = {}
         for field in _METADATA_FIELDS:
             if first[field] != second[field]:
+                metadata_field_changes[field] += 1
                 changed_fields[field] = {
                     "left": first[field],
                     "right": second[field],
                 }
         if changed_fields:
             metadata_changed += 1
+            if set(changed_fields) == {"mtime"}:
+                metadata_mtime_only += 1
             differences.append(
                 {
                     "kind": "metadata",
@@ -287,8 +302,12 @@ def _compare_scans(
             }
         )
 
+    # Actionable differences come first. In particular, a small number of
+    # content changes must remain visible even when thousands of timestamps
+    # differ and the JSON report has a strict output limit.
     differences.sort(
         key=lambda item: (
+            _DIFFERENCE_PRIORITY.get(str(item.get("kind", "")), 99),
             str(item.get("path", "")),
             str(item.get("kind", "")),
         )
@@ -298,11 +317,39 @@ def _compare_scans(
         "removed": len(removed_paths),
         "type_changed": type_changed,
         "metadata_changed": metadata_changed,
+        "metadata_mtime_only": metadata_mtime_only,
+        "metadata_field_changes": {
+            field: metadata_field_changes.get(field, 0)
+            for field in _METADATA_FIELDS
+            if metadata_field_changes.get(field, 0)
+        },
         "content_changed": content_changed,
         "order_changed": order_changed,
         "difference_count_total": len(differences),
     }
     return summary, differences
+
+
+def _reporting_summary(
+    all_differences: list[dict[str, Any]],
+    reported: list[dict[str, Any]],
+) -> dict[str, Any]:
+    total = Counter(str(item.get("kind", "unknown")) for item in all_differences)
+    emitted = Counter(str(item.get("kind", "unknown")) for item in reported)
+    kinds = list(_DIFFERENCE_KINDS)
+    for kind in sorted(set(total) - set(kinds)):
+        kinds.append(kind)
+    return {
+        "priority": list(_DIFFERENCE_KINDS),
+        "reported_by_kind": {
+            kind: emitted.get(kind, 0) for kind in kinds if total.get(kind, 0)
+        },
+        "omitted_by_kind": {
+            kind: total.get(kind, 0) - emitted.get(kind, 0)
+            for kind in kinds
+            if total.get(kind, 0) - emitted.get(kind, 0)
+        },
+    }
 
 
 def build_rootfs_repro_diagnostics(
@@ -330,11 +377,12 @@ def build_rootfs_repro_diagnostics(
     left = _scan_archive(Path(archive_a))
     right = _scan_archive(Path(archive_b))
     summary, all_differences = _compare_scans(left, right)
+    reported = all_differences[:max_differences]
 
     strict_reproducible = left.sha256 == right.sha256
     semantic_equal = summary["difference_count_total"] == 0
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "kps.rootfs-repro-diagnostic",
         "beta_gate_credit": False,
         "strict_reproducible": strict_reproducible,
@@ -345,7 +393,8 @@ def build_rootfs_repro_diagnostics(
         "left": left.summary(),
         "right": right.summary(),
         "summary": summary,
-        "differences": all_differences[:max_differences],
+        "reporting": _reporting_summary(all_differences, reported),
+        "differences": reported,
         "differences_truncated": len(all_differences) > max_differences,
         "max_differences": max_differences,
     }
