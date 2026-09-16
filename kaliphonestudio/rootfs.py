@@ -2,8 +2,8 @@
 
 This module deliberately separates a *build source lock* from proof that a concrete
 rootfs artifact was reproducible. A moving kali-rolling mirror is never treated as
-reproducible by itself: callers must bind signed repository metadata/package-index
-hashes and compare two independently produced artifacts byte-for-byte.
+reproducible by itself: callers must bind repository metadata/package-index hashes
+and compare two independently produced artifacts byte-for-byte.
 """
 from __future__ import annotations
 
@@ -29,9 +29,10 @@ def _require_sha256(value: str, label: str) -> str:
     return value
 
 
-def _canonical_digest(value: Any) -> str:
-    payload = json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n"
-    return sha256(payload.encode("utf-8")).hexdigest()
+def _require_text(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise RootfsError(f"{label} must be a non-empty string")
+    return value
 
 
 @dataclass(frozen=True)
@@ -90,58 +91,82 @@ class RootfsArtifactEvidence:
         return sha256(self.canonical_json().encode("utf-8")).hexdigest()
 
 
+def validate_rootfs_source_lock(lock: RootfsSourceLock) -> None:
+    if lock.schema_version != 1:
+        raise RootfsError("unsupported rootfs source-lock schema")
+    if not isinstance(lock.source_commit, str) or not _COMMIT_RE.fullmatch(lock.source_commit):
+        raise RootfsError("rootfs source must be pinned to a full 40-hex commit")
+    if not isinstance(lock.source_url, str) or not lock.source_url.startswith("https://"):
+        raise RootfsError("rootfs source URL must use HTTPS")
+    _require_text(lock.release_tag, "rootfs release tag")
+    if lock.architecture != "arm64":
+        raise RootfsError("KaliPhoneStudio common phone rootfs must be arm64")
+    if lock.suite != "kali-rolling":
+        raise RootfsError("rootfs suite must be explicitly kali-rolling")
+    if lock.variant not in {"minimal", "full"}:
+        raise RootfsError("unsupported rootfs variant")
+    if not isinstance(lock.mirror, str) or not lock.mirror.startswith(("http://", "https://")):
+        raise RootfsError("rootfs mirror must be an explicit HTTP(S) URL")
+    if not lock.command or not all(isinstance(item, str) and item for item in lock.command):
+        raise RootfsError("rootfs build command must be a non-empty argv list")
+    if lock.command[0] != "./build-fs.sh" or "arm64" not in lock.command:
+        raise RootfsError("rootfs build command is not bound to the pinned ARM64 builder")
+    if lock.mirror not in lock.command:
+        raise RootfsError("rootfs build command must use the locked mirror")
+    if lock.variant == "minimal" and not ({"--minimal", "-m"} & set(lock.command)):
+        raise RootfsError("minimal rootfs lock must request the minimal variant")
+    if lock.variant == "full" and not ({"--full", "-f"} & set(lock.command)):
+        raise RootfsError("full rootfs lock must request the full variant")
+    if lock.repository_evidence_required is not True:
+        raise RootfsError("rolling rootfs builds must require repository snapshot evidence")
+    if lock.double_build_required is not True:
+        raise RootfsError("rootfs reproducibility requires independent double-build equality")
+
+
 def load_rootfs_source_lock(path: Path) -> RootfsSourceLock:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RootfsError(f"cannot read rootfs source lock: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise RootfsError("rootfs source lock must be a JSON object")
     if set(raw) != {"schema_version", "source", "build_contract"}:
         raise RootfsError("unexpected rootfs source-lock top-level fields")
     if raw["schema_version"] != 1:
         raise RootfsError("unsupported rootfs source-lock schema")
     source = raw["source"]
     build = raw["build_contract"]
-    if set(source) != {"url", "commit", "release_tag"}:
+    if not isinstance(source, dict) or set(source) != {"url", "commit", "release_tag"}:
         raise RootfsError("unexpected rootfs source fields")
     required_build = {
         "suite", "architecture", "variant", "mirror", "command",
         "repository_evidence_required", "double_build_required",
     }
-    if set(build) != required_build:
+    if not isinstance(build, dict) or set(build) != required_build:
         raise RootfsError("unexpected rootfs build-contract fields")
-    commit = source["commit"]
-    if not isinstance(commit, str) or not _COMMIT_RE.fullmatch(commit):
-        raise RootfsError("rootfs source must be pinned to a full 40-hex commit")
-    if not isinstance(source["url"], str) or not source["url"].startswith("https://"):
-        raise RootfsError("rootfs source URL must use HTTPS")
-    if build["architecture"] != "arm64":
-        raise RootfsError("KaliPhoneStudio common phone rootfs must be arm64")
-    if build["suite"] != "kali-rolling":
-        raise RootfsError("rootfs suite must be explicitly kali-rolling")
-    if build["variant"] not in {"minimal", "full"}:
-        raise RootfsError("unsupported rootfs variant")
-    if not isinstance(build["mirror"], str) or not build["mirror"].startswith(("http://", "https://")):
-        raise RootfsError("rootfs mirror must be an explicit HTTP(S) URL")
     command = build["command"]
-    if not isinstance(command, list) or not command or not all(isinstance(item, str) and item for item in command):
-        raise RootfsError("rootfs build command must be a non-empty argv list")
-    if command[0] != "./build-fs.sh" or "arm64" not in command:
-        raise RootfsError("rootfs build command is not bound to the pinned ARM64 builder")
-    if build["variant"] == "minimal" and not ({"--minimal", "-m"} & set(command)):
-        raise RootfsError("minimal rootfs lock must request the minimal variant")
-    if build["variant"] == "full" and not ({"--full", "-f"} & set(command)):
-        raise RootfsError("full rootfs lock must request the full variant")
-    if build["repository_evidence_required"] is not True:
-        raise RootfsError("rolling rootfs builds must require repository snapshot evidence")
-    if build["double_build_required"] is not True:
-        raise RootfsError("rootfs reproducibility requires independent double-build equality")
-    return RootfsSourceLock(
-        1, source["url"], commit, source["release_tag"], build["suite"],
-        build["architecture"], build["variant"], build["mirror"], tuple(command), True, True,
+    if not isinstance(command, list):
+        raise RootfsError("rootfs build command must be an argv list")
+    lock = RootfsSourceLock(
+        1,
+        _require_text(source["url"], "rootfs source URL"),
+        _require_text(source["commit"], "rootfs source commit"),
+        _require_text(source["release_tag"], "rootfs release tag"),
+        _require_text(build["suite"], "rootfs suite"),
+        _require_text(build["architecture"], "rootfs architecture"),
+        _require_text(build["variant"], "rootfs variant"),
+        _require_text(build["mirror"], "rootfs mirror"),
+        tuple(command),
+        build["repository_evidence_required"],
+        build["double_build_required"],
     )
+    validate_rootfs_source_lock(lock)
+    return lock
 
 
 def repository_snapshot_from_dict(raw: dict[str, Any]) -> RepositorySnapshotEvidence:
+    if not isinstance(raw, dict):
+        raise RootfsError("repository snapshot evidence must be a JSON object")
     required = {
         "schema_version", "mirror", "suite", "architecture", "inrelease_sha256",
         "package_index_sha256s", "package_manifest_sha256",
@@ -153,9 +178,9 @@ def repository_snapshot_from_dict(raw: dict[str, Any]) -> RepositorySnapshotEvid
         raise RootfsError("repository snapshot requires at least one package-index SHA-256")
     return RepositorySnapshotEvidence(
         1,
-        str(raw["mirror"]),
-        str(raw["suite"]),
-        str(raw["architecture"]),
+        _require_text(raw["mirror"], "repository mirror"),
+        _require_text(raw["suite"], "repository suite"),
+        _require_text(raw["architecture"], "repository architecture"),
         _require_sha256(raw["inrelease_sha256"], "InRelease"),
         tuple(_require_sha256(item, "package index") for item in indexes),
         _require_sha256(raw["package_manifest_sha256"], "package manifest"),
@@ -167,12 +192,11 @@ def load_repository_snapshot(path: Path) -> RepositorySnapshotEvidence:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RootfsError(f"cannot read repository snapshot evidence: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise RootfsError("repository snapshot evidence must be a JSON object")
     return repository_snapshot_from_dict(raw)
 
 
 def validate_repository_snapshot(lock: RootfsSourceLock, snapshot: RepositorySnapshotEvidence) -> None:
+    validate_rootfs_source_lock(lock)
     if snapshot.schema_version != 1:
         raise RootfsError("unsupported repository snapshot schema")
     if snapshot.mirror != lock.mirror or snapshot.suite != lock.suite or snapshot.architecture != lock.architecture:
@@ -239,12 +263,17 @@ def verify_rootfs_artifact(
     validate_repository_snapshot(lock, snapshot)
     if evidence.schema_version != 1 or not evidence.reproducible:
         raise RootfsError("rootfs artifact lacks reproducibility evidence")
+    _require_sha256(evidence.source_lock_sha256, "rootfs source-lock evidence")
+    _require_sha256(evidence.repository_snapshot_sha256, "repository snapshot evidence")
+    _require_sha256(evidence.artifact_sha256, "rootfs artifact")
     if evidence.source_lock_sha256 != lock.lock_sha256():
         raise RootfsError("rootfs source lock changed after build")
     if evidence.repository_snapshot_sha256 != snapshot.evidence_sha256():
         raise RootfsError("rootfs repository snapshot changed after build")
     if evidence.architecture != lock.architecture or evidence.variant != lock.variant:
         raise RootfsError("rootfs artifact evidence target mismatch")
+    if evidence.artifact_size <= 0:
+        raise RootfsError("rootfs artifact evidence contains an invalid size")
     digest, size = _sha256_and_size(artifact)
     if digest != evidence.artifact_sha256 or size != evidence.artifact_size:
         raise RootfsError("rootfs artifact changed after reproducibility verification")
