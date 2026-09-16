@@ -14,22 +14,42 @@ mount -t devtmpfs devtmpfs /dev || echo "KPS: devtmpfs mount unavailable"
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts || echo "KPS: devpts mount unavailable"
 
+LOG_DIR=/run/kaliphonestudio
+LOG_FILE="$LOG_DIR/rescue.log"
+READY_FILE="$LOG_DIR/rescue-ready"
+mkdir -p "$LOG_DIR"
+
+{
+    echo "KPS_RESCUE_EVIDENCE_V1"
+    echo "network=disabled"
+    echo "ssh=disabled"
+    echo "architecture=$(uname -m 2>/dev/null || echo unknown)"
+    if [ -r /proc/cmdline ]; then
+        echo "cmdline=$(cat /proc/cmdline)"
+    fi
+    if [ -r /proc/version ]; then
+        echo "kernel=$(cat /proc/version)"
+    fi
+    if [ -r /proc/partitions ]; then
+        echo "--- partitions ---"
+        cat /proc/partitions
+    fi
+    echo "--- dmesg-tail ---"
+    dmesg 2>/dev/null | tail -n 80 || true
+} > "$LOG_FILE" 2>&1
+
+echo "KPS_RESCUE_READY_V1" > "$READY_FILE"
+sync
+
 if [ -w /dev/kmsg ]; then
-    echo "KaliPhoneStudio rescue userspace reached /init" > /dev/kmsg
+    echo "KaliPhoneStudio rescue userspace reached /init; log=$LOG_FILE" > /dev/kmsg
 fi
 
 echo ""
 echo "KaliPhoneStudio rescue userspace"
 echo "network=disabled ssh=disabled"
-if [ -r /proc/cmdline ]; then
-    echo "cmdline: $(cat /proc/cmdline)"
-fi
-if [ -r /proc/version ]; then
-    echo "kernel: $(cat /proc/version)"
-fi
-
-dmesg | tail -n 40 2>/dev/null || true
-sync
+echo "diagnostics=$LOG_FILE ready=$READY_FILE"
+cat "$LOG_FILE" 2>/dev/null || true
 
 echo "Entering local rescue shell. Persistent storage is not mounted automatically."
 exec cttyhack sh
