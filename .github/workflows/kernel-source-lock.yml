@@ -103,7 +103,7 @@ jobs:
           git -C upstream-kernel fetch --quiet --depth=1 --filter=blob:none origin "$SOURCE_COMMIT"
           test "$(git -C upstream-kernel rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
           git -C upstream-kernel checkout --quiet --detach "$SOURCE_COMMIT"
-          test -C upstream-kernel/.git
+          test -d upstream-kernel/.git
           test "$(git -C upstream-kernel rev-parse HEAD)" = "$SOURCE_COMMIT"
 
       - name: Verify source version and profile-selected config material
