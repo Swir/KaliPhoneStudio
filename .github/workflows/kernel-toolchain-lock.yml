@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest
       - name: Run focused toolchain lock tests
         env:
           PYTHONPATH: ${{ github.workspace }}
