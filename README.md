@@ -10,7 +10,7 @@
 
 Progress is weighted toward real device bring-up, hardware validation, recovery and release readiness. Host-side CI/tests alone do not significantly raise this percentage.
 
-> Current status: **0.6.24-dev** — the host boot chain, exact-firmware authorization, profile-driven kernel evidence and structural DTB/DTBO evidence chains are in place. Device-tree verification is device-independent: profile policy decides whether in-boot DTB and separate DTBO are required, while the common core validates FDT/Android DT table structure, partition bounds and exact SHA-256/size equality with the approved boot plan. First-boot candidate schema v5 now binds those artifacts together with exact kernel, boot and rootfs evidence. This is **host-side provenance and preflight only**: it does not claim that the final kernel/DTB/DTBO candidate boots on a physical AC2003. The real ARM64 rootfs double-build is still not counted reproducible until its active workflow finishes successfully and its evidence is reviewed. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
+> Current status: **0.6.26-dev** — the host boot chain, exact-firmware authorization, profile-driven kernel/device-tree evidence and kernel reproducibility contracts are in place. First-boot candidate schema v6 binds the reproducible kernel evidence together with exact firmware, boot, DTB/DTBO and rootfs evidence. The real ARM64 rootfs workflow completed two independent builds but failed the strict byte-for-byte acceptance step, so `rootfs_reproducible_artifact` remains false. The new rootfs diagnostic layer records bounded member/content/metadata/order differences after such a failure without changing the strict gate or granting Beta credit. This remains **host-side provenance and preflight only**: no final kernel/DTB/DTBO candidate or Kali userspace has been proven on a physical AC2003. No public Beta is allowed until the physical device passes `BETA_RELEASE_GATE.md`.
 
 ## Architecture
 
@@ -55,11 +55,12 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Generated final `.config` evidence must satisfy every profile-required `CONFIG_*` state and is bound by SHA-256/size.
 - ARM64 kernel preflight verifies Linux `Image` magic, SHA-256 and size, then re-hashes the image when source/config/image evidence is bundled to prevent post-verification drift.
 - `KernelCandidateEvidence` binds plan, source commit/version, config evidence and exact `Image`; the first-boot candidate additionally requires that the kernel SHA-256/size equal the kernel input in the approved `BootBuildPlan`.
-- `tools/device-tree-format-locks.json` pins exact upstream FDT and Android DT table format references; the dedicated CI fetches those exact commits and verifies the expected authoritative format definitions are still present.
+- Kernel reproducibility evidence requires two independent build roots, revalidates both final `.config` and ARM64 `Image` outputs against the same profile-driven plan, and accepts evidence only when both pairs are byte-identical. Canonical evidence intentionally omits host paths and does not grant hardware credit.
+- `tools/device-tree-format-locks.json` pins exact upstream FDT and Android DT table format references; dedicated CI fetches those exact commits and verifies the expected authoritative format definitions are still present.
 - Device-independent DTB verification parses big-endian FDT v17 headers, validates block offsets/ranges/alignment, supports safe zero-padded concatenated DTB bundles and emits canonical SHA-256/size/tree-count evidence.
 - Device-independent DTBO verification parses the Android DT table header/entries, validates page/table metadata, non-overlapping payload ranges, every embedded FDT and zero-only padding, then enforces the selected profile's DTBO partition limit.
 - `DeviceTreeCandidateEvidence` rejects profile/plan drift and requires exact DTB/DTBO SHA-256 and size equality with the approved `BootBuildPlan`; `scripts/verify_device_tree_candidate.py` provides the same fail-closed flow offline without touching a phone.
-- First-boot candidate manifest schema v5 carries Fastboot baseline/exact firmware identity, temporary-boot authorization, boot-plan digest, exact kernel evidence, exact structural DTB/DTBO evidence and rootfs/package evidence in one canonical host-side contract.
+- First-boot candidate manifest schema v6 carries Fastboot baseline/exact firmware identity, temporary-boot authorization, boot-plan digest, reproducible kernel evidence, exact structural DTB/DTBO evidence and rootfs/package evidence in one canonical host-side contract.
 - Versioned `tools/extractor-locks.json` contract pinning extractor source, exact Go toolchain and deterministic build command.
 - Dedicated extractor reproducibility CI builds the exact pinned source twice on Linux amd64 and Windows amd64 and emits SHA-256 evidence only after byte-for-byte equality.
 - Linux amd64 and Windows amd64 extractor reproducibility passed in GitHub Actions run `35018283145`.
@@ -70,7 +71,8 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Rootfs evidence requires two independent byte-identical tar.xz builds and derives a normalized package/version/architecture manifest directly from the archive's single safe `var/lib/dpkg/status` location, accepting the pinned builder's one-top-level-directory layout while rejecting traversal, deeper suffix tricks and ambiguous duplicates.
 - Rootfs build execution performs a fail-closed host preflight requiring `qemu-aarch64-static`, rejecting a competing dynamic `qemu-aarch64`, preventing the pinned upstream dependency helper from replacing the static emulator, and revalidating the signed HTTPS `InRelease` state immediately before each build.
 - The reviewed Kali archive keyring used for snapshot verification is carried into the rootfs job so debootstrap can validate Kali repository signatures itself.
-- `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and executes two real pinned ARM64 builds on relevant `main` pushes; the result is fail-closed if bytes or package evidence diverge.
+- `.github/workflows/rootfs-repro.yml` performs signed-snapshot validation on PRs and executes two real pinned ARM64 builds on relevant `main` pushes; strict acceptance still requires byte-identical archives and package evidence.
+- Failed strict rootfs comparisons now trigger a bounded, safe `tar.xz` diagnostic report that compares canonical member sets, order, metadata and streamed regular-file SHA-256 values. The report is non-release evidence with `beta_gate_credit=false`; it is uploaded only to explain a failure, after which the workflow still fails.
 - Device-independent deterministic rescue-initramfs construction normalizes uid/gid/mtime and entry ordering, builds twice, requires byte equality, emits canonical SHA-256 evidence, and rejects setuid/setgid, world-writable regular files, special files and unsafe paths.
 - Rescue initramfs supports deterministic LZ4 legacy framing for profiles whose boot policy requires `lz4`. The implementation is pinned to reviewed AOSP/LZ4 format references in `tools/ramdisk-format-locks.json`, uses bounded 8 MiB legacy blocks and independently decodes the resulting stream before acceptance.
 - Source-locked ARM64 rescue payload contract pins BusyBox 1.38.0 source URL/SHA-256, reviewed local miniconfig and `/init` hashes, ARM64 static-ELF policy, required rescue applets and forbidden remote-access applets.
@@ -80,7 +82,7 @@ The avicii engineering board baseline is pinned to LineageOS `android_device_one
 - Verified rescue-initramfs evidence can bind to a boot plan only when exact ramdisk bytes, size, compression policy and plan digest agree. This host-side binding is not a physical rescue claim.
 - CI targets Python **3.11, 3.12, 3.13 and 3.14**.
 
-The rootfs CI pipeline is **not** proof that a reproducible KaliPhoneStudio rootfs artifact already exists. `rootfs_reproducible_artifact` remains false until the active real double-build run passes and its evidence is reviewed.
+The latest real ARM64 rootfs double-build completed both builds but failed the strict reproducibility verifier. `rootfs_reproducible_artifact` therefore remains **false**. Rootfs diagnostics may identify whether divergence is container-only, metadata, ordering or file-content related, but they never substitute for byte-for-byte acceptance.
 
 ## Safety model
 
@@ -98,7 +100,13 @@ python main.py
 python -m pytest -q
 ```
 
-`rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, independent builds second, canonical evidence only after equality.
+`rootfs-repro` separates source/repository trust from artifact reproducibility: exact source commit + GPG-verified repository snapshot first, independent builds second, canonical evidence only after equality. When strict comparison fails, the CI emits a bounded diagnostic artifact and then remains failed.
+
+Offline rootfs divergence diagnostics can also be generated explicitly without changing release acceptance:
+
+```powershell
+python scripts/diagnose_rootfs_repro.py --archive-a build/rootfs-a.tar.xz --archive-b build/rootfs-b.tar.xz --out evidence/rootfs-repro-diagnostic.json
+```
 
 A rescue artifact can be built with its profile-driven compression policy without touching a phone. The release-oriented rescue path should use the locked reproducibility workflow rather than an arbitrary local BusyBox binary; the lower-level initramfs builder remains useful for development fixtures:
 
