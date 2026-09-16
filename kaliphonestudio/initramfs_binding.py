@@ -15,6 +15,7 @@ from .initramfs import InitramfsEvidence, InitramfsError, verify_initramfs_artif
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _INITRAMFS_COMPRESSION_TO_BOOT_POLICY = {
     "gzip-mtime0-level9": "gzip",
+    "lz4-legacy-literal-v1": "lz4",
 }
 
 
