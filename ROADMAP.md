@@ -51,7 +51,8 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Require two independent byte-identical final kernel `.config` and ARM64 `Image` builds before kernel reproducibility evidence is accepted
 - [x] Pin the Android Clang kernel compiler to an immutable AOSP commit/subtree/object set and verify it against live Gitiles metadata
 - [x] Bind the kernel plan to the exact checkout build configuration selecting the locked Clang revision; reject toolchain/path drift fail-closed
-- [x] Carry kernel provenance, reproducibility and exact Image evidence into schema-v6 first-boot candidate manifests
+- [x] Define canonical compiler candidate evidence that requires immutable source evidence, exact kernel-plan/build-config selection and verified materialized clang bytes/banner to agree on one toolchain lock
+- [x] Carry compiler source/selection/materialized-byte evidence together with kernel provenance/reproducibility into schema-v7 first-boot candidate manifests
 - [x] Pin exact upstream FDT and Android DT table format references
 - [x] Device-independent structural DTB/DTBO validation with bounded parsing, partition limits and exact boot-plan SHA-256/size binding
 - [x] Carry DTB/DTBO evidence and format-lock digest into first-boot candidate manifests
@@ -67,7 +68,7 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Verify Kali `InRelease` with `gpgv` and capture exact ARM64 package-index paths/sizes/SHA-256 values
 - [x] Extract a normalized installed package/version/architecture manifest directly from each rootfs archive
 - [x] Provide a host CLI to verify byte-identical independent rootfs builds and emit canonical evidence
-- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact kernel/device-tree evidence and package manifest into a canonical first-boot candidate manifest contract
+- [x] Bind verified rootfs evidence, firmware-baseline-bound temporary-boot authorization, exact kernel/compiler/device-tree evidence and package manifest into a canonical first-boot candidate manifest contract
 - [x] Add real CI pipeline that prepares two independent exact-source ARM64 rootfs builds and fails closed on byte/package divergence
 - [x] Harden the real rootfs runner after the first main run exposed Ubuntu replacing `qemu-user-static`; require static ARM64 emulation, bind each build to the signed snapshot and install the reviewed Kali keyring for debootstrap
 - [x] Add bounded canonical rootfs divergence diagnostics for strict CI failures; compare member sets/order/metadata/content hashes without extraction, mark the report `beta_gate_credit=false`, and keep the strict job failed
@@ -111,15 +112,17 @@ This percentage is deliberately weighted toward real-device boot, hardware valid
 - [x] Host-side exact kernel checkout/config/Image evidence and boot-plan binding implemented
 - [x] Host-side kernel reproducibility evidence contract implemented; no concrete final hardware kernel is credited yet
 - [x] AOSP Android Clang `r416183b` source identity locked to exact commit/tree/blob metadata and bound to the kernel checkout's declared compiler path
+- [x] Host-side compiler evidence bundle requires source lock, build-config selection and materialized clang SHA-256/banner before a first-boot candidate can be emitted
 - [x] Host-side DTB/DTBO structural evidence, exact boot-plan binding and partition-bound checks implemented
-- [ ] Produce and review a concrete double-build kernel artifact using the locked toolchain
+- [ ] Materialize and review the exact locked compiler payload used for a concrete kernel build
+- [ ] Produce and review a concrete double-build kernel artifact using that locked compiler
 - [ ] Capture exact user's OxygenOS fingerprint/build
 - [ ] Capture user's `fastboot getvar all`
 - [ ] Obtain matching stock `boot.img` from exact OTA
 - [ ] Validate parser/repacker against that exact stock image
 - [ ] Pin final first-boot kernel commit after exact-firmware/hardware review
 - [ ] Build final kernel + DTB/DTBO candidate from pinned sources
-- [ ] Bind concrete final kernel/DTB/DTBO artifacts into the exact first-boot candidate
+- [ ] Bind concrete final kernel/DTB/DTBO/compiler artifacts into the exact first-boot candidate
 - [ ] Temporary `fastboot boot` on physical AC2003
 - [ ] Capture early kernel/rescue logs
 
