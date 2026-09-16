@@ -1,4 +1,4 @@
-"""Host-side first-boot candidate manifest binding boot, kernel, device-tree and Kali userspace evidence."""
+"""Host-side first-boot candidate manifest binding boot, kernel, compiler, device-tree and Kali userspace evidence."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -12,6 +12,7 @@ from .boot_builder import BootBuildPlan
 from .device_tree import DeviceTreeCandidateEvidence
 from .kernel_bundle import KernelCandidateEvidence
 from .kernel_repro import KernelReproducibilityEvidence
+from .kernel_toolchain_bundle import KernelToolchainCandidateEvidence
 from .rootfs import (
     RepositorySnapshotEvidence,
     RootfsArtifactEvidence,
@@ -46,6 +47,15 @@ class FirstBootCandidateManifest:
     kernel_reproducibility_evidence_sha256: str
     kernel_reproducible: bool
     kernel_distinct_build_roots_verified: bool
+    kernel_toolchain_evidence_sha256: str
+    kernel_toolchain_lock_sha256: str
+    kernel_toolchain_source_evidence_sha256: str
+    kernel_toolchain_binding_evidence_sha256: str
+    kernel_toolchain_materialized_evidence_sha256: str
+    kernel_clang_revision: str
+    kernel_clang_sha256: str
+    kernel_clang_size: int
+    kernel_build_config_sha256: str
     device_tree_evidence_sha256: str
     device_tree_format_lock_sha256: str
     dtb_sha256: str | None
@@ -124,6 +134,37 @@ def _verify_kernel_reproducibility_binding(
         raise RootfsError("kernel reproducibility evidence digest is invalid")
 
 
+def _verify_kernel_toolchain_binding(
+    kernel: KernelCandidateEvidence,
+    toolchain: KernelToolchainCandidateEvidence,
+) -> None:
+    if toolchain.schema_version != 1:
+        raise RootfsError("unsupported kernel toolchain candidate evidence schema")
+    if toolchain.profile_id != kernel.profile_id:
+        raise RootfsError("kernel toolchain evidence profile does not match kernel candidate")
+    if toolchain.kernel_plan_sha256 != kernel.kernel_plan_sha256:
+        raise RootfsError("kernel toolchain evidence does not match kernel plan digest")
+    if toolchain.kernel_source_commit != kernel.source_commit:
+        raise RootfsError("kernel toolchain evidence source commit drifted")
+    if toolchain.beta_gate_credit is not False:
+        raise RootfsError("host kernel toolchain evidence cannot claim hardware Beta credit")
+    for value, label in (
+        (toolchain.evidence_sha256(), "kernel toolchain evidence SHA-256"),
+        (toolchain.toolchain_lock_sha256, "kernel toolchain lock SHA-256"),
+        (toolchain.source_evidence_sha256, "kernel toolchain source evidence SHA-256"),
+        (toolchain.binding_evidence_sha256, "kernel toolchain binding evidence SHA-256"),
+        (toolchain.materialized_evidence_sha256, "materialized kernel toolchain evidence SHA-256"),
+        (toolchain.clang_sha256, "kernel clang SHA-256"),
+        (toolchain.build_config_sha256, "kernel build config SHA-256"),
+    ):
+        if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
+            raise RootfsError(f"kernel toolchain candidate contains invalid {label}")
+    if not isinstance(toolchain.clang_size, int) or isinstance(toolchain.clang_size, bool) or toolchain.clang_size <= 0:
+        raise RootfsError("kernel toolchain candidate contains invalid clang size")
+    if not isinstance(toolchain.clang_revision, str) or not toolchain.clang_revision.strip():
+        raise RootfsError("kernel toolchain candidate contains invalid clang revision")
+
+
 def _verify_device_tree_binding(plan: BootBuildPlan, evidence: DeviceTreeCandidateEvidence) -> None:
     if evidence.schema_version != 1:
         raise RootfsError("unsupported device-tree candidate evidence schema")
@@ -176,10 +217,11 @@ def create_first_boot_candidate_manifest(
     rootfs_evidence: RootfsArtifactEvidence,
     *,
     kernel_reproducibility_evidence: KernelReproducibilityEvidence,
+    kernel_toolchain_evidence: KernelToolchainCandidateEvidence,
     device_tree_evidence: DeviceTreeCandidateEvidence,
     rootfs_artifact: Path,
 ) -> FirstBootCandidateManifest:
-    """Bind verified boot, reproducible kernel, DTB/DTBO and rootfs evidence.
+    """Bind verified boot, reproducible kernel+compiler, DTB/DTBO and rootfs evidence.
 
     The result is host-side evidence only. It is deliberately not hardware-success
     evidence and does not execute fastboot or write any phone partition.
@@ -227,6 +269,7 @@ def create_first_boot_candidate_manifest(
         raise RootfsError("verified kernel evidence does not match the kernel embedded in the boot plan")
 
     _verify_kernel_reproducibility_binding(kernel_evidence, kernel_reproducibility_evidence)
+    _verify_kernel_toolchain_binding(kernel_evidence, kernel_toolchain_evidence)
     _verify_device_tree_binding(boot_plan, device_tree_evidence)
 
     verify_rootfs_artifact(
@@ -236,7 +279,7 @@ def create_first_boot_candidate_manifest(
         artifact=rootfs_artifact,
     )
     return FirstBootCandidateManifest(
-        schema_version=6,
+        schema_version=7,
         profile_id=boot.profile_id,
         device_serial=boot.device_serial,
         fastboot_baseline_sha256=boot.fastboot_baseline_sha256,
@@ -256,6 +299,15 @@ def create_first_boot_candidate_manifest(
         kernel_reproducibility_evidence_sha256=kernel_reproducibility_evidence.evidence_sha256(),
         kernel_reproducible=True,
         kernel_distinct_build_roots_verified=True,
+        kernel_toolchain_evidence_sha256=kernel_toolchain_evidence.evidence_sha256(),
+        kernel_toolchain_lock_sha256=kernel_toolchain_evidence.toolchain_lock_sha256,
+        kernel_toolchain_source_evidence_sha256=kernel_toolchain_evidence.source_evidence_sha256,
+        kernel_toolchain_binding_evidence_sha256=kernel_toolchain_evidence.binding_evidence_sha256,
+        kernel_toolchain_materialized_evidence_sha256=kernel_toolchain_evidence.materialized_evidence_sha256,
+        kernel_clang_revision=kernel_toolchain_evidence.clang_revision,
+        kernel_clang_sha256=kernel_toolchain_evidence.clang_sha256,
+        kernel_clang_size=kernel_toolchain_evidence.clang_size,
+        kernel_build_config_sha256=kernel_toolchain_evidence.build_config_sha256,
         device_tree_evidence_sha256=device_tree_evidence.evidence_sha256(),
         device_tree_format_lock_sha256=device_tree_evidence.format_lock_sha256,
         dtb_sha256=device_tree_evidence.dtb_sha256,
