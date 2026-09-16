@@ -2,6 +2,17 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.33-dev — rootfs volatile-state canonicalization and kernel path remapping
+
+- Reviewed the latest real Kali ARM64 A/B failure instead of guessing: both builds had identical normalized 269-package manifests, no type/order/add/remove drift, exactly five changed payload files and 4817 metadata differences, all mtime-only.
+- Added a device-independent, no-extraction rootfs canonicalization stage that normalizes archive mtimes, clears `etc/machine-id`, D-Bus machine-id and fake-clock state, locks generated password hashes without introducing a shared deterministic password, and omits only the regenerable `ldconfig` auxiliary cache.
+- The canonicalizer validates safe archive paths/layout, rejects duplicate/ambiguous members, preserves unrelated payloads and PAX security/xattr metadata, and emits per-build audit evidence with `beta_gate_credit=false`.
+- Strict rootfs acceptance is unchanged: post-canonicalization A/B archives must still be byte-identical and their normalized installed-package evidence must match.
+- Reviewed real kernel run `35151043468`: both exact-source builds used the same locked compiler/recipe and produced identical final `.config` plus equal-size ARM64 `Image` files, but the Image bytes differed.
+- The pinned defconfig enables `CONFIG_DEBUG_INFO`; the exact-source runner now maps independent A/B source/output paths to fixed virtual roots with Clang `-fdebug-prefix-map`, `-fmacro-prefix-map` and `KBUILD_ABS_SRCTREE=0`, with the remap policy bound into reproducibility-environment evidence.
+- Added focused regression tests for both rootfs canonicalization and kernel path remapping. PR #31 passed the full Python 3.11/3.12/3.13/3.14 matrix plus rootfs/kernel contract workflows before merge as `6f02c69b13ad8a156bc95d66a6374dd6eb64c972`.
+- Real post-merge A/B kernel/rootfs runs remain authoritative for artifact acceptance. Project completion stays at 52% and no physical AC2003/Beta gate is credited.
+
 ## 0.6.32-dev — actionable rootfs divergence diagnostics
 
 - Upgraded non-release rootfs divergence diagnostics to schema v2 after the real A/B rootfs run exposed a small number of payload changes mixed with thousands of metadata differences.

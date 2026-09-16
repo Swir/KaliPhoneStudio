@@ -10,7 +10,7 @@
 
 Progress is deliberately weighted toward **real device bring-up, hardware validation, recovery and release readiness**. Host-side CI and safety infrastructure are required, but they do not substitute for physical evidence.
 
-> Current development line: **0.6.32-dev**. The host-side boot/provenance chain, exact-source kernel pipeline, locked Android Clang toolchain, DTB/DTBO verification, deterministic rescue path and strict Kali ARM64 rootfs reproducibility gate are implemented. The profile-required kernel config is now applied deterministically before builds, including LZ4 initramfs support for `oneplus/avicii`. Rootfs divergence diagnostics now prioritize real payload changes over timestamp noise and compare normalized installed-package manifests. **No concrete kernel/rootfs artifact or AC2003 hardware feature is accepted for Beta until its strict evidence gate passes.**
+> Current development line: **0.6.33-dev**. The host-side boot/provenance chain, exact-source kernel pipeline, locked Android Clang toolchain, DTB/DTBO verification, deterministic rescue path and strict Kali ARM64 rootfs reproducibility gate are implemented. The profile-required kernel config is applied deterministically before builds, and independent kernel source/output roots are compiler-prefix-mapped to fixed virtual roots to remove host-path identity from reproducibility-sensitive output. Rootfs builds now pass through a narrowly reviewed canonicalization stage that removes only the volatile state proven by real A/B diagnostics while keeping strict byte-for-byte plus package-manifest equality as the acceptance rule. **No concrete kernel/rootfs artifact or AC2003 hardware feature is accepted for Beta until its strict evidence gate passes.**
 
 ## Architecture
 
@@ -50,9 +50,12 @@ The avicii board baseline is pinned to LineageOS `android_device_oneplus_avicii`
 - Android Clang `clang-r416183b` toolchain source/object lock plus materialized compiler SHA-256/banner verification.
 - Canonical per-run kernel build evidence and strict A/B reproducibility binding.
 - Deterministic required-kernel-config application before build, followed by fail-closed final `.config` verification.
+- Compiler `-fdebug-prefix-map` / `-fmacro-prefix-map` plus `KBUILD_ABS_SRCTREE=0` map independent A/B source/output roots to fixed virtual roots; the policy is bound into reproducibility-environment evidence.
 - `oneplus/avicii` requires `CONFIG_RD_LZ4=y`; engineering module signing is disabled in the reproducibility-sensitive build policy.
 - Source-locked FDT/Android DT table format references and structural DTB/DTBO verification bound to the approved boot plan.
 - First-boot candidate schema v8 binds exact firmware, boot plan, kernel execution provenance, compiler evidence, DTB/DTBO evidence and rootfs evidence without claiming hardware success.
+
+The latest reviewed pre-fix real kernel A/B run completed both exact-source builds with the same toolchain, recipe, final `.config` SHA-256 and `Image` size, but different `Image` bytes. Therefore kernel reproducibility remains **unaccepted** until the post-fix real A/B run passes strict equality and its evidence is reviewed.
 
 ### Kali ARM64 rootfs
 
@@ -62,7 +65,9 @@ The avicii board baseline is pinned to LineageOS `android_device_oneplus_avicii`
 - Real A/B builds are bound to one verified rolling-repository start state.
 - Failed strict comparisons generate non-release diagnostic evidence only; acceptance criteria are never relaxed.
 - Diagnostic schema v2 prioritizes type/content/add/remove/order differences before metadata noise, counts metadata fields/mtime-only drift, records omitted difference classes and compares normalized installed-package manifests.
-- The most recent reviewed failed A/B run exposed **5 content changes and 5050 metadata changes**. Therefore `rootfs_reproducible_artifact` remains **false**.
+- The latest reviewed pre-fix A/B run had identical 269-package manifests, identical member type/order/add/remove structure, **5 changed payload files** and **4817 mtime-only metadata differences**.
+- A device-independent canonicalization stage now normalizes archive mtimes, clears `machine-id`/D-Bus machine-id/fake-clock state, locks generated password hashes without introducing a shared password, and omits only the regenerable `ldconfig` auxiliary cache. All other regular-file payloads are preserved and the transformation emits non-release audit evidence.
+- `rootfs_reproducible_artifact` remains **false** until a real post-fix A/B build is byte-identical and its strict evidence is reviewed.
 
 ### Rescue / recovery foundations
 
@@ -79,6 +84,8 @@ Primary Python test matrix:
 - Python 3.12
 - Python 3.13
 - Python 3.14
+
+PR #31 passed the full Python matrix plus focused rootfs and kernel reproducibility contract checks before merge. Post-merge real A/B kernel/rootfs jobs are authoritative for artifact acceptance; host contract success alone grants no reproducibility or hardware credit.
 
 See [`BUILD_STATUS.json`](BUILD_STATUS.json) for the current run IDs and evidence state, and [`ROADMAP.md`](ROADMAP.md) for milestone status.
 
