@@ -109,8 +109,13 @@ jobs:
               LDFLAGS="$LOCKED_LDFLAGS" \
                 make -j2 CROSS_COMPILE="$CROSS_COMPILE" "$MAKE_TARGET"
             )
+            # Execute the source-tree binary while its basename is still exactly
+            # "busybox".  Renaming a BusyBox multicall binary to busybox-a/b
+            # changes argv[0] dispatch semantics and can be interpreted as an
+            # applet invocation under QEMU.
+            qemu-aarch64-static "build/$pass/busybox" --list | LC_ALL=C sort -u > "build/applets-$pass.txt"
+            test -s "build/applets-$pass.txt"
             cp "build/$pass/busybox" "build/busybox-$pass"
-            qemu-aarch64-static -0 busybox "build/busybox-$pass" --list | LC_ALL=C sort -u > "build/applets-$pass.txt"
           done
           cmp build/busybox-a build/busybox-b
           cmp build/applets-a.txt build/applets-b.txt
