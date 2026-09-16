@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.19-dev — ARM64 rootfs CI host repair and snapshot drift guards
+
+- Diagnosed the first real post-merge ARM64 rootfs reproducibility run (`35090859764`) instead of treating the signed-snapshot job as artifact success. Build A failed during debootstrap second stage with exit 127 after the pinned upstream builder replaced `qemu-user-static` with `qemu-user`/`qemu-user-binfmt`; `/debootstrap/debootstrap` could no longer execute inside the ARM64 chroot.
+- Added a fail-closed host preflight for the `qemu-aarch64` binfmt handler, including the `F`/fix-binary flag required for reliable chroot execution, and checks for all required host commands before the expensive build starts.
+- The reproducibility workflow now installs `qemu-user` and `qemu-user-binfmt` up front, refreshes the ARM64 binfmt registration, and fails early with explicit diagnostics rather than allowing the upstream dependency checker to mutate the QEMU runtime mid-build.
+- The exact GPG-verified Kali archive keyring captured with the repository snapshot is installed as `/usr/share/keyrings/kali-archive-keyring.gpg`; host preflight confirms it contains the locked fingerprint before debootstrap starts.
+- Added signed repository drift guards immediately before and after each independent rootfs build. The workflow re-downloads `InRelease`, verifies it with the locked keyring, reconstructs canonical repository snapshot evidence and requires byte-identical snapshot evidence throughout the two-build window.
+- The real two-build job now runs on relevant pull requests as well as `main`, so a rootfs execution repair must prove itself before merge instead of being deferred to a post-merge surprise.
+- Added focused tests for enabled/fixed ARM64 binfmt parsing, disabled/non-fixed rejection and archive-key fingerprint binding.
+- Project completion remains 49%. A reproducible ARM64 rootfs artifact is still **not** claimed until the repaired real double-build completes successfully and its evidence is reviewed; no AC2003 hardware gate is credited.
+
 ## 0.6.18-dev — signed repository snapshots and real ARM64 rootfs reproducibility CI
 
 - Upgraded the common rootfs lock to schema v2, switched the Kali mirror to HTTPS, and pinned the Kali archive signing fingerprint `827C8569F2518CC677FECA1AED65462EC8D5E4C5` alongside the exact NetHunter rootfs source commit.
