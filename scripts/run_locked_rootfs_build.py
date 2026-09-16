@@ -17,6 +17,10 @@ from kaliphonestudio.rootfs import (  # noqa: E402
     load_rootfs_source_lock,
     package_manifest_from_rootfs,
 )
+from kaliphonestudio.rootfs_canonical import (  # noqa: E402
+    canonicalize_rootfs_archive,
+    write_canonicalization_evidence,
+)
 from scripts.verify_live_kali_snapshot import verify_captured_inrelease  # noqa: E402
 
 _DEP_CHECK_MARKER = "KaliPhoneStudio: host dependencies preflighted; preserve qemu-user-static\n"
@@ -66,8 +70,6 @@ def _prepare_host_environment(checkout: Path) -> Path:
         if not Path(value).resolve().is_file():
             raise RootfsError(f"rootfs host tool is not a regular file: {tool}")
 
-    # A dynamic qemu-aarch64 can take precedence in the pinned upstream helper.
-    # Refuse that ambiguous state instead of falling back from qemu-aarch64-static.
     dynamic_qemu = shutil.which("qemu-aarch64")
     if dynamic_qemu:
         raise RootfsError(
@@ -112,6 +114,11 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--checkout", type=Path, required=True)
     result.add_argument("--out", type=Path, required=True)
+    result.add_argument(
+        "--canonicalization-evidence",
+        type=Path,
+        help="optional path for non-release canonicalization audit evidence",
+    )
     result.add_argument("--sudo", action="store_true", help="prefix the locked builder argv with sudo --")
     result.add_argument("--timeout", type=int, default=5400)
     return result
@@ -132,7 +139,7 @@ def main() -> int:
         raise RootfsError("locked rootfs builder entrypoint is missing")
 
     # The live mirror is checked once for the whole A/B pair immediately before both
-    # builders start.  Per-builder validation is deliberately local so an upstream
+    # builders start. Per-builder validation is deliberately local so an upstream
     # rolling-repository update during build A cannot prevent build B from running.
     # Strict byte/package equality remains mandatory after both builds complete.
     verify_captured_inrelease(lock, args.snapshot, args.inrelease)
@@ -157,13 +164,29 @@ def main() -> int:
         except OSError:
             pass
 
-    artifact = _find_rootfs_artifact(checkout, lock.architecture)
-    _, package_count = package_manifest_from_rootfs(artifact)
-    args.out.parent.mkdir(parents=True, exist_ok=True)
+    source_artifact = _find_rootfs_artifact(checkout, lock.architecture)
     if args.out.exists():
         raise RootfsError("refusing to overwrite an existing rootfs output artifact")
-    shutil.copyfile(artifact, args.out)
-    print(f"source_artifact={artifact}")
+
+    # Do not compare/publish raw builder-local identity and wall-clock state. The
+    # canonicalizer is intentionally narrow: it normalizes tar mtimes, clears
+    # machine identity/fake-clock state, locks generated password hashes and drops
+    # only ldconfig's regenerable aux-cache. All package payloads remain untouched.
+    canonical = canonicalize_rootfs_archive(source_artifact, args.out)
+    _, package_count = package_manifest_from_rootfs(args.out)
+    if args.canonicalization_evidence is not None:
+        evidence_digest = write_canonicalization_evidence(
+            canonical, args.canonicalization_evidence
+        )
+        print(f"canonicalization_evidence_sha256={evidence_digest}")
+
+    print(f"source_artifact={source_artifact}")
+    print(f"source_artifact_sha256={canonical.input_sha256}")
+    print(f"canonical_artifact_sha256={canonical.output_sha256}")
+    print(f"normalized_mtime_count={canonical.normalized_mtime_count}")
+    print(f"zeroed_volatile_files={canonical.zeroed_volatile_files}")
+    print(f"locked_password_entries={canonical.locked_password_entries}")
+    print(f"dropped_cache_entries={canonical.dropped_cache_entries}")
     print(f"package_count={package_count}")
     print(f"published_artifact={args.out}")
     return 0
