@@ -2,6 +2,18 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.61-dev — fail-closed physical hardware survey manual review
+
+- Added `kaliphonestudio.physical_hardware_review` as a schema-v1 offline manual-review layer for one exact bounded `PhysicalHardwareSurveyEvidence` record.
+- Bound the exact hardware survey, physical boot/rescue/transcript/probe identity, canonical review-record bytes and separate UTF-8 review-notes bytes by SHA-256 and size.
+- Context acceptance requires a non-empty recorded survey plus explicit review of physical context, survey integrity, USB presence, network/radio presence, audio presence, input/display presence, thermal/power presence and the limitation that sysfs presence is not functionality.
+- Added a rejected-by-default template generator, `scripts/prepare_physical_hardware_review.py`, and the offline binder `scripts/review_physical_hardware_survey.py`; neither command performs phone I/O.
+- `accepted_as_context=true` means only that the exact survey may be used as contextual input for later subsystem-specific physical functional tests. It never promotes display/touch/USB/Wi-Fi/Bluetooth/audio/modem/power/thermal/storage/recovery/hardware verification or Beta credit.
+- Added fail-closed tests covering contextual acceptance, incomplete/empty survey rejection, identity drift, canonical JSON, exact file binding, safe template defaults and forbidden functional/Beta promotion.
+- Extended `rescue-readonly-diagnostics` CI to compile and test the manual survey-review contract together with the existing rescue observation/diagnostic/survey layers.
+- Added `docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md` and synchronized README/ROADMAP/BUILD_STATUS with SWIR README PRO v2 while keeping all release and compatibility claims unchanged.
+- Project completion remains **58%** because no real AC2003 survey has been captured/reviewed and no subsystem has passed a physical functional test.
+
 ## 0.6.60-dev — bounded physical hardware-presence survey
 
 - Added a separate `readonly-hardware-presence-v1` block to rescue userspace after the existing locked rescue diagnostic block.
