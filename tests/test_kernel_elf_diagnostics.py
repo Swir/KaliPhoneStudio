@@ -17,7 +17,16 @@ def _align(value: int, alignment: int = 8) -> int:
     return (value + alignment - 1) // alignment * alignment
 
 
-def _write_elf(path: Path, sections: list[tuple[str, int, bytes]]) -> None:
+def _write_elf(
+    path: Path,
+    sections: list[tuple[str, int, bytes]],
+    *,
+    elf_class: int = 64,
+    machine: int | None = None,
+) -> None:
+    if elf_class not in {32, 64}:
+        raise ValueError("test ELF class must be 32 or 64")
+    machine = (183 if elf_class == 64 else 40) if machine is None else machine
     names = b"\0"
     offsets_by_name: dict[str, int] = {"": 0}
     for name, _flags, _payload in sections + [(".shstrtab", 0, b"")]:
@@ -26,7 +35,9 @@ def _write_elf(path: Path, sections: list[tuple[str, int, bytes]]) -> None:
             names += name.encode() + b"\0"
     payloads = [(name, flags, data, 1) for name, flags, data in sections]
     payloads.append((".shstrtab", 0, names, 3))
-    cursor = 64
+    ehdr_size = 64 if elf_class == 64 else 52
+    shdr_size = 64 if elf_class == 64 else 40
+    cursor = ehdr_size
     body = bytearray()
     offsets: list[int] = []
     for _name, _flags, data, _stype in payloads:
@@ -40,23 +51,35 @@ def _write_elf(path: Path, sections: list[tuple[str, int, bytes]]) -> None:
     body.extend(b"\0" * (shoff - cursor))
     shnum = 1 + len(payloads)
     shstrndx = shnum - 1
-    headers = bytearray(64)
+    headers = bytearray(shdr_size)
     for (name, flags, data, stype), offset in zip(payloads, offsets):
-        headers.extend(struct.pack(
-            "<IIQQQQIIQQ", offsets_by_name[name], stype, flags, 0,
-            offset, len(data), 0, 0, 1, 0,
-        ))
+        if elf_class == 64:
+            headers.extend(struct.pack(
+                "<IIQQQQIIQQ", offsets_by_name[name], stype, flags, 0,
+                offset, len(data), 0, 0, 1, 0,
+            ))
+        else:
+            headers.extend(struct.pack(
+                "<IIIIIIIIII", offsets_by_name[name], stype, flags, 0,
+                offset, len(data), 0, 0, 1, 0,
+            ))
     ident = bytearray(16)
     ident[:4] = b"\x7fELF"
-    ident[4] = 2
+    ident[4] = 2 if elf_class == 64 else 1
     ident[5] = 1
     ident[6] = 1
-    header = bytes(ident) + struct.pack(
-        "<HHIQQQIHHHHHH", 1, 183, 1, 0, 0, shoff, 0,
-        64, 0, 0, 64, shnum, shstrndx,
-    )
+    if elf_class == 64:
+        rest = struct.pack(
+            "<HHIQQQIHHHHHH", 1, machine, 1, 0, 0, shoff, 0,
+            64, 0, 0, 64, shnum, shstrndx,
+        )
+    else:
+        rest = struct.pack(
+            "<HHIIIIIHHHHHH", 1, machine, 1, 0, 0, shoff, 0,
+            52, 0, 0, 40, shnum, shstrndx,
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(header + body + headers)
+    path.write_bytes(bytes(ident) + rest + body + headers)
 
 
 def _tree(path: Path, relative: str, kind: str = "content_mismatch") -> None:
@@ -84,12 +107,18 @@ def test_non_elf_returns_none(tmp_path: Path) -> None:
 
 def test_wrong_machine_fails_closed(tmp_path: Path) -> None:
     item = tmp_path / "x.o"
-    _write_elf(item, [(".text", 0x6, b"x")])
-    data = bytearray(item.read_bytes())
-    struct.pack_into("<H", data, 18, 62)
-    item.write_bytes(data)
-    with pytest.raises(KernelElfDiagnosticError, match="not AArch64"):
+    _write_elf(item, [(".text", 0x6, b"x")], machine=62)
+    with pytest.raises(KernelElfDiagnosticError, match="not ARM/AArch64"):
         fingerprint_elf_sections(item)
+
+
+def test_arm32_compat_vdso_sections_are_supported(tmp_path: Path) -> None:
+    item = tmp_path / "arch/arm64/kernel/vdso32/vgettimeofday.o"
+    _write_elf(item, [(".text", 0x6, b"ARM32"), (".debug_info", 0, b"dbg")], elf_class=32)
+    sections = fingerprint_elf_sections(item)
+    assert sections is not None
+    assert any(section.name == ".text" and section.category == "executable" for section in sections)
+    assert any(section.name == ".debug_info" and section.category == "debug" for section in sections)
 
 
 def test_debug_only_difference_is_classified(tmp_path: Path) -> None:
@@ -107,6 +136,19 @@ def test_debug_only_difference_is_classified(tmp_path: Path) -> None:
     assert evidence.beta_gate_credit is False
     assert evidence.hardware_verified is False
     assert any(x.name == ".debug_info" for x in evidence.files[0].reported_section_differences)
+
+
+def test_arm32_debug_difference_is_classified_without_failure(tmp_path: Path) -> None:
+    a, b = tmp_path / "a", tmp_path / "b"
+    rel = "arch/arm64/kernel/vdso32/note.o"
+    _write_elf(a / rel, [(".text", 0x6, b"same"), (".debug_line", 0, b"A")], elf_class=32)
+    _write_elf(b / rel, [(".text", 0x6, b"same"), (".debug_line", 0, b"B")], elf_class=32)
+    tree = tmp_path / "tree.json"
+    _tree(tree, rel)
+    evidence = diagnose_kernel_elf_sections(a, b, tree)
+    assert evidence.parsed_elf_path_count == 1
+    assert evidence.debug_section_difference_count == 1
+    assert evidence.executable_section_difference_count == 0
 
 
 def test_executable_difference_is_counted(tmp_path: Path) -> None:
@@ -146,6 +188,16 @@ def test_non_elf_pair_is_diagnostic_not_failure(tmp_path: Path) -> None:
     evidence = diagnose_kernel_elf_sections(a, b, tree)
     assert evidence.non_elf_path_count == 1
     assert evidence.files[0].status == "non_elf"
+
+
+def test_host_scripts_objects_are_excluded_from_target_section_analysis(tmp_path: Path) -> None:
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir(); b.mkdir()
+    tree = tmp_path / "tree.json"
+    _tree(tree, "scripts/dtc/checks.o")
+    evidence = diagnose_kernel_elf_sections(a, b, tree)
+    assert evidence.candidate_path_count == 0
+    assert evidence.files == ()
 
 
 def test_path_traversal_fails_closed(tmp_path: Path) -> None:
