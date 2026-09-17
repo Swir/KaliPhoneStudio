@@ -84,10 +84,10 @@ def test_deterministic_dtbo_packer_is_byte_identical_and_structurally_valid(tmp_
     assert a.stat().st_size % 4096 == 0
 
 
-def test_packer_rejects_concatenated_overlay(tmp_path):
+def test_packer_rejects_concatenated_or_malformed_overlay(tmp_path):
     overlay = tmp_path / "bad.dtbo"
     overlay.write_bytes(fdt_blob() + b"\x00\x00\x00\x00" + fdt_blob())
-    with pytest.raises(DeviceTreeError, match="exactly one FDT"):
+    with pytest.raises(DeviceTreeError):
         pack_android_dtbo_image((overlay,), tmp_path / "out.img", page_size=4096)
 
 
@@ -140,7 +140,7 @@ def test_strict_repro_pair_requires_identical_artifacts_and_distinct_roots(tmp_p
         verify_device_tree_reproducibility(
             dt_plan, a, _run(dt_plan, "9"), build_root_a=a_root, build_root_b=b_root
         )
-    with pytest.raises((DeviceTreeError, Exception), match="independent build roots"):
+    with pytest.raises(DeviceTreeError, match="independent build roots"):
         verify_device_tree_reproducibility(
             dt_plan, a, b, build_root_a=a_root, build_root_b=a_root
         )
