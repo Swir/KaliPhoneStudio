@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Capture and validate a read-only physical Fastboot baseline for one exact serial.
+"""Capture a read-only physical Fastboot baseline with reviewed tool identity.
 
-Only ``fastboot devices`` and ``fastboot -s SERIAL getvar all`` are executed. The
-command never boots, reboots, flashes, erases, changes slots or writes phone
-storage. The resulting baseline is host evidence only and keeps
-``beta_gate_credit=false``.
+The helper first hashes and verifies the exact Fastboot executable against the
+reviewed Platform-Tools policy, then executes only ``fastboot devices`` and
+``fastboot -s SERIAL getvar all`` using that exact resolved binary. It never
+boots, reboots, flashes, erases, changes slots or writes phone storage.
 """
 from __future__ import annotations
 
@@ -27,6 +27,11 @@ from kaliphonestudio.fastboot_capture import (
     validate_capture_with_offline_parser,
     write_capture_once,
 )
+from kaliphonestudio.fastboot_tool import (
+    FastbootToolError,
+    inspect_fastboot_tool,
+    write_fastboot_tool_evidence,
+)
 from kaliphonestudio.profiles import get_profile
 
 
@@ -38,40 +43,63 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--firmware-build", required=True)
     p.add_argument("--firmware-fingerprint", required=True)
     p.add_argument("--fastboot", default="fastboot", help="fastboot executable or full path")
+    p.add_argument(
+        "--fastboot-policy",
+        type=Path,
+        default=ROOT / "tools" / "fastboot-tool-policy.json",
+        help="reviewed exact Platform-Tools policy",
+    )
+    p.add_argument("--tool-timeout", type=int, default=15)
     p.add_argument("--timeout", type=int, default=30)
     p.add_argument("--transcript-out", type=Path, required=True)
     p.add_argument("--evidence-out", type=Path, required=True)
+    p.add_argument("--tool-evidence-out", type=Path, required=True)
     return p
 
 
 def main() -> int:
     args = parser().parse_args()
-    if args.transcript_out == args.evidence_out:
-        raise SystemExit("transcript and evidence destinations must be different")
-    for path, label in ((args.transcript_out, "transcript"), (args.evidence_out, "evidence")):
+    destinations = (
+        (args.transcript_out, "transcript"),
+        (args.evidence_out, "baseline evidence"),
+        (args.tool_evidence_out, "Fastboot tool evidence"),
+    )
+    normalized = [str(path.resolve(strict=False)) for path, _label in destinations]
+    if len(set(normalized)) != len(normalized):
+        raise SystemExit("transcript, baseline evidence and tool evidence destinations must be different")
+    for path, label in destinations:
         if path.exists() or path.is_symlink():
             raise SystemExit(f"refusing to overwrite existing {label}: {path}")
 
     profile = get_profile(args.devices_root, args.profile_id)
     try:
+        tool_evidence, resolved_fastboot = inspect_fastboot_tool(
+            args.fastboot,
+            policy_path=args.fastboot_policy,
+            timeout_seconds=args.tool_timeout,
+        )
         payload = capture_fastboot_getvar_all(
             args.serial,
-            fastboot=args.fastboot,
+            fastboot=resolved_fastboot,
             timeout_seconds=args.timeout,
         )
         validate_capture_with_offline_parser(payload)
-    except FastbootCaptureError as exc:
+    except (FastbootCaptureError, FastbootToolError) as exc:
         raise SystemExit(str(exc)) from exc
 
     staged_transcript = args.transcript_out.with_name(args.transcript_out.name + ".capturing")
     staged_evidence = args.evidence_out.with_name(args.evidence_out.name + ".capturing")
-    if staged_transcript.exists() or staged_transcript.is_symlink():
-        raise SystemExit(f"refusing stale transcript staging path: {staged_transcript}")
-    if staged_evidence.exists() or staged_evidence.is_symlink():
-        raise SystemExit(f"refusing stale evidence staging path: {staged_evidence}")
+    staged_tool = args.tool_evidence_out.with_name(args.tool_evidence_out.name + ".capturing")
+    staged = (
+        (staged_transcript, "transcript"),
+        (staged_evidence, "baseline evidence"),
+        (staged_tool, "Fastboot tool evidence"),
+    )
+    for path, label in staged:
+        if path.exists() or path.is_symlink():
+            raise SystemExit(f"refusing stale {label} staging path: {path}")
 
-    published_transcript = False
-    published_evidence = False
+    published: list[Path] = []
     try:
         write_capture_once(payload, staged_transcript)
         evidence = capture_fastboot_baseline(
@@ -82,25 +110,32 @@ def main() -> int:
         )
         if evidence.serialno != args.serial.strip():
             raise SystemExit("captured getvar serialno does not match requested fastboot serial")
-        digest = write_fastboot_baseline_evidence(evidence, staged_evidence)
+        baseline_digest = write_fastboot_baseline_evidence(evidence, staged_evidence)
+        tool_digest = write_fastboot_tool_evidence(tool_evidence, staged_tool)
+
         saved = json.loads(staged_evidence.read_text(encoding="utf-8"))
         if saved != json.loads(evidence.canonical_json()):
             raise SystemExit("fastboot baseline evidence round-trip mismatch")
-        if args.transcript_out.exists() or args.evidence_out.exists():
+        saved_tool = json.loads(staged_tool.read_text(encoding="utf-8"))
+        if saved_tool != json.loads(tool_evidence.canonical_json()):
+            raise SystemExit("Fastboot tool evidence round-trip mismatch")
+        if any(path.exists() for path, _label in destinations):
             raise SystemExit("capture destination appeared during validation")
-        staged_transcript.replace(args.transcript_out)
-        published_transcript = True
-        staged_evidence.replace(args.evidence_out)
-        published_evidence = True
+
+        for staged_path, final_path in (
+            (staged_transcript, args.transcript_out),
+            (staged_evidence, args.evidence_out),
+            (staged_tool, args.tool_evidence_out),
+        ):
+            staged_path.replace(final_path)
+            published.append(final_path)
     except BaseException:
-        if published_evidence:
-            args.evidence_out.unlink(missing_ok=True)
-        if published_transcript:
-            args.transcript_out.unlink(missing_ok=True)
+        for path in reversed(published):
+            path.unlink(missing_ok=True)
         raise
     finally:
-        staged_transcript.unlink(missing_ok=True)
-        staged_evidence.unlink(missing_ok=True)
+        for path, _label in staged:
+            path.unlink(missing_ok=True)
 
     print(json.dumps({
         "profile_id": evidence.profile_id,
@@ -113,8 +148,11 @@ def main() -> int:
         "firmware_build": evidence.firmware_build,
         "firmware_fingerprint": evidence.firmware_fingerprint,
         "transcript_sha256": evidence.transcript_sha256,
-        "baseline_evidence_sha256": digest,
-        "commands": ["fastboot devices", "fastboot -s SERIAL getvar all"],
+        "baseline_evidence_sha256": baseline_digest,
+        "fastboot_platform_tools_version": tool_evidence.observed_platform_tools_version,
+        "fastboot_executable_sha256": tool_evidence.executable_sha256,
+        "fastboot_tool_evidence_sha256": tool_digest,
+        "commands": ["fastboot --version", "fastboot devices", "fastboot -s SERIAL getvar all"],
         "phone_storage_written": False,
         "beta_gate_credit": False,
     }, sort_keys=True))
