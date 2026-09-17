@@ -1,0 +1,165 @@
+name: windows-host-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/app.py"
+      - "kaliphonestudio/operator_diagnostics.py"
+      - "devices/**/profile.json"
+      - "assets/**"
+      - "tools/**"
+      - "BUILD_STATUS.json"
+      - "BETA_RELEASE_GATE.md"
+      - "requirements.txt"
+      - "build/windows-requirements.txt"
+      - "scripts/build_windows.ps1"
+      - "tests/test_windows_packaging_contract.py"
+      - "docs/WINDOWS_HOST_BUILD.md"
+      - ".github/workflows/windows-host-build.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/app.py"
+      - "kaliphonestudio/operator_diagnostics.py"
+      - "devices/**/profile.json"
+      - "assets/**"
+      - "tools/**"
+      - "BUILD_STATUS.json"
+      - "BETA_RELEASE_GATE.md"
+      - "requirements.txt"
+      - "build/windows-requirements.txt"
+      - "scripts/build_windows.ps1"
+      - "tests/test_windows_packaging_contract.py"
+      - "docs/WINDOWS_HOST_BUILD.md"
+      - ".github/workflows/windows-host-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-host-package:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install runtime and pinned Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+          python -m PyInstaller --version
+
+      - name: Verify packaging and operator safety contracts before freezing
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_windows_packaging_contract.py
+          tests/test_operator_diagnostics.py
+          tests/test_app.py
+
+      - name: Build GUI and CLI onedir artifacts
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Smoke-test frozen CLI safety surface
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+          & $Cli --list-profiles --json | Set-Content -Encoding utf8 "dist/profiles.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen --list-profiles failed: $LASTEXITCODE" }
+          & $Cli --doctor --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/doctor.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen --doctor failed: $LASTEXITCODE" }
+          & $Cli --recovery-guide --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/recovery.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen --recovery-guide failed: $LASTEXITCODE" }
+          & $Cli --export-diagnostics "dist/operator-diagnostics.json" --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/export-result.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen --export-diagnostics failed: $LASTEXITCODE" }
+
+          @'
+          import json
+          from pathlib import Path
+
+          def load(name):
+              return json.loads(Path("dist", name).read_text(encoding="utf-8-sig"))
+
+          profiles = load("profiles.json")
+          assert any(item["profile_id"] == "oneplus/avicii" for item in profiles)
+          doctor = load("doctor.json")
+          assert doctor["selected_profile_id"] == "oneplus/avicii"
+          assert doctor["physical_interaction_performed"] is False
+          assert doctor["hardware_verified"] is False
+          assert doctor["beta_gate_credit"] is False
+          recovery = load("recovery.json")
+          assert recovery["persistent_write_authorized"] is False
+          assert recovery["hardware_verified"] is False
+          assert recovery["beta_gate_credit"] is False
+          bundle = load("operator-diagnostics.json")
+          assert bundle["privacy"]["external_commands_executed"] is False
+          assert bundle["privacy"]["device_queried"] is False
+          assert bundle["privacy"]["absolute_tool_paths_exported"] is False
+          assert bundle["hardware_verified"] is False
+          assert bundle["beta_gate_credit"] is False
+          '@ | python -
+
+      - name: Smoke-test frozen GUI bootstrap path
+        shell: pwsh
+        run: |
+          $Gui = (Resolve-Path "dist/KaliPhoneStudio/KaliPhoneStudio.exe").Path
+          $Process = Start-Process -FilePath $Gui -ArgumentList "--version" -Wait -PassThru
+          if ($Process.ExitCode -ne 0) { throw "Frozen GUI bootstrap/version path failed: $($Process.ExitCode)" }
+
+      - name: Create per-run SHA-256 manifest
+        shell: pwsh
+        run: |
+          $Root = (Resolve-Path "dist").Path
+          $Targets = @(
+            (Resolve-Path "dist/KaliPhoneStudio").Path,
+            (Resolve-Path "dist/KaliPhoneStudioCLI").Path
+          )
+          $Lines = foreach ($Target in $Targets) {
+            Get-ChildItem -Path $Target -Recurse -File |
+              Sort-Object FullName |
+              ForEach-Object {
+                $Hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
+                $Relative = [IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\\', '/')
+                "$Hash  $Relative"
+              }
+          }
+          $Lines | Set-Content -Encoding ascii "dist/WINDOWS_HOST_BUILD_SHA256.txt"
+          @{
+            schema_version = 1
+            kind = "kaliphonestudio-unsigned-windows-host-development-build"
+            git_commit = "${{ github.sha }}"
+            python = "3.12"
+            pyinstaller = "6.22.3"
+            pyinstaller_hooks_contrib = "2026.7"
+            packaging_mode = "onedir"
+            signed = $false
+            hardware_verified = $false
+            beta_release = $false
+            beta_gate_credit = $false
+          } | ConvertTo-Json | Set-Content -Encoding utf8 "dist/WINDOWS_HOST_BUILD_INFO.json"
+
+      - name: Upload unsigned development host artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaliPhoneStudio-windows-host-dev-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/KaliPhoneStudio/**
+            dist/KaliPhoneStudioCLI/**
+            dist/WINDOWS_HOST_BUILD_SHA256.txt
+            dist/WINDOWS_HOST_BUILD_INFO.json
