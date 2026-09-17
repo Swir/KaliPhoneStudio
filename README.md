@@ -32,6 +32,10 @@
 | Latest public release | **Not published yet** |
 | Beta gate | **BLOCKED** |
 
+**Current development line: `0.6.61-dev`**
+
+**58% complete**
+
 `███████████▋░░░░░░░░ 58%`
 
 Host-side foundations are deliberately ahead of physical-device validation. Reviewed strict A/B authorities exist for the Kali ARM64 rootfs, avicii kernel and DTB/DTBO. The physical evidence chain now includes a bounded sysfs-only hardware-presence survey plus a fail-closed manual-review contract. None of that is counted as real hardware support until the exact AC2003 passes the physical gate.
