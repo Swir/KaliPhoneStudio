@@ -2,6 +2,18 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.57-dev — explicit human physical-storage review gate
+
+- Added `kaliphonestudio.physical_storage_review` as a fail-closed boundary between typed physical discovery and any future rootfs staging proposal.
+- Added `PhysicalStorageReviewRecord` and `PhysicalStorageReviewEvidence`, binding one exact reviewer decision to the exact physical-storage discovery evidence, raw discovery-report digest, recovery-plan digest, device identity, physical candidate and reviewed rootfs chain.
+- `approve_for_strategy_design` is accepted only when the bound discovery evidence is already `discovery_ready_for_manual_review=true`; `reject` can record a negative review without granting any strategy permission.
+- Approval can only set `strategy_design_allowed=true`. `target_selected`, `storage_path_bound`, `write_authorized`, `handoff_ready`, `storage_verified`, `recovery_verified`, `phone_storage_written`, `hardware_verified` and `beta_gate_credit` remain false.
+- Added exact required reviewer attestation, bounded reviewer identifiers, exact-byte review-record SHA-256/size binding, symlink/TOCTOU hardening and immutable output writes.
+- Added `scripts/record_physical_storage_review.py`, focused tests and `rootfs-handoff-policy` CI coverage.
+- Added `docs/PHYSICAL_STORAGE_REVIEW_GATE.md` with the exact review-record schema and offline usage.
+- Updated README to the canonical SWIR README PRO structure, including centered electric-cyan hero/badges, clearer compatibility/safety/release sections, mandatory Search Keywords and SWIR footer without changing hardware/release claims.
+- Project completion remains **58%** because no real AC2003 storage discovery has been reviewed and no reversible rootfs target has been selected or tested.
+
 ## 0.6.56-dev — typed physical storage discovery evidence
 
 - Added `kaliphonestudio.physical_storage_discovery` with a strict schema-v1 report/evidence layer for read-only physical storage discovery; it never carries a `/dev/...` target path, never selects a staging target and can never authorize a write.
