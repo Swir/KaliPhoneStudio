@@ -22,6 +22,36 @@ def test_rescue_init_emits_bounded_readonly_inventory_markers() -> None:
     assert text.count('"$count" -lt 64') >= 6
 
 
+def test_rescue_init_emits_bounded_hardware_presence_survey_without_activation() -> None:
+    text = _init_text()
+    for marker in (
+        "KPS_SURVEY_BEGIN=",
+        "KPS_SURVEY_USB_UDC=",
+        "KPS_SURVEY_USB_DEVICE=",
+        "KPS_SURVEY_NET=",
+        "KPS_SURVEY_RFKILL=",
+        "KPS_SURVEY_SOUND=",
+        "KPS_SURVEY_THERMAL=",
+        "KPS_SURVEY_INPUT=",
+        "KPS_SURVEY_GRAPHICS=",
+        "KPS_SURVEY_DRM=",
+        "KPS_SURVEY_POWER=",
+        "KPS_SURVEY_END=",
+    ):
+        assert marker in text
+    assert 'KPS_SURVEY_POLICY="readonly-hardware-presence-v1"' in text
+    assert text.count('"$count" -lt 32') >= 10
+    assert "/sys/class/udc/*" in text
+    assert "/sys/bus/usb/devices/*" in text
+    assert "/sys/class/net/*" in text
+    assert "/sys/class/rfkill/rfkill*" in text
+    assert "/sys/class/sound/card*" in text
+    assert "/sys/class/thermal/thermal_zone*" in text
+    assert "ip link" not in text.lower()
+    assert "rfkill unblock" not in text.lower()
+    assert "alsactl" not in text.lower()
+
+
 def test_rescue_init_keeps_persistent_storage_unmounted_and_no_fastboot() -> None:
     text = _init_text()
     lowered = text.lower()
