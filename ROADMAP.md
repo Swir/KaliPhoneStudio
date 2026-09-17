@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.39-dev
+## Current development line — 0.6.40-dev
 
 - [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
 - [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
@@ -18,14 +18,15 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Add generic fail-closed profile hooks for explicitly registered host `build`/`verify`/`recovery` stages; no profile-driven shell/module auto-execution and recovery requires extra authorization.
 - [x] Bind rootfs A/B canonicalization audit records and raw-input hashes to the strict accepted artifact, exact signed repository snapshot and source lock.
 - [x] Bind that rootfs transformation provenance to the exact schema-v8 first-boot manifest digest so release preparation cannot detach raw A/B build history from the candidate.
+- [x] Review real rootfs authority run `35158577624`, accept the strict byte-identical ARM64 artifact evidence and pin a fail-closed authority record without hardware/Beta credit.
+- [x] Add a fail-closed candidate-level link from the exact first-boot manifest/rootfs-provenance evidence to the reviewed rootfs authority record, including authority run/commit/artifact identity and all artifact/package/source/snapshot/canonicalization/raw-A/B invariants.
 - [x] Add deterministic device-independent first-boot provisioning bound to strict ARM64 rootfs evidence, with no embedded credentials and remote access disabled by default.
 - [x] Add an offline provisioning CLI and independent bundle-byte/metadata verifier.
 - [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
 - [x] Exact-source kernel runner applies profile-required `CONFIG_*` policy, fixed build identity/time values and canonical path remapping before strict comparison.
 - [x] Record the latest real kernel authority failure rather than granting partial credit: final `.config` is byte-identical and Image size matches, but Image bytes differ.
 - [x] Add bounded streaming kernel Image divergence diagnostics that report exact differing-byte/range counts and offsets without relaxing strict equality.
-- [x] Review real rootfs authority run `35158577624`, accept the strict byte-identical ARM64 artifact evidence and pin a fail-closed authority record without hardware/Beta credit.
-- [ ] Run the next real A/B kernel authority with independent outer builds but serial (`jobs=1`) internal make graphs; if it still fails, continue evidence-driven nondeterminism isolation.
+- [ ] Review the running real A/B kernel authority retry with independent outer builds and serial (`jobs=1`) internal make graphs; if it still fails, continue evidence-driven nondeterminism isolation.
 
 ## Phase A — Multi-device Studio Core
 
@@ -81,7 +82,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Fixed `KBUILD_BUILD_USER`, `KBUILD_BUILD_HOST`, `KBUILD_BUILD_TIMESTAMP`, `KBUILD_BUILD_VERSION`, `SOURCE_DATE_EPOCH`, locale and timezone in the evidence-bearing build environment.
 - [x] Non-release bounded Image divergence diagnostics integrated after strict mismatch.
 - [x] Review run `35161227840`: identical final `.config`, equal Image size, but `11695369` differing Image bytes across `960780` ranges; strict reproducibility remains false.
-- [x] Prepare evidence-bearing serial internal (`jobs=1`) kernel authority retry while retaining independent/concurrent A/B roots.
+- [x] Launch evidence-bearing serial internal (`jobs=1`) kernel authority retry while retaining independent/concurrent A/B roots.
 - [x] Source-locked FDT and Android DT table format references.
 - [x] Structural DTB and DTBO verification bound to the exact boot plan.
 - [ ] Review and accept first real byte-identical kernel A/B evidence.
@@ -93,8 +94,9 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Schema v8 additionally binds exact executed A/B kernel build records, canonical recipe/environment and execution-binding digest.
 - [x] Rootfs canonicalization provenance is bound to the strict reproducible rootfs artifact, source lock and signed repository snapshot.
 - [x] Schema-v1 first-boot rootfs provenance evidence binds the exact first-boot manifest digest to the canonicalization policy/binding, both A/B audit evidence digests and both raw rootfs input hashes/sizes.
+- [x] Schema-v1 reviewed-authority binding contract joins that exact manifest/provenance chain to one `RootfsAuthorityRecord` and rejects artifact/package/source/snapshot/canonicalization/raw-A/B substitution or any host hardware/Beta claim.
 - [x] Schema-v1 first-boot provisioning plan/bundle is bound to strict reproducible ARM64 rootfs evidence, contains only deterministic non-secret defaults and requires interactive local user creation.
-- [ ] Bind the reviewed rootfs authority to the exact physical-firmware first-boot candidate after the AC2003 baseline and matching stock boot provenance exist.
+- [ ] Instantiate the reviewed-authority binding against the exact physical-firmware first-boot candidate after the AC2003 baseline and matching stock boot provenance exist.
 - [ ] Promote host candidate evidence to a release-candidate manifest only after required physical gates exist.
 
 ## Phase B — Common Kali Phone Userspace
@@ -116,6 +118,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Candidate-level provenance link prevents accepted canonicalization evidence from being substituted or detached from the first-boot manifest.
 - [x] Produce and review the first byte-identical ARM64 rootfs artifact: authority run `35158577624`, artifact SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, 269-package manifest.
 - [x] Check in a fail-closed authority record binding exact run/commit/artifact IDs, source lock, signed repository snapshot/InRelease, raw A/B inputs, both canonicalization records/policy and strict evidence; `hardware_verified=false`, `beta_gate_credit=false`.
+- [x] Add candidate-level reviewed-authority binding so an accepted authority cannot be detached from the first-boot rootfs provenance chain.
 - [x] Generic first-boot provisioning independent of device name (host-side bundle/verification foundation; physical first boot still required).
 - [ ] Phosh stage on the verified common rootfs.
 - [ ] Common mobile defaults: scaling, keyboard and lock/power integration.
