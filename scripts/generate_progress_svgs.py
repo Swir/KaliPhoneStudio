@@ -123,18 +123,25 @@ def fill_width(track_width: float, percentage: float | None) -> float | None:
     return min(track_width, max(0.0, width))
 
 
-def _progress_fill(x: float, y: float, height: float, track_width: float, percentage: float | None) -> str:
+def _progress_fill(
+    x: float,
+    y: float,
+    height: float,
+    track_width: float,
+    percentage: float | None,
+    radius: float,
+) -> str:
     width = fill_width(track_width, percentage)
     if width is None or width <= 0.0:
         return ""
     return (
         f'<rect x="{x:.0f}" y="{y:.0f}" width="{width:.3f}" height="{height:.0f}" '
-        'rx="7" fill="url(#progressGradient)" filter="url(#softGlow)" clip-path="url(#trackClip)"/>'
+        f'rx="{radius:.0f}" fill="url(#progressGradient)" filter="url(#softGlow)" clip-path="url(#trackClip)"/>'
     )
 
 
 def render_card(model: ProgressModel) -> str:
-    fill = _progress_fill(CARD_TRACK_X, 112, 18, CARD_TRACK_WIDTH, model.percentage)
+    fill = _progress_fill(CARD_TRACK_X, 112, 18, CARD_TRACK_WIDTH, model.percentage, 7)
     description = (
         f"{model.project}; {model.scope}; progress {model.percent_label}; status {model.status}; "
         f"{model.authority_label}; Beta readiness {model.beta_status}."
@@ -164,7 +171,7 @@ def render_card(model: ProgressModel) -> str:
 
 
 def render_mini(model: ProgressModel) -> str:
-    fill = _progress_fill(MINI_TRACK_X, 43, 12, MINI_TRACK_WIDTH, model.percentage)
+    fill = _progress_fill(MINI_TRACK_X, 43, 12, MINI_TRACK_WIDTH, model.percentage, 5)
     description = (
         f"{model.project} compact roadmap dashboard; progress {model.percent_label}; {model.authority_label}; "
         f"status {model.status}; Beta readiness {model.beta_status}."
@@ -181,7 +188,7 @@ def render_mini(model: ProgressModel) -> str:
   <rect x="1" y="1" width="898" height="70" rx="16" fill="url(#bg)" stroke="#62E5FF" stroke-opacity="0.24" stroke-width="2"/>
   <text x="28" y="28" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">{escape(model.project)}</text>
   <text x="870" y="28" text-anchor="end" fill="#62E5FF" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="800">{escape(model.percent_label)} • {escape(model.status)}</text>
-  <text x="28" y="55" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="12">{escape(model.authority_completed.__str__())}/{escape(model.authority_total.__str__())} authorities</text>
+  <text x="28" y="55" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="12">{model.authority_completed}/{model.authority_total} authorities</text>
   <rect x="170" y="43" width="700" height="12" rx="5" fill="#02050A" stroke="#62E5FF" stroke-opacity="0.28"/>
   {fill}
 </svg>
