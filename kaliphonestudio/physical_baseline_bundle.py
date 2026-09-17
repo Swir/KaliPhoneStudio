@@ -82,6 +82,12 @@ def _size(value: object, label: str) -> int:
     return value
 
 
+def _header_version(value: object) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise PhysicalBaselineBundleError("stock boot header version must be a non-negative integer")
+    return value
+
+
 def bind_physical_baseline_to_stock(
     profile: DeviceProfile,
     baseline: FastbootBaselineEvidence,
@@ -125,9 +131,9 @@ def bind_physical_baseline_to_stock(
         (provenance.ota_size, "stock OTA size"),
         (provenance.payload_size, "payload size"),
         (provenance.boot_size, "stock boot size"),
-        (provenance.boot_header_version, "stock boot header version"),
     ):
         _size(value, label)
+    _header_version(provenance.boot_header_version)
 
     return PhysicalBaselineBundleEvidence(
         schema_version=1,
