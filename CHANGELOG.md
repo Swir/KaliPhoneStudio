@@ -2,6 +2,16 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.57-dev — safe operator storage-discovery template
+
+- Added `kaliphonestudio.physical_storage_template` to build an operator-editable discovery report directly from one exact, already-bound no-write rescue evidence chain.
+- The generator pre-fills only whole-block kernel names, sector counts and removable bits already present in `KPS_DIAG_BLOCK` evidence. It deliberately leaves filesystem, encryption and free-space observations as explicit `unknown`/unobserved placeholders.
+- The template carries the exact profile/serial context but contains no `/dev/...` path, mount/staging target or write authorization and cannot turn the profile `userdata` hint into a selected device.
+- Template generation fails closed on profile/contract drift, detached rescue functional-probe evidence, transcript/probe mismatch, prior storage-write claims, duplicate block names or the absence of usable whole-block topology.
+- Added immutable canonical template output plus `scripts/create_physical_storage_discovery_template.py` for offline operator preparation before filling real read-only observations.
+- Added four focused template tests and extended `rootfs-handoff-policy` CI compilation/test coverage.
+- Project completion remains **58%** because templates and host contracts do not replace real AC2003 storage discovery, review or a validated reversible handoff target.
+
 ## 0.6.56-dev — typed physical storage discovery evidence
 
 - Added `kaliphonestudio.physical_storage_discovery` with a strict schema-v1 report/evidence layer for read-only physical storage discovery; it never carries a `/dev/...` target path, never selects a staging target and can never authorize a write.
