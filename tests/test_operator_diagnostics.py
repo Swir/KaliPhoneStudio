@@ -134,7 +134,8 @@ def test_operator_bundle_is_deterministic_redacted_and_round_trips(tmp_path: Pat
     assert b"/redacted/tools" not in first.read_bytes()
 
     loaded = load_operator_bundle(first)
-    assert loaded == bundle
+    # Canonical JSON intentionally normalizes immutable Python tuples to JSON arrays.
+    assert loaded == json.loads(json.dumps(bundle))
     assert loaded["privacy"]["external_commands_executed"] is False
     assert loaded["privacy"]["device_queried"] is False
     assert loaded["hardware_verified"] is False
