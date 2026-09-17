@@ -202,12 +202,16 @@ jobs:
             --lock "$TOOLCHAIN_LOCK" \
             --out evidence/kernel-toolchain-binding.json
 
-      - name: Build kernel A and B concurrently from locked source and compiler
+      - name: Build independent kernels concurrently with serial internal make graphs
         id: build_pair
         shell: bash
         env:
           TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
         run: |
+          # The previous authority run produced identical .config files and equal-size
+          # Images but 11,695,369 differing bytes across 960,780 ranges. Keep the two
+          # independent A/B builds concurrent, but force each vendor-kernel make graph
+          # to -j1 so build-order races cannot hide inside either authority build.
           set +e
           mkdir -p build-logs
           python scripts/run_locked_kernel_build.py \
@@ -216,7 +220,7 @@ jobs:
             --checkout kernel-a \
             --toolchain-root "$TOOLCHAIN_ROOT" \
             --build-root build-a \
-            --jobs 2 \
+            --jobs 1 \
             --out evidence/kernel-build-a.json \
             >build-logs/kernel-a.log 2>&1 &
           pid_a=$!
@@ -226,7 +230,7 @@ jobs:
             --checkout kernel-b \
             --toolchain-root "$TOOLCHAIN_ROOT" \
             --build-root build-b \
-            --jobs 2 \
+            --jobs 1 \
             --out evidence/kernel-build-b.json \
             >build-logs/kernel-b.log 2>&1 &
           pid_b=$!
