@@ -10,7 +10,7 @@ Active development changes are listed here. Older detailed entries remain in [`C
 - Added `scripts/review_physical_storage_discovery.py` as an offline-only recorder. It cannot connect to a phone, select a device path, mount storage or authorize a write.
 - Added focused tests for accepted/rejected review states, incomplete-source rejection, profile/serial drift, forbidden target/write claims, unsafe reviewer identifiers, exact-byte binding and immutable evidence.
 - Extended `rootfs-handoff-policy` CI to compile and test the manual-review layer together with discovery and exact pinned layout-source verification.
-- Brought `README.md` toward the canonical SWIR README PRO v1 standard, including a centered electric-cyan hero, truthful status badges, clearer navigation, quick start, compatibility, release/safety sections, mandatory Search Keywords and SWIR footer.
+- Aligned `README.md` with the current canonical **SWIR README PRO v2** standard: local 1200×320 electric-cyan project hero, unique KaliPhoneStudio phone/terminal icon, truthful status badges/table, quick navigation, Quick Start, compatibility, release/safety sections, mandatory Search Keywords and SWIR footer. Repository-contract tests verify the v2 marker and local SVG assets.
 - Project completion remains **58%** because no real AC2003 physical storage record has been captured or reviewed, no reversible handoff target is approved and no physical temporary boot has passed the Beta gate.
 
 ## 0.6.56-dev — typed physical storage discovery evidence
