@@ -1,4 +1,11 @@
-"""Bounded, non-release ELF diagnostics for divergent kernel build artifacts."""
+"""Bounded, non-release ELF diagnostics for divergent kernel build artifacts.
+
+The final kernel reproducibility rule remains strict byte equality. This module
+only classifies already-reported divergent target artifacts. It supports both
+AArch64 ELF64 objects and the ARM ELF32 compat-vDSO objects produced by the
+pinned arm64 kernel tree. Host-tool objects under ``scripts/`` are intentionally
+excluded because they are not linked into the target kernel Image.
+"""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -17,14 +24,18 @@ MAX_FILE_BYTES = 1024 * 1024 * 1024
 MAX_SECTIONS = 65535
 MAX_SHSTRTAB_BYTES = 16 * 1024 * 1024
 ELF_MAGIC = b"\x7fELF"
+ELFCLASS32 = 1
 ELFCLASS64 = 2
 ELFDATA2LSB = 1
 EV_CURRENT = 1
+EM_ARM = 40
 EM_AARCH64 = 183
 SHT_NOBITS = 8
 SHF_EXECINSTR = 0x4
-EHDR_SIZE = 64
-SHDR_SIZE = 64
+ELF32_EHDR_SIZE = 52
+ELF64_EHDR_SIZE = 64
+ELF32_SHDR_SIZE = 40
+ELF64_SHDR_SIZE = 64
 
 
 class KernelElfDiagnosticError(ValueError):
@@ -99,7 +110,7 @@ class KernelElfDivergenceEvidence:
         return json.dumps(asdict(self), sort_keys=True, separators=(",", ":")) + "\n"
 
     def evidence_sha256(self) -> str:
-        return sha256(self.canonical_json().encode()).hexdigest()
+        return sha256(self.canonical_json().encode("utf-8")).hexdigest()
 
 
 def _root(path: Path, label: str) -> Path:
@@ -190,8 +201,32 @@ def _category(name: str, flags: int) -> str:
     return "data"
 
 
+def _target_candidate(relative: str, kind: object) -> bool:
+    """Select target-side ELF candidates and exclude known host build tools."""
+    if kind not in {"content_mismatch", "size_mismatch"}:
+        return False
+    path = PurePosixPath(relative)
+    if path.name == "vmlinux":
+        return True
+    if path.suffix != ".o":
+        return False
+    if path.parts and path.parts[0] == "scripts":
+        return False
+    return True
+
+
+def _elf_layout(ident: bytes) -> tuple[int, int, str, str]:
+    if len(ident) < 16 or ident[5] != ELFDATA2LSB or ident[6] != EV_CURRENT:
+        raise KernelElfDiagnosticError("unsupported ELF data/version")
+    if ident[4] == ELFCLASS64:
+        return ELF64_EHDR_SIZE, ELF64_SHDR_SIZE, "<HHIQQQIHHHHHH", "<IIQQQQ"
+    if ident[4] == ELFCLASS32:
+        return ELF32_EHDR_SIZE, ELF32_SHDR_SIZE, "<HHIIIIIHHHHHH", "<IIIIII"
+    raise KernelElfDiagnosticError("unsupported ELF class")
+
+
 def fingerprint_elf_sections(path: Path, *, chunk_size: int = DEFAULT_CHUNK) -> tuple[Section, ...] | None:
-    """Fingerprint ARM64 ELF64 little-endian sections; return None for non-ELF."""
+    """Fingerprint little-endian AArch64 ELF64 or ARM compat-vDSO ELF32 sections."""
     if not isinstance(chunk_size, int) or isinstance(chunk_size, bool) or chunk_size < 4096:
         raise KernelElfDiagnosticError("chunk_size must be an integer >= 4096")
     path = Path(path)
@@ -206,25 +241,31 @@ def fingerprint_elf_sections(path: Path, *, chunk_size: int = DEFAULT_CHUNK) -> 
     with path.open("rb") as handle:
         if handle.read(4) != ELF_MAGIC:
             return None
-        header = _read(handle, 0, EHDR_SIZE, size, "header")
-        ident = header[:16]
-        if ident[4] != ELFCLASS64 or ident[5] != ELFDATA2LSB or ident[6] != EV_CURRENT:
-            raise KernelElfDiagnosticError("unsupported ELF class/data/version")
-        (_etype, machine, version, _entry, _phoff, shoff, _flags, _ehsize,
-         _phentsize, _phnum, shentsize, shnum, shstrndx) = struct.unpack_from(
-            "<HHIQQQIHHHHHH", header, 16
-        )
-        if machine != EM_AARCH64:
-            raise KernelElfDiagnosticError("ELF artifact is not AArch64")
-        if version != EV_CURRENT or shentsize < SHDR_SIZE:
-            raise KernelElfDiagnosticError("unsupported ELF header/section format")
+        ident = _read(handle, 0, 16, size, "ident")
+        ehdr_size, minimum_shdr_size, header_fmt, section_fmt = _elf_layout(ident)
+        header = _read(handle, 0, ehdr_size, size, "header")
+        unpacked = struct.unpack_from(header_fmt, header, 16)
+        machine = unpacked[1]
+        version = unpacked[2]
+        shoff = unpacked[5]
+        shentsize, shnum, shstrndx = unpacked[10], unpacked[11], unpacked[12]
+        if version != EV_CURRENT:
+            raise KernelElfDiagnosticError("unsupported ELF header version")
+        if machine not in {EM_ARM, EM_AARCH64}:
+            raise KernelElfDiagnosticError("ELF artifact is not ARM/AArch64")
+        if ident[4] == ELFCLASS64 and machine != EM_AARCH64:
+            raise KernelElfDiagnosticError("ELF64 target artifact is not AArch64")
+        if ident[4] == ELFCLASS32 and machine != EM_ARM:
+            raise KernelElfDiagnosticError("ELF32 compat artifact is not ARM")
+        if shentsize < minimum_shdr_size:
+            raise KernelElfDiagnosticError("unsupported ELF section-header format")
         if shnum < 1 or shnum > MAX_SECTIONS or shstrndx >= shnum:
             raise KernelElfDiagnosticError("unsupported ELF section table")
         table = _read(handle, shoff, shentsize * shnum, size, "section header table")
         headers: list[tuple[int, int, int, int, int]] = []
         for index in range(shnum):
             off = index * shentsize
-            name, stype, flags, _addr, data_off, data_size = struct.unpack_from("<IIQQQQ", table, off)
+            name, stype, flags, _addr, data_off, data_size = struct.unpack_from(section_fmt, table, off)
             headers.append((name, stype, flags, data_off, data_size))
         names_hdr = headers[shstrndx]
         if names_hdr[1] == SHT_NOBITS or names_hdr[4] > MAX_SHSTRTAB_BYTES:
@@ -316,8 +357,7 @@ def diagnose_kernel_elf_sections(
         if not isinstance(item, dict):
             raise KernelElfDiagnosticError("malformed build-tree difference")
         relative = _relative(item.get("path"))
-        path = PurePosixPath(relative)
-        if item.get("kind") in {"content_mismatch", "size_mismatch"} and (path.name == "vmlinux" or path.suffix == ".o"):
+        if _target_candidate(relative, item.get("kind")):
             candidates.add(relative)
 
     files: list[ArtifactDiagnostic] = []
@@ -360,4 +400,4 @@ def write_evidence(evidence: KernelElfDivergenceEvidence, destination: Path) -> 
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = evidence.canonical_json()
     path.write_text(payload, encoding="utf-8", newline="\n")
-    return sha256(payload.encode()).hexdigest()
+    return sha256(payload.encode("utf-8")).hexdigest()
