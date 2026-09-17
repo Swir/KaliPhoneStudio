@@ -2,6 +2,17 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.63-dev — independent exact physical test-plan manual review
+
+- Added `kaliphonestudio.physical_hardware_test_plan_review` as a separate fail-closed review boundary between deterministic plan generation and any real-device functional-test session.
+- The review binds the original canonical test-plan file by SHA-256 and byte size in addition to the plan semantic evidence digest, preventing a reviewer from approving only a detached downstream hash.
+- Exact profile/device, survey-review, survey, boot, rescue, transcript, rescue-probe and functional-hardware-contract identities are carried into the review evidence.
+- `decision="accepted"` requires explicit review of exact plan bytes, identity chain, functional contract, Beta-required scope, context readiness, no-write policy and limitations; a plan that is not itself ready still cannot become `accepted_for_physical_execution=true`.
+- Added rejected-by-default review templates, separate UTF-8 review notes, immutable canonical evidence output and offline operator CLIs. No command performs phone I/O or hardware activation.
+- Even accepted plan review forces manual test execution and keeps functional execution/verification, phone-storage writes, hardware verification and Beta credit false.
+- Added focused fail-closed tests, dedicated `physical-hardware-test-plan-review` CI and `docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md`.
+- Synchronized README/ROADMAP/BUILD_STATUS/Beta-gate wording with SWIR README PRO v2; project completion remains **58%** and Beta remains **BLOCKED** because no real AC2003 plan or physical functional result has passed the gate.
+
 ## 0.6.62-dev — exact physical functional-test observation and review
 
 - Added `kaliphonestudio.physical_hardware_test_observation` to bind one actually executed physical functional test to one exact pending profile-driven test plan, exact device/candidate context, canonical operator record and separate notes.
@@ -87,7 +98,6 @@ Active development changes are listed here. Older detailed entries remain in [`C
 - Added `kaliphonestudio.rootfs_handoff` with a fail-closed schema-v1 contract that resolves one exact profile-pinned storage-layout source and explicitly forbids target selection or persistent-write authorization.
 - Added `RootfsHandoffAssessmentEvidence` binding one exact `PhysicalCandidateGateEvidence` to one exact reviewed `RootfsAuthorityRecord` while retaining `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `manual_review_required=true`, `hardware_verified=false` and `beta_gate_credit=false`.
 - Added a source-lock verifier that requires a clean Git SHA-1 checkout at the exact pinned commit and verifies the exact profile-declared layout-file blob before emitting non-release evidence.
-- Added an avicii profile policy pinned to LineageOS `android_device_oneplus_avicii@3f1270c2871e9893332073eb0f8f5f9499abbf13`, `init/fstab.qcom` blob `20873c3a84e1e6e8d2483e313f561ad35ded7355`.
 - The avicii profile records UFS, F2FS, `fileencryption=ice`, `wrappedkey` and metadata as **discovery expectations only**; `userdata` is a partition hint, not an approved rootfs target.
 - Discovery policy requires physical block-topology, filesystem-identity, encryption-state, free-space and recovery-plan evidence, while all declared A/B/system partitions, `super` and metadata remain forbidden.
 - Added focused tests for exact source binding, path/field hardening, forbidden-system coverage, rootfs-authority/candidate binding, immutable evidence, prior-device-action rejection and clean-checkout Git-object verification.

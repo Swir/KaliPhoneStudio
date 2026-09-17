@@ -25,20 +25,20 @@
 
 | Item | Status |
 |---|---|
-| Current development line | `0.6.62-dev` |
+| Current development line | `0.6.63-dev` |
 | Completion | **58%** |
 | Current stage | Development / physical bring-up |
 | First device profile | OnePlus Nord AC2003 — `oneplus/avicii` |
 | Latest public release | **Not published yet** |
 | Beta gate | **BLOCKED** |
 
-**Current development line: `0.6.62-dev`**
+**Current development line: `0.6.63-dev`**
 
 **58% complete**
 
 `███████████▋░░░░░░░░ 58%`
 
-Host-side foundations are deliberately ahead of physical-device validation. Reviewed strict A/B authorities exist for the Kali ARM64 rootfs, avicii kernel and DTB/DTBO. The physical evidence chain now includes a bounded sysfs-only hardware-presence survey, fail-closed survey review, profile-driven pending functional-test plans, exact per-test observation evidence, independent review and an aggregate exact-plan status summary. None of that is counted as real hardware support until the exact AC2003 passes the physical gate with real evidence.
+Host-side foundations are deliberately ahead of physical-device validation. Reviewed strict A/B authorities exist for the Kali ARM64 rootfs, avicii kernel and DTB/DTBO. The physical evidence chain now includes a bounded sysfs-only hardware-presence survey, fail-closed survey review, profile-driven pending functional-test plans, an independent exact-plan manual review gate, exact per-test observation evidence, independent result review and an aggregate exact-plan status summary. None of that is counted as real hardware support until the exact AC2003 passes the physical gate with real evidence.
 
 The authoritative release rules are in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
@@ -59,6 +59,7 @@ Permanent flashing is not the default path. The project prefers exact provenance
 | 🛟 Rescue path | Deterministic source-locked ARM64 rescue initramfs with exact probe identity and remote access disabled by default. |
 | 🧪 Physical evidence | Rescue markers, read-only diagnostics, explicit bounded probes, hardware-presence survey and Kali early-userspace markers. |
 | 👁️ Manual hardware review | Exact survey + canonical review record + separate notes can be accepted only as context for later functional testing; no subsystem is auto-verified. |
+| 📋 Exact plan review | The original canonical functional-test plan bytes must pass an independent manual review before the plan is eligible as a physical test checklist. |
 | ✅ Functional-test evidence | Profile-driven pending tests can bind one real observation, independent manual review and exact-plan status without automatically promoting support/Beta claims. |
 | 💾 Storage safety | Discovery/review/session/dossier layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
 | 🖥️ Offline UI/CLI | Safe profile inspection without automatically invoking ADB/Fastboot or exposing unguarded write controls. |
@@ -129,15 +130,16 @@ The 0.6.60 rescue survey records only bounded sysfs-visible presence/state for U
 
 0.6.62 adds the next evidence boundary for a real physical test attempt. An operator record must match one exact pending test and one exact candidate context; `pass_candidate` requires every exact required observation. A separate reviewer then accepts pass/fail/inconclusive only after all exact review checks are complete. The aggregate summary reports coverage but still cannot authorize project support or Beta release.
 
+0.6.63 adds an independent review of the **original canonical test-plan bytes** before that plan is eligible as a real-device testing checklist. Acceptance requires review of exact bytes, identity chain, functional contract, Beta-required scope, context readiness, no-write policy and limitations; it still executes nothing and grants no hardware/Beta credit.
+
 ```bash
-python scripts/prepare_physical_hardware_test_observation.py \
+python scripts/prepare_physical_hardware_test_plan_review.py \
   --test-plan evidence/physical-hardware-test-plan.json \
-  --test-id display \
-  --operator operator-1 \
-  --out evidence/display-observation-record.json
+  --reviewer reviewer-1 \
+  --out evidence/physical-hardware-test-plan-review-record.json
 ```
 
-The generated template is deliberately not-executed and inconclusive by default. It becomes bindable only after the physical test was actually performed and the required exact fields were reviewed and edited. See [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md), [`docs/PHYSICAL_HARDWARE_TEST_PLAN.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN.md) and [`docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md`](docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md).
+The generated plan-review template is deliberately rejected by default. See [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md), [`docs/PHYSICAL_HARDWARE_TEST_PLAN.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN.md), [`docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md) and [`docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md`](docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md).
 
 ## Rootfs handoff and storage evidence
 
@@ -153,7 +155,8 @@ See [`docs/ROOTFS_HANDOFF_POLICY.md`](docs/ROOTFS_HANDOFF_POLICY.md), [`docs/PHY
 - Never flash a physical phone without explicit user interaction and a verified exact-device baseline.
 - Fail closed on identity, firmware, provenance, checksum, partition-layout or evidence drift.
 - Keep host CI and physical hardware claims separate.
-- Treat sysfs hardware presence, accepted contextual review, generated test plans and synthetic/mock functional records as non-credit evidence.
+- Treat sysfs hardware presence, accepted contextual review, generated/reviewed test plans and synthetic/mock functional records as non-credit evidence.
+- An accepted test-plan review only authorizes use of that exact plan as a manual checklist; it is not a flash, write, hardware or release authorization.
 - A reviewed functional-test pass is test-level evidence only; project support and release status require the complete physical gate.
 - Never weaken strict reproducibility to make a gate pass.
 - Do not embed credentials or enable remote access by default.
@@ -166,7 +169,7 @@ python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
-Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, hardware-presence survey/review, functional-test planning/observation/review/summary, Kali early-userspace proof, rootfs handoff, physical-storage evidence, bring-up sessions and exact-file dossier verification.
+Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, hardware-presence survey/review, functional-test planning/exact-plan review/observation/result-review/summary, Kali early-userspace proof, rootfs handoff, physical-storage evidence, bring-up sessions and exact-file dossier verification.
 
 ## Roadmap and releases
 
