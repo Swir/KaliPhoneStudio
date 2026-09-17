@@ -84,6 +84,16 @@
       "CONFIG_SERIAL_MSM_GENI": "y"
     }
   },
+  "device_tree": {
+    "source_name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline",
+    "build_target": "dtbs",
+    "dtb_output": "arch/arm64/boot/dts/vendor/20801/lito.dtb",
+    "dtbo_outputs": [
+      "arch/arm64/boot/dts/vendor/20801/avicii-overlay.dtbo"
+    ],
+    "dtbo_page_size": 4096,
+    "dtbo_table_version": 0
+  },
   "kernel_cmdline": [
     "androidboot.hardware=qcom",
     "androidboot.memcg=1",
@@ -123,6 +133,7 @@
     "The engineering first-boot kernel requires CONFIG_RD_LZ4=y because the profile boot policy uses an LZ4 ramdisk.",
     "The host reproducibility profile exports deterministic GNU tar metadata/order and single-threaded xz settings for CONFIG_IKHEADERS generation; this is build-only evidence and does not grant hardware support.",
     "The compat-vDSO reproducibility experiment passes canonical debug/macro prefix maps through the locked clang CC command using recursive KBUILD_SRC/CURDIR make variables because the pinned vdso32 Makefile intentionally does not inherit global KBUILD CFLAGS; this is host-only evidence and does not grant hardware support.",
+    "The device-tree host contract builds dtbs from the exact reviewed kernel source/config/toolchain and expects the profile-selected lito.dtb plus avicii-overlay.dtbo before creating a deterministic Android DT table image; this does not prove physical device-tree functionality.",
     "Do not mark recovery verified until restore has been exercised on the exact physical AC2003 baseline."
   ],
   "test_contract": {
@@ -136,7 +147,8 @@
       "kernel config policy enforces ramdisk decompressor compatibility and deterministic module-signing behavior",
       "deterministic CONFIG_IKHEADERS tar/xz archive environment is profile-bound",
       "compat-vDSO clang command carries canonical source/output path maps through recursive make variables",
-      "source-locked compiler kernel build and two-build reproducibility verification"
+      "source-locked compiler kernel build and two-build reproducibility verification",
+      "profile-driven DTB/DTBO output selection and strict A/B artifact reproducibility verification"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",
