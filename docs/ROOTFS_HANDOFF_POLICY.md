@@ -2,7 +2,7 @@
 
 KaliPhoneStudio treats rootfs transport as a separate safety gate from kernel/rescue boot. A reproducible Kali ARM64 rootfs does not imply that any phone partition is a safe staging target.
 
-## 0.6.55 discovery-only contract
+## Discovery-only handoff contract
 
 `kaliphonestudio.rootfs_handoff` adds a device-independent, fail-closed contract that binds one exact physical candidate to one reviewed rootfs authority while deliberately refusing to select a block device, mount path or write target.
 
@@ -47,6 +47,80 @@ It may not contain an approved raw block path or authorize persistent writes. Th
 
 For discovery-only policy, every declared A/B partition plus the `super` container remains forbidden. Metadata is also forbidden because it participates in encryption/recovery state. The avicii `userdata` name is only a discovery hint, not an approved staging target.
 
+## 0.6.56 typed physical storage discovery evidence
+
+`kaliphonestudio.physical_storage_discovery` records the physical evidence required by the handoff contract while keeping discovery and target selection separate.
+
+The evidence chain binds:
+
+1. one exact `RootfsHandoffAssessmentEvidence`;
+2. the exact rescue diagnostics and explicitly invoked functional-probe evidence from the same physical transcript/probe id;
+3. the exact original bytes and SHA-256 of an operator storage-discovery JSON report;
+4. the exact bytes/SHA-256 of a separate recovery-plan UTF-8 text file;
+5. the exact physical-candidate/rootfs authority identities already carried by the handoff assessment.
+
+The report schema deliberately has no field capable of expressing `/dev/block/...`, a mount target, a staging target or write authorization. Kernel block identifiers are bounded single tokens such as `sda`; partition references are semantic roles such as `userdata`.
+
+Whole-block topology is cross-checked against the exact `KPS_DIAG_BLOCK=<name>|<sectors>|<removable>` records already captured by the rescue sysfs inventory. For avicii, review readiness additionally requires the UFS signal from the same exact rescue evidence chain. Filesystem, encryption and free-space observations are checked against profile expectations for the `userdata` role but do not convert that role into a path.
+
+A complete matching set may set `discovery_ready_for_manual_review=true`. This means only that the record contains enough internally bound observations for a human review. The evidence still requires:
+
+- `target_selected=false`;
+- `storage_path_bound=false`;
+- `write_authorized=false`;
+- `handoff_ready=false`;
+- `storage_verified=false`;
+- `recovery_verified=false`;
+- `phone_storage_written=false`;
+- `manual_review_required=true`;
+- `hardware_verified=false`;
+- `beta_gate_credit=false`.
+
+### Operator report shape
+
+A report is strict schema-v1 JSON. Example values below are illustrative only and are **not** AC2003 evidence:
+
+```json
+{
+  "schema_version": 1,
+  "profile_id": "oneplus/avicii",
+  "device_serial": "SERIAL_FROM_EXACT_PHYSICAL_CANDIDATE",
+  "collection_policy": "operator-read-only-storage-discovery-v1",
+  "block_devices": [
+    {"kernel_name": "sda", "size_sectors": 0, "removable": false}
+  ],
+  "filesystems": [
+    {"partition_role": "userdata", "kernel_name": "unknown", "filesystem": "unknown", "observed": false}
+  ],
+  "encryption": [
+    {"partition_role": "userdata", "state": "unknown", "features": [], "observed": false}
+  ],
+  "free_space": [
+    {"partition_role": "userdata", "total_bytes": null, "free_bytes": null, "observed": false}
+  ],
+  "phone_storage_written": false,
+  "target_selected": false,
+  "storage_path_bound": false
+}
+```
+
+The example intentionally cannot become review-ready; real block sector counts must be positive and must match the bound rescue transcript. Unknown filesystem/encryption/free-space observations remain valid placeholders but do not satisfy their physical evidence categories.
+
+Recorder:
+
+```bash
+python scripts/record_physical_storage_discovery.py \
+  --profile-id oneplus/avicii \
+  --handoff-assessment evidence/rootfs-handoff-assessment.json \
+  --rescue-diagnostics evidence/physical-rescue-diagnostics.json \
+  --functional-probes evidence/physical-rescue-functional-probes.json \
+  --discovery-report evidence/operator-storage-discovery.json \
+  --recovery-plan evidence/recovery-plan.txt \
+  --out evidence/physical-storage-discovery.json
+```
+
+The recorder is offline. It does not run Fastboot/ADB, mount/decrypt storage, read new phone blocks, or perform any write.
+
 ## Required physical evidence before target selection
 
 At minimum the exact phone/firmware must provide reviewed evidence for:
@@ -57,19 +131,20 @@ At minimum the exact phone/firmware must provide reviewed evidence for:
 4. available free space;
 5. a concrete recovery/rollback plan.
 
-The rootfs handoff assessment is bound to the exact `PhysicalCandidateGateEvidence` and exact reviewed `RootfsAuthorityRecord`. Any rootfs digest mismatch, prior phone-storage write, already-executed temporary boot, missing reviewed-authority binding or hardware/Beta claim fails closed.
+The rootfs handoff assessment is bound to the exact `PhysicalCandidateGateEvidence` and exact reviewed `RootfsAuthorityRecord`. The 0.6.56 discovery evidence further binds that assessment to the exact rescue evidence chain and operator report/recovery plan. Any identity/digest drift, phone-storage write claim, path-like token, duplicate role, inconsistent unknown observation or hardware/Beta promotion fails closed.
 
 ## Upstream source locking
 
-The focused `rootfs-handoff-policy` workflow performs two separate checks:
+The focused `rootfs-handoff-policy` workflow performs:
 
-1. offline contract tests across every repository device profile;
-2. an exact checkout of the pinned avicii device-source commit, followed by Git-object verification that `init/fstab.qcom` is the profile-declared blob and the tracked checkout is clean.
+1. offline handoff and physical-discovery contract tests across repository profiles;
+2. compilation checks for the evidence/CLI surfaces;
+3. an exact checkout of the pinned avicii device-source commit, followed by Git-object verification that `init/fstab.qcom` is the profile-declared blob and the tracked checkout is clean.
 
 The generated source evidence is explicitly non-release evidence. It proves only which upstream storage-layout file informed the policy.
 
 ## What still blocks physical Kali rootfs handoff
 
-0.6.55 does **not** choose a storage strategy. A later reviewed milestone must consume real AC2003 storage/encryption/recovery evidence and select a reversible method. Until then KaliPhoneStudio will not generate a target path, mount instruction or write authorization from the common core.
+0.6.56 does **not** choose a storage strategy. A later reviewed milestone must consume a **real, manually reviewed** AC2003 physical-storage discovery record and then select a reversible method. Until then KaliPhoneStudio will not generate a target path, mount instruction or write authorization from the common core.
 
-A successful rescue boot or early-systemd marker does not change this rule.
+A successful rescue boot, `discovery_ready_for_manual_review=true`, or early-systemd marker does not change this rule.
