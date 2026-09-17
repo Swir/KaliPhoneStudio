@@ -1,4 +1,8 @@
 from pathlib import Path
+import shutil
+import subprocess
+
+import pytest
 
 from kaliphonestudio.kernel_build_runner import create_kernel_build_recipe
 from kaliphonestudio.kernel_contract import create_kernel_build_plan
@@ -47,3 +51,40 @@ def test_compat_vdso_policy_keeps_locked_llvm_and_cross_compile_contract() -> No
     assert flags["CROSS_COMPILE_COMPAT"] == "arm-linux-gnueabi-"
     assert flags["HOSTCC"] == "clang"
     assert flags["HOSTCXX"] == "clang++"
+
+
+def test_gnu_make_expands_recursive_source_and_output_maps_at_build_scope(tmp_path: Path) -> None:
+    make = shutil.which("make")
+    if make is None:
+        pytest.skip("GNU make is not installed on this host")
+
+    plan, _recipe = _plan_and_recipe()
+    cc = dict(plan.make_flags)["CC"]
+    source = (tmp_path / "kernel-source").resolve()
+    output = (tmp_path / "kernel-output").resolve()
+    source.mkdir()
+    output.mkdir()
+    makefile = output / "Makefile"
+    makefile.write_text(
+        f"KBUILD_SRC := {source}\n"
+        "all:\n"
+        "\t@printf '%s\\n' '$(CC)'\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [make, "--no-print-directory", "-C", str(output), f"CC={cc}"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=20,
+    )
+    expanded = result.stdout.strip()
+
+    assert "$(KBUILD_SRC)" not in expanded
+    assert "$(CURDIR)" not in expanded
+    assert f"-fdebug-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
+    assert f"-fmacro-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
+    assert f"-fdebug-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
+    assert f"-fmacro-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
