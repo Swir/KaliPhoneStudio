@@ -94,6 +94,47 @@
     "dtbo_page_size": 4096,
     "dtbo_table_version": 0
   },
+  "rootfs_handoff": {
+    "schema_version": 1,
+    "state": "discovery-only",
+    "layout_source_name": "LineageOS android_device_oneplus_avicii lineage-22.1 baseline",
+    "layout_source_path": "init/fstab.qcom",
+    "layout_source_blob_sha1": "20873c3a84e1e6e8d2483e313f561ad35ded7355",
+    "storage_bus": "ufs",
+    "partition_hint": "userdata",
+    "expected_filesystems": ["f2fs"],
+    "encryption_features": ["fileencryption=ice", "wrappedkey"],
+    "metadata_partition": "metadata",
+    "required_physical_evidence": [
+      "block-topology",
+      "filesystem-identity",
+      "encryption-state",
+      "free-space",
+      "recovery-plan"
+    ],
+    "forbidden_partitions": [
+      "boot",
+      "dtbo",
+      "odm",
+      "product",
+      "recovery",
+      "system",
+      "system_ext",
+      "vbmeta",
+      "vbmeta_system",
+      "vendor",
+      "metadata",
+      "super",
+      "persist",
+      "misc",
+      "spunvm",
+      "modem",
+      "dsp",
+      "bluetooth"
+    ],
+    "target_selection_allowed": false,
+    "persistent_write_authorized": false
+  },
   "kernel_cmdline": [
     "androidboot.hardware=qcom",
     "androidboot.memcg=1",
@@ -134,6 +175,7 @@
     "The host reproducibility profile exports deterministic GNU tar metadata/order and single-threaded xz settings for CONFIG_IKHEADERS generation; this is build-only evidence and does not grant hardware support.",
     "The compat-vDSO reproducibility experiment passes canonical debug/macro prefix maps through the locked clang CC command using recursive KBUILD_SRC/CURDIR make variables because the pinned vdso32 Makefile intentionally does not inherit global KBUILD CFLAGS; this is host-only evidence and does not grant hardware support.",
     "The device-tree host contract builds dtbs from the exact reviewed kernel source/config/toolchain and expects the profile-selected lito.dtb plus avicii-overlay.dtbo before creating a deterministic Android DT table image; this does not prove physical device-tree functionality.",
+    "The rootfs handoff contract is discovery-only: the pinned Lineage fstab reports encrypted/wrapped-key userdata on UFS, so no raw block path or staging target is selected before exact-device storage/encryption/free-space/recovery evidence is reviewed.",
     "Do not mark recovery verified until restore has been exercised on the exact physical AC2003 baseline."
   ],
   "test_contract": {
@@ -148,7 +190,8 @@
       "deterministic CONFIG_IKHEADERS tar/xz archive environment is profile-bound",
       "compat-vDSO clang command carries canonical source/output path maps through recursive make variables",
       "source-locked compiler kernel build and two-build reproducibility verification",
-      "profile-driven DTB/DTBO output selection and strict A/B artifact reproducibility verification"
+      "profile-driven DTB/DTBO output selection and strict A/B artifact reproducibility verification",
+      "discovery-only rootfs handoff policy is source-pinned, forbids system/A-B targets, and cannot authorize storage writes"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",

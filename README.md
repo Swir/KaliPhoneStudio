@@ -2,7 +2,7 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux / NetHunter Pro as the primary phone OS/userspace**, without Android as the user-facing layer.
 
-The repository is conservative by design: a device profile, green CI, reproducible artifact, successful Fastboot command, rescue marker, read-only diagnostic or early-userspace marker does **not** by itself mean a phone is supported. Public Beta requires every applicable host and physical gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+The repository is conservative by design: a device profile, green CI, reproducible artifact, successful Fastboot command, rescue marker, read-only diagnostic, early-userspace marker or storage-layout hint does **not** by itself mean a phone is supported. Public Beta requires every applicable host and physical gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Project progress
 
@@ -12,7 +12,7 @@ The repository is conservative by design: a device profile, green CI, reproducib
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host reproducibility and safety are foundations, not substitutes for exact-device evidence.
 
-> **Current development line: `0.6.54-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.54 adds a deterministic proof overlay that can distinguish "rescue initramfs ran" from "the exact reviewed Kali rootfs reached early systemd userspace". The probe is cryptographically bound to the exact candidate/rootfs authority chain and physical transcript parser, but still sets `kali_early_userspace_verified=false`, `hardware_verified=false` and `beta_gate_credit=false` until manual review of a real phone run. Rootfs transport/staging is intentionally **not** hard-coded by this milestone.
+> **Current development line: `0.6.55-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.55 adds a source-pinned, discovery-only rootfs handoff contract that binds the exact physical-candidate gate to the exact reviewed rootfs authority while explicitly refusing to select a block device, mount path or write target. The first avicii policy is informed by the exact pinned LineageOS `fstab.qcom` blob and records UFS/F2FS/encryption expectations as facts to verify on the real phone, not as authorization to use Android userdata. **No rootfs target is approved and Beta remains blocked.**
 
 ## Source of truth and architecture
 
@@ -57,25 +57,32 @@ These records are strict, immutable host-side evidence only; all explicitly reta
 - Manual-only bounded rescue functional probes: up to one 4096-byte read from up to eight non-removable whole block devices into `/dev/null`, plus paired battery telemetry. These signals do not automatically verify storage or charging.
 - Offline GUI/CLI profile inspection remains non-destructive and performs no Fastboot/ADB action.
 
-## Kali early-userspace proof (0.6.54)
+## Kali early-userspace proof
 
-The new `kaliphonestudio.kali_early_userspace` layer builds a deterministic USTAR proof overlay bound to:
+`kaliphonestudio.kali_early_userspace` builds a deterministic USTAR proof overlay bound to the exact first-boot manifest, reviewed authority bundle, rootfs-authority binding, reviewed rootfs authority and strict rootfs artifact SHA-256/size.
 
-- exact first-boot manifest SHA-256;
-- exact reviewed authority-bundle SHA-256;
-- exact rootfs-authority binding and authority SHA-256;
-- exact strict rootfs artifact SHA-256/size;
-- ARM64 architecture and rootfs variant.
+The overlay installs one systemd oneshot before `basic.target` and emits exact stage/probe/candidate/rootfs markers. `kaliphonestudio.physical_kali_early_userspace` binds an operator-captured transcript to the same exact physical candidate and successful non-persistent temporary-boot execution. A complete marker match is still an **observation requiring manual review**, not an automatic hardware/Beta pass. Details: [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
 
-The overlay installs one systemd oneshot before `basic.target`. It emits five exact markers including `KPS_KALI_STAGE=rootfs-systemd-early-v1`, deterministic probe id, candidate manifest digest, rootfs authority digest and rootfs artifact digest. It enables no SSH/network service, embeds no credentials, performs no Fastboot/ADB call and writes no phone storage.
+## Rootfs handoff discovery contract (0.6.55)
 
-`kaliphonestudio.physical_kali_early_userspace` then binds an operator-captured transcript to the same physical candidate gate and successful non-persistent temporary-boot execution. Missing, conflicting or excessive markers; serial/profile drift; candidate/rootfs drift; changed transcripts; failed boots; or storage-write claims are rejected fail-closed.
+`kaliphonestudio.rootfs_handoff` adds a separate safety boundary between “we have the correct reproducible rootfs” and “we know where it can safely be made available on this physical phone”. The contract:
 
-A complete marker match is still an **observation requiring manual review**, not an automatic hardware/Beta pass. Full design details: [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
+- resolves one exact profile-pinned storage-layout source and Git blob;
+- records only source-backed storage/filesystem/encryption expectations;
+- requires physical evidence for block topology, filesystem identity, encryption state, free space and recovery plan;
+- forbids all profile-declared A/B/system partitions plus the super container during discovery;
+- keeps metadata forbidden because it participates in encryption/recovery state;
+- rejects any profile attempt to select a target or authorize persistent writes;
+- binds one exact `PhysicalCandidateGateEvidence` to one exact reviewed `RootfsAuthorityRecord`;
+- always returns `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `hardware_verified=false` and `beta_gate_credit=false`.
 
-## Rootfs handoff remains a real blocker
+For avicii, the exact pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6e8d2483e313f561ad35ded7355`. It describes userdata as F2FS with `fileencryption=ice` and `wrappedkey` on UFS, with separate metadata-based encryption state. KaliPhoneStudio treats `userdata` only as a **discovery hint**, never as an approved rootfs target. The focused CI workflow also fetches the exact pinned device-source commit and verifies that exact blob in a clean tracked checkout.
 
-0.6.54 intentionally does **not** pretend that proof markers solve rootfs transport. Before a physical Kali-rootfs boot can be attempted, the exact reviewed rootfs must be made available through a safe, reversible, profile-driven staging/handoff strategy that respects UFS/encryption reality, temporary-boot-first policy and recovery. No global AC2003 storage path is hard-coded.
+Full policy: [`docs/ROOTFS_HANDOFF_POLICY.md`](docs/ROOTFS_HANDOFF_POLICY.md).
+
+## Rootfs handoff is still a physical blocker
+
+0.6.55 completes the **discovery contract**, not the actual staging strategy. Before any physical Kali-rootfs handoff can be attempted, the exact AC2003 must provide reviewed storage/encryption/free-space/recovery evidence and a later milestone must explicitly select a reversible strategy. The common core still generates no raw block path, mount target or write authorization.
 
 ## Offline application
 
@@ -97,7 +104,7 @@ Primary Python matrix:
 - Python 3.13
 - Python 3.14
 
-Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics and the Kali early-userspace proof contract. A green workflow is host evidence only.
+Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof and rootfs-handoff source/contract locking. A green workflow is host evidence only.
 
 ## Beta release policy
 
@@ -108,7 +115,8 @@ Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-o
 - one exact physical candidate bound to reviewed kernel/rootfs/DT authorities;
 - successful temporary boot on that same phone;
 - usable rescue/logging path and manually reviewed exact rescue markers;
-- a safe, explicit rootfs staging/handoff method and proof that the kernel reached the intended Kali early userspace/rootfs;
+- physical storage/encryption/free-space/recovery discovery plus a separately reviewed reversible rootfs staging/handoff method;
+- proof that the kernel reached the intended Kali early userspace/rootfs;
 - required storage/UFS validation;
 - safe charging/battery behavior for testing;
 - display/touch proof or an explicitly reviewed console-only Beta scope;
@@ -126,6 +134,7 @@ Do not publish an empty/symbolic Beta. Stable has a higher threshold.
 5. Do not weaken strict reproducibility rules to make a gate pass.
 6. Do not add credentials or enable remote access by default.
 7. Keep the common core multi-device; phone-specific facts belong in profiles and their reviewed evidence.
+8. A storage-layout hint is not a target path and never implies permission to write it.
 
 ## Development
 
