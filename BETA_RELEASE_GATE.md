@@ -1,6 +1,6 @@
 # KaliPhoneStudio Beta Release Gate
 
-A Beta release is a **tested device build**, not a development snapshot. A profile, green CI, host-reproducible artifact, physical-candidate gate or prepared command offer never satisfies a physical-device checkbox.
+A Beta release is a **tested device build**, not a development snapshot. A profile, green CI, host-reproducible artifact, physical-candidate gate, prepared command offer, explicit confirmation, or successful Fastboot return code never satisfies a physical-device checkbox.
 
 ## Required host-side evidence
 
@@ -19,6 +19,10 @@ A Beta release is a **tested device build**, not a development snapshot. A profi
 - [ ] `PhysicalCandidateGateEvidence` cross-binds exact physical baseline/stock bundle, schema-v8 manifest, unified reviewed authority bundle, schema-v2 temporary-boot authorization and exact profile-driven `BootBuildPlan`; it must still record no execution/write/hardware/Beta claim.
 - [ ] `TemporaryBootOfferEvidence` is prepared from that exact gate and exact original read-only Fastboot capture/tool evidence. The concrete Fastboot executable and concrete candidate `boot.img` must be rehashed locally and exactly match reviewed/gated SHA-256 and size. The only eligible command plan is serial-bound `fastboot ... boot ...`, with `persistent_write=false`, `phone_storage_written=false`, `temporary_boot_executed=false`, `hardware_verified=false`, `beta_gate_credit=false`.
 - [ ] Exact profile-specific confirmation is required before execution can be permitted. Confirmation authorization by itself still records `temporary_boot_executed=false` and grants no hardware/Beta credit.
+- [ ] Immediately before a temporary-boot invocation, exact offer files are reverified again and a fresh read-only serial-bound Fastboot runtime probe is captured. Product, serial, active slot, slot count, unlock/security state and bootloader/baseband identity must still match the reviewed baseline; device/state drift must fail closed before `boot`.
+- [ ] The reviewed baseline and fresh runtime probe both report the bootloader unlocked before the temporary-boot command is eligible.
+- [ ] If a temporary-boot command is actually invoked, immutable execution evidence records the exact offer/authorization/runtime-probe digests, argv digest, return code and bounded output digest. Even return code 0 must keep `kali_userspace_verified=false`, `hardware_verified=false`, `beta_gate_credit=false` until independent physical evidence proves the real boot path.
+- [ ] No temporary-boot execution component exposes `flash`, `erase`, `set_active`, `reboot` or any persistent-write path.
 - [ ] If a provisioning overlay ships, its exact SHA-256/size/plan digest is bound to accepted rootfs evidence; it embeds no credentials, keeps root locked and remote access disabled by default.
 - [ ] Every release image has SHA-256 recorded and partition-size/boot-layout gates pass.
 - [ ] Build instructions reproduce artifacts from pinned sources.
@@ -28,7 +32,7 @@ A Beta release is a **tested device build**, not a development snapshot. A profi
 - [ ] Exact model/profile and serial recognized correctly before any destructive action.
 - [ ] Exact OxygenOS build/fingerprint captured from the physical device.
 - [ ] Stock recovery/restore information captured before persistent experiments.
-- [ ] Explicitly confirmed candidate succeeds with **temporary boot** where supported.
+- [ ] Explicitly confirmed candidate succeeds with **temporary boot** where supported, with evidence beyond the host Fastboot return code.
 - [ ] Rescue/log channel is usable after candidate boot.
 - [ ] Kernel reaches intended Kali early userspace/rootfs path.
 - [ ] Required internal storage/UFS path is verified.
@@ -46,6 +50,6 @@ A Beta release is a **tested device build**, not a development snapshot. A profi
 - [ ] Real binaries/images attached; no empty or symbolic release.
 - [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
 
-Creating a profile, capturing/importing Fastboot evidence, accepting host-side kernel/rootfs/DT authorities, generating a schema-v8 candidate, creating unified authority/physical-candidate evidence, preparing a temporary-boot argv, recording profile confirmation, generating a provisioning overlay, or passing host CI does **not** satisfy a physical-device checkbox.
+Creating a profile, capturing/importing Fastboot evidence, accepting host-side kernel/rootfs/DT authorities, generating a schema-v8 candidate, creating unified authority/physical-candidate evidence, preparing a temporary-boot argv, recording profile confirmation, passing the fresh runtime probe, receiving Fastboot return code 0, generating a provisioning overlay, or passing host CI does **not** satisfy a physical-device checkbox.
 
 Only after all required gates pass for the declared compatibility scope should a GitHub **Beta** be created. Stable requires a later, higher hardware-completeness and regression threshold.
