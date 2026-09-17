@@ -2,7 +2,7 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux / NetHunter Pro as the primary phone OS/userspace**, without Android as the user-facing layer.
 
-The repository is conservative by design: a device profile, green CI, reproducible artifact, successful Fastboot command, rescue marker, read-only diagnostic, early-userspace marker or storage-layout hint does **not** by itself mean a phone is supported. Public Beta requires every applicable host and physical gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+The repository is conservative by design: a device profile, green CI, reproducible artifact, successful Fastboot command, rescue marker, read-only diagnostic, early-userspace marker, storage-layout hint or storage-discovery record does **not** by itself mean a phone is supported. Public Beta requires every applicable host and physical gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Project progress
 
@@ -12,7 +12,7 @@ The repository is conservative by design: a device profile, green CI, reproducib
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host reproducibility and safety are foundations, not substitutes for exact-device evidence.
 
-> **Current development line: `0.6.55-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.55 adds a source-pinned, discovery-only rootfs handoff contract that binds the exact physical-candidate gate to the exact reviewed rootfs authority while explicitly refusing to select a block device, mount path or write target. The first avicii policy is informed by the exact pinned LineageOS `fstab.qcom` blob and records UFS/F2FS/encryption expectations as facts to verify on the real phone, not as authorization to use Android userdata. **No rootfs target is approved and Beta remains blocked.**
+> **Current development line: `0.6.56-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.56 adds a typed, fail-closed physical-storage discovery evidence layer on top of the 0.6.55 source-pinned handoff contract. It can bind real topology/filesystem/encryption/free-space/recovery observations to the exact physical candidate, rescue transcript chain and reviewed rootfs authority **without carrying a `/dev/...` target, selecting userdata, authorizing a write or claiming storage support**. No real AC2003 discovery record has been reviewed yet. **Beta remains blocked.**
 
 ## Source of truth and architecture
 
@@ -63,7 +63,7 @@ These records are strict, immutable host-side evidence only; all explicitly reta
 
 The overlay installs one systemd oneshot before `basic.target` and emits exact stage/probe/candidate/rootfs markers. `kaliphonestudio.physical_kali_early_userspace` binds an operator-captured transcript to the same exact physical candidate and successful non-persistent temporary-boot execution. A complete marker match is still an **observation requiring manual review**, not an automatic hardware/Beta pass. Details: [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
 
-## Rootfs handoff discovery contract (0.6.55)
+## Rootfs handoff discovery contract
 
 `kaliphonestudio.rootfs_handoff` adds a separate safety boundary between “we have the correct reproducible rootfs” and “we know where it can safely be made available on this physical phone”. The contract:
 
@@ -80,9 +80,37 @@ For avicii, the exact pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6
 
 Full policy: [`docs/ROOTFS_HANDOFF_POLICY.md`](docs/ROOTFS_HANDOFF_POLICY.md).
 
+## Typed physical storage discovery (0.6.56)
+
+`kaliphonestudio.physical_storage_discovery` provides the evidence format needed for the next real-device step without turning discovery into an installation action.
+
+- The operator report uses kernel names/partition **roles**, never absolute block-device paths.
+- Whole-block topology entries must match the exact `KPS_DIAG_BLOCK` records from the already-bound rescue transcript by kernel name, sector count and removable bit.
+- The expected storage-bus signal is taken from the same exact rescue evidence chain; for avicii that currently means a reviewed UFS signal.
+- Filesystem, encryption and free-space observations are typed and checked against profile expectations for the `userdata` role, but that role is never converted to a target path.
+- The exact original discovery-report bytes are SHA-256 bound, as is a separate recovery-plan text file.
+- Evidence is also bound to the exact rootfs-handoff assessment, physical candidate, reviewed rootfs artifact, rescue diagnostics, manual functional probe, transcript and rescue probe id.
+- A complete/matching observation set may become `discovery_ready_for_manual_review=true`. That means only “there is enough evidence for a human review”; it **does not** mean a target is approved.
+- `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `storage_verified=false`, `recovery_verified=false`, `phone_storage_written=false`, `hardware_verified=false` and `beta_gate_credit=false` remain mandatory.
+
+Recorder CLI:
+
+```bash
+python scripts/record_physical_storage_discovery.py \
+  --profile-id oneplus/avicii \
+  --handoff-assessment evidence/rootfs-handoff-assessment.json \
+  --rescue-diagnostics evidence/physical-rescue-diagnostics.json \
+  --functional-probes evidence/physical-rescue-functional-probes.json \
+  --discovery-report evidence/operator-storage-discovery.json \
+  --recovery-plan evidence/recovery-plan.txt \
+  --out evidence/physical-storage-discovery.json
+```
+
+This command is offline evidence binding only. It does not connect to a phone, mount a filesystem, decrypt storage, run Fastboot, select a partition or perform a write.
+
 ## Rootfs handoff is still a physical blocker
 
-0.6.55 completes the **discovery contract**, not the actual staging strategy. Before any physical Kali-rootfs handoff can be attempted, the exact AC2003 must provide reviewed storage/encryption/free-space/recovery evidence and a later milestone must explicitly select a reversible strategy. The common core still generates no raw block path, mount target or write authorization.
+0.6.56 completes the **typed discovery evidence layer**, not the actual staging strategy. Before any physical Kali-rootfs handoff can be attempted, the exact AC2003 still must supply real, reviewed storage/encryption/free-space/recovery observations and a later milestone must explicitly select and review a reversible strategy. The common core still generates no raw block path, mount target or write authorization.
 
 ## Offline application
 
@@ -104,7 +132,7 @@ Primary Python matrix:
 - Python 3.13
 - Python 3.14
 
-Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof and rootfs-handoff source/contract locking. A green workflow is host evidence only.
+Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof, rootfs-handoff source locking and typed physical-storage discovery contracts. A green workflow is host evidence only.
 
 ## Beta release policy
 
@@ -115,7 +143,7 @@ Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-o
 - one exact physical candidate bound to reviewed kernel/rootfs/DT authorities;
 - successful temporary boot on that same phone;
 - usable rescue/logging path and manually reviewed exact rescue markers;
-- physical storage/encryption/free-space/recovery discovery plus a separately reviewed reversible rootfs staging/handoff method;
+- real physical storage/encryption/free-space/recovery discovery, manual review, then a separately reviewed reversible rootfs staging/handoff method;
 - proof that the kernel reached the intended Kali early userspace/rootfs;
 - required storage/UFS validation;
 - safe charging/battery behavior for testing;
@@ -134,7 +162,7 @@ Do not publish an empty/symbolic Beta. Stable has a higher threshold.
 5. Do not weaken strict reproducibility rules to make a gate pass.
 6. Do not add credentials or enable remote access by default.
 7. Keep the common core multi-device; phone-specific facts belong in profiles and their reviewed evidence.
-8. A storage-layout hint is not a target path and never implies permission to write it.
+8. A storage-layout hint, discovery role or review-ready observation set is not a target path and never implies permission to write it.
 
 ## Development
 
