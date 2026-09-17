@@ -25,8 +25,9 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description=(
             "Verify two independent source/material-locked static ARM64 BusyBox builds, "
-            "stage the reviewed offline rescue userspace, and build the device profile's "
-            "deterministic rescue ramdisk. This never connects to or boots a phone."
+            "stage the reviewed offline rescue userspace, add one deterministic provenance "
+            "probe id, and build the device profile's deterministic rescue ramdisk. "
+            "This never connects to or boots a phone."
         )
     )
     result.add_argument("--profile-id", required=True)
@@ -52,7 +53,7 @@ def _refuse_overwrite(paths: tuple[Path, ...]) -> None:
         if resolved in seen:
             raise SystemExit(f"output paths must be distinct: {path}")
         seen.add(resolved)
-        if path.exists():
+        if path.exists() or path.is_symlink():
             raise SystemExit(f"refusing to overwrite existing output: {path}")
 
 
@@ -90,8 +91,12 @@ def main() -> int:
     print(f"ramdisk_compression={candidate.ramdisk_compression}")
     print(f"ramdisk_sha256={candidate.ramdisk_sha256}")
     print(f"ramdisk_size={candidate.ramdisk_size}")
+    print(f"rescue_probe_id={candidate.rescue_probe_id}")
+    print(f"rescue_probe_file_sha256={candidate.rescue_probe_file_sha256}")
     print(f"repro_evidence_sha256={repro_digest}")
     print(f"candidate_evidence_sha256={candidate_digest}")
+    print("hardware_verified=false")
+    print("beta_gate_credit=false")
     return 0
 
 
