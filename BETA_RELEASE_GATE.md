@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record or host-only evidence-session bundle does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle or exact-file dossier does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -25,9 +25,11 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Typed physical-storage discovery evidence can bind exact report/recovery-plan bytes to the exact handoff/rescue/rootfs chain while rejecting device paths, write claims and automatic target/storage/hardware/Beta promotion.
 - [x] Manual storage-review evidence can bind exact review-record and review-notes bytes to one exact physical-storage discovery chain; acceptance requires a review-ready source and explicit physical-context/topology/filesystem/encryption/free-space/recovery/evidence-chain checks, but still cannot select a target or authorize writes.
 - [x] Physical bring-up session evidence can cross-bind the exact candidate gate, rescue observation, diagnostics, functional probes, storage discovery/review and optional Kali early-userspace identities while forcing all target/write/hardware/Beta claims false.
+- [x] Physical bring-up exact-file dossier can verify the canonical session plus every bound original evidence/raw transcript/report/recovery/review file by exact SHA-256/size, with optional exact rootfs verification, while granting no physical/Beta credit.
 - [ ] Capture and manually review the real storage/encryption/free-space/recovery evidence required by those contracts and produce one accepted review record for the exact physical device.
 - [ ] Produce and review one cross-bound bring-up session from the exact real candidate/rescue/storage evidence before later storage-strategy approval.
-- [ ] Select and separately review the actual reversible rootfs staging/handoff strategy only after that exact physical review is accepted.
+- [ ] Produce and review the exact-file dossier from that real session and its original bound source bytes before later storage-strategy approval.
+- [ ] Select and separately review the actual reversible rootfs staging/handoff strategy only after that exact physical review and dossier audit are accepted.
 - [ ] Final release manifest/compatibility matrix/known issues and SHA-256 set are generated from the exact reviewed physical candidate.
 
 ## Physical AC2003 mandatory gate
@@ -42,7 +44,8 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] Rootfs-handoff discovery evidence from the real phone confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan.
 - [ ] That exact discovery record is manually reviewed and bound; `accepted_for_strategy_design=true` only authorizes later strategy design, not a write or target selection.
 - [ ] The real candidate/rescue/storage evidence is cross-bound into one reviewed physical bring-up session without identity/transcript/rootfs drift.
-- [ ] A reversible rootfs handoff target is explicitly reviewed after accepted discovery review; no guessed UFS/userdata path is accepted.
+- [ ] The canonical real session and its original evidence/transcript/report/recovery/review bytes are frozen into one exact-file dossier and reviewed for completeness before target-strategy approval.
+- [ ] A reversible rootfs handoff target is explicitly reviewed after accepted discovery review and dossier audit; no guessed UFS/userdata path is accepted.
 - [ ] `fastboot boot` succeeds on the exact phone after explicit user confirmation.
 - [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
 - [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
@@ -72,7 +75,8 @@ The following remain useful diagnostics but **cannot** satisfy a physical checkb
 - a manual-review contract or synthetic review record without real physical discovery evidence;
 - `accepted_for_strategy_design=true` before a separate reversible target/strategy review;
 - a valid host-side physical bring-up session bundle without the underlying real reviewed physical evidence;
-- synthetic/mock storage reports, reviews, sessions or transcripts.
+- a valid exact-file dossier without accepted underlying real physical evidence and later strategy/hardware review;
+- synthetic/mock storage reports, reviews, sessions, dossiers or transcripts.
 
 ## Release publication rule
 

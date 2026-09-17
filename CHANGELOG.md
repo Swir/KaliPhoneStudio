@@ -2,6 +2,18 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.59-dev — exact-file physical bring-up dossier
+
+- Added `kaliphonestudio.physical_bringup_dossier` as a schema-v1 offline audit-packaging layer for one already-created `PhysicalBringupSessionEvidence`.
+- The dossier verifies the canonical session file and every evidence/raw file named by that session: candidate gate, boot observation, rescue diagnostics, rescue functional probes, physical-storage discovery, manual storage review, raw rescue transcript, storage discovery report, recovery plan, review record and review notes.
+- When the session contains Kali early-userspace evidence, both the exact evidence file and raw transcript become mandatory dossier members; missing, extra or role-drifted files fail closed.
+- Added optional streaming verification of the exact reviewed rootfs artifact by SHA-256 and size without loading the full artifact into memory.
+- All dossier inputs must be regular non-symlink files, remain unchanged while hashed and stay within role-specific safety limits; the resulting manifest is path-independent and records only role, size, SHA-256 and canonical-JSON policy.
+- Added immutable dossier load/write validation and `scripts/build_physical_bringup_dossier.py`; the CLI performs no phone I/O, mount/decrypt operation, target selection or write authorization.
+- Added nine focused tests covering exact binding, early-userspace file pairing, extra/missing roles, raw-file substitution, non-canonical session bytes, optional rootfs verification, symlink rejection, forbidden hardware/write promotion and immutable round-trip behavior.
+- Extended `rootfs-handoff-policy` CI to compile/test the dossier together with the existing physical evidence chain and exact pinned layout source verification.
+- Project completion remains **58%** because the dossier improves audit integrity only; no real AC2003 baseline, accepted physical storage review, reversible target, temporary boot or hardware gate has been completed.
+
 ## 0.6.58-dev — cross-bound physical bring-up evidence session
 
 - Added `kaliphonestudio.physical_bringup_session` as a schema-v1 offline audit boundary across one exact physical-candidate gate, rescue boot observation, read-only diagnostics, explicitly authorized functional probes, physical-storage discovery and manual storage-review evidence chain.
