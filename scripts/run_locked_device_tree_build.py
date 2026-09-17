@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 import shutil
 
+from kaliphonestudio.device_tree import DeviceTreeError
 from kaliphonestudio.device_tree_build import (
     create_device_tree_build_plan,
     execute_device_tree_build,
@@ -16,19 +18,36 @@ from kaliphonestudio.kernel_toolchain import load_kernel_toolchain_lock
 from kaliphonestudio.profiles import get_profile
 
 
-def _export_artifacts(build_root: Path, plan, dtbo_image: Path, destination: Path) -> None:
+def _verify_export(path: Path, expected_sha256: str, expected_size: int, label: str) -> None:
+    data = path.read_bytes()
+    if len(data) != expected_size or sha256(data).hexdigest() != expected_sha256:
+        raise DeviceTreeError(f"exported {label} does not match verified build evidence")
+
+
+def _export_artifacts(build_root: Path, plan, evidence, dtbo_image: Path, destination: Path) -> None:
     if destination.exists():
-        raise ValueError(f"refusing to overwrite artifact export directory: {destination}")
+        raise DeviceTreeError(f"refusing to overwrite artifact export directory: {destination}")
     destination.mkdir(parents=True)
-    shutil.copyfile(build_root.joinpath(*PurePosixPath(plan.dtb_output).parts), destination / "dtb.bin")
+    dtb_target = destination / "dtb.bin"
+    shutil.copyfile(build_root.joinpath(*PurePosixPath(plan.dtb_output).parts), dtb_target)
+    _verify_export(dtb_target, evidence.dtb_sha256, evidence.dtb_size, "DTB")
+
     raw_dir = destination / "raw-dtbo"
     raw_dir.mkdir()
-    for index, relative in enumerate(plan.dtbo_outputs):
+    if len(plan.dtbo_outputs) != len(evidence.raw_dtbo):
+        raise DeviceTreeError("raw DTBO export count drifted from verified build evidence")
+    for index, (relative, verified) in enumerate(zip(plan.dtbo_outputs, evidence.raw_dtbo)):
+        if relative != verified.relative_path:
+            raise DeviceTreeError("raw DTBO export path drifted from verified build evidence")
         source = build_root.joinpath(*PurePosixPath(relative).parts)
-        shutil.copyfile(source, raw_dir / f"{index:03d}.dtbo")
+        target = raw_dir / f"{index:03d}.dtbo"
+        shutil.copyfile(source, target)
+        _verify_export(target, verified.artifact_sha256, verified.artifact_size, f"raw DTBO {index}")
+
     target = destination / "dtbo.img"
     if dtbo_image.resolve() != target.resolve():
         shutil.copyfile(dtbo_image, target)
+    _verify_export(target, evidence.dtbo_image_sha256, evidence.dtbo_image_size, "DTBO image")
 
 
 def main() -> int:
@@ -85,7 +104,7 @@ def main() -> int:
     )
     digest = write_evidence(evidence, args.out)
     if args.artifact_dir is not None:
-        _export_artifacts(args.build_root, plan, args.dtbo_image, args.artifact_dir)
+        _export_artifacts(args.build_root, plan, evidence, args.dtbo_image, args.artifact_dir)
     print(plan.canonical_json(), end="")
     print(f"device-tree plan sha256={plan_digest}")
     print(evidence.canonical_json(), end="")
