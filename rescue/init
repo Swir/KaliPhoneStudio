@@ -14,8 +14,31 @@ mount -t devtmpfs devtmpfs /dev || echo "KPS: devtmpfs mount unavailable"
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts || echo "KPS: devpts mount unavailable"
 
+KPS_STAGE_MARKER="KPS_RESCUE_STAGE=init-reached-v1"
+echo "$KPS_STAGE_MARKER"
 if [ -w /dev/kmsg ]; then
-    echo "KaliPhoneStudio rescue userspace reached /init" > /dev/kmsg
+    echo "$KPS_STAGE_MARKER" > /dev/kmsg
+fi
+
+KPS_PROBE_FILE="/etc/kaliphonestudio/rescue-probe-id"
+if [ -r "$KPS_PROBE_FILE" ]; then
+    KPS_PROBE_ID="$(tr -d '\r\n' < "$KPS_PROBE_FILE")"
+    case "$KPS_PROBE_ID" in
+        *[!0-9a-f]*|'')
+            echo "KPS: invalid rescue probe id"
+            ;;
+        *)
+            if [ "${#KPS_PROBE_ID}" -eq 64 ]; then
+                KPS_PROBE_MARKER="KPS_RESCUE_PROBE_ID=$KPS_PROBE_ID"
+                echo "$KPS_PROBE_MARKER"
+                if [ -w /dev/kmsg ]; then
+                    echo "$KPS_PROBE_MARKER" > /dev/kmsg
+                fi
+            else
+                echo "KPS: invalid rescue probe id length"
+            fi
+            ;;
+    esac
 fi
 
 echo ""
