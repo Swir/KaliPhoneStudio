@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio engineering** from **per-d
 
 The percentage is weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory, but do not receive the same weight as verified device milestones.
 
-## Current development line — 0.6.44-dev
+## Current development line — 0.6.46-dev
 
 ### Completed in the current kernel/rootfs milestone
 
@@ -30,16 +30,24 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Review kernel run `35177350001`: identical `.config`, equal 43,878,416-byte Images, but 4,388,978 differing Image bytes across 229,151 ranges; only 20 of 4,597 selected intermediate artifacts differ.
 - [x] Identify `kernel/kheaders.o` as a concrete differing kernel-linked artifact while keeping `CONFIG_IKHEADERS` enabled.
 - [x] Bind deterministic GNU tar order/mtime/uid/gid and single-threaded xz policy to the avicii kernel build plan for embedded headers.
-- [x] Add bounded ARM64 ELF-section diagnostics classifying executable/debug/metadata/relocation/data divergence after strict failure.
+- [x] Review kernel run `35181516724`: deterministic IKHEADERS reduces final divergence to only 16 bytes across 2 ranges and 14/4,597 selected artifacts while final `.config` remains identical.
+- [x] Confirm that `kernel/kheaders.o`, `System.map`, kallsyms objects and earlier archive drift disappear after deterministic IKHEADERS policy.
+- [x] Narrow the remaining target-linked divergence to four ARM32 compat-vDSO objects (`note.o`, `sigreturn.o`, `vdso.o`, `vgettimeofday.o`).
+- [x] Add recursive source/output prefix maps to the profile-bound `CC` path consumed by pinned `CC_COMPAT ?= $(CC)` in the compat-vDSO Makefile.
+- [x] Extend ELF diagnostics to ARM ELF32 compat-vDSO objects while excluding unrelated `scripts/*` host-tool objects.
+- [x] Compare generated `kernel/kheaders_data.tar.xz` directly in build-tree diagnostics.
+- [x] Close the executed-build provenance gap by requiring strict reproducibility evidence to match each build's exact config/Image verifier evidence digests.
+- [x] Add a fail-closed reviewed kernel-authority contract for a future strict pass.
+- [x] Add candidate-level binding from a schema-v8 first-boot manifest to an exact reviewed kernel authority.
 - [x] Review and accept the first strict byte-identical Kali ARM64 rootfs authority from run `35158577624`.
 - [x] Bind rootfs authority, raw A/B provenance and canonicalization evidence to first-boot candidate contracts.
 - [x] Add deterministic credential-free first-boot provisioning and reproducible rescue-initramfs foundations.
 
 ### Immediate next gates
 
-- [ ] Review real kernel authority run `35181516724`, the first retry with deterministic `CONFIG_IKHEADERS` archive policy and ELF-section diagnostics.
-- [ ] If strict kernel equality still fails, confirm whether `kernel/kheaders.o` became byte-identical and use the ELF evidence to isolate the next smallest divergence source.
-- [ ] Produce reviewed byte-identical final kernel `.config` + ARM64 `Image` evidence from two independent exact-source builds.
+- [ ] Complete and review real kernel A/B run `35183670399`, the compat-vDSO recursive prefix-map experiment.
+- [ ] If strict kernel equality passes, persist a reviewed `KernelAuthorityRecord` only after checking the exact run/commit/artifact and full build/reproducibility binding chain.
+- [ ] If strict equality still fails, use ARM32-aware ELF section evidence plus direct IKHEADERS archive evidence to isolate the next smallest target-linked difference.
 - [ ] Bind the accepted kernel authority to the exact DTB/DTBO and first-boot candidate.
 - [ ] Capture the exact physical AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` provenance from that exact OTA.
@@ -98,8 +106,11 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Git-tracked source-mtime normalization.
 - [x] Final Image byte-range diagnostics.
 - [x] Intermediate build-tree diagnostics.
-- [x] ARM64 ELF section diagnostics.
+- [x] ARM64 + ARM32 target ELF section diagnostics.
 - [x] Deterministic `CONFIG_IKHEADERS` archive/compressor policy.
+- [x] Compat-vDSO recursive source/output prefix-map experiment bound to the profile build recipe.
+- [x] Strict build-run verifier-evidence provenance binding.
+- [x] Reviewed kernel-authority schema and candidate-authority binding contract.
 - [ ] Accept first real byte-identical kernel A/B authority.
 - [ ] Promote an exact kernel commit/patchset only after physical temporary boot evidence.
 
@@ -130,6 +141,7 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Schema-v8 first-boot candidate manifest.
 - [x] Candidate-level rootfs raw-A/B/canonicalization provenance binding.
 - [x] Candidate-level reviewed-rootfs-authority binding.
+- [x] Candidate-level reviewed-kernel-authority binding contract.
 - [x] Deterministic provisioning overlay with no credentials and remote access disabled.
 - [ ] Instantiate the exact candidate against physical firmware + stock boot + accepted kernel/DT evidence.
 
