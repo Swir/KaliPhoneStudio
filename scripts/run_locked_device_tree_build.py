@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import shutil
 
 from kaliphonestudio.device_tree_build import (
     create_device_tree_build_plan,
@@ -13,6 +14,21 @@ from kaliphonestudio.kernel_authority import load_and_verify_kernel_authority
 from kaliphonestudio.kernel_contract import create_kernel_build_plan
 from kaliphonestudio.kernel_toolchain import load_kernel_toolchain_lock
 from kaliphonestudio.profiles import get_profile
+
+
+def _export_artifacts(build_root: Path, plan, dtbo_image: Path, destination: Path) -> None:
+    if destination.exists():
+        raise ValueError(f"refusing to overwrite artifact export directory: {destination}")
+    destination.mkdir(parents=True)
+    shutil.copyfile(build_root.joinpath(*PurePosixPath(plan.dtb_output).parts), destination / "dtb.bin")
+    raw_dir = destination / "raw-dtbo"
+    raw_dir.mkdir()
+    for index, relative in enumerate(plan.dtbo_outputs):
+        source = build_root.joinpath(*PurePosixPath(relative).parts)
+        shutil.copyfile(source, raw_dir / f"{index:03d}.dtbo")
+    target = destination / "dtbo.img"
+    if dtbo_image.resolve() != target.resolve():
+        shutil.copyfile(dtbo_image, target)
 
 
 def main() -> int:
@@ -29,6 +45,7 @@ def main() -> int:
     parser.add_argument("--toolchain-root", type=Path, required=True)
     parser.add_argument("--build-root", type=Path, required=True)
     parser.add_argument("--dtbo-image", type=Path, required=True)
+    parser.add_argument("--artifact-dir", type=Path)
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--plan-out", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
@@ -67,6 +84,8 @@ def main() -> int:
         jobs=args.jobs,
     )
     digest = write_evidence(evidence, args.out)
+    if args.artifact_dir is not None:
+        _export_artifacts(args.build_root, plan, args.dtbo_image, args.artifact_dir)
     print(plan.canonical_json(), end="")
     print(f"device-tree plan sha256={plan_digest}")
     print(evidence.canonical_json(), end="")
