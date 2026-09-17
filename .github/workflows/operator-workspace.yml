@@ -1,0 +1,76 @@
+name: operator-workspace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/app.py"
+      - "kaliphonestudio/operator_diagnostics.py"
+      - "devices/**/profile.json"
+      - "BUILD_STATUS.json"
+      - "BETA_RELEASE_GATE.md"
+      - "scripts/generate_progress_svgs.py"
+      - "tests/test_app.py"
+      - "tests/test_operator_diagnostics.py"
+      - "docs/OPERATOR_WORKSPACE.md"
+      - ".github/workflows/operator-workspace.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/app.py"
+      - "kaliphonestudio/operator_diagnostics.py"
+      - "devices/**/profile.json"
+      - "BUILD_STATUS.json"
+      - "BETA_RELEASE_GATE.md"
+      - "scripts/generate_progress_svgs.py"
+      - "tests/test_app.py"
+      - "tests/test_operator_diagnostics.py"
+      - "docs/OPERATOR_WORKSPACE.md"
+      - ".github/workflows/operator-workspace.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      - name: Compile safe operator workspace sources
+        run: >-
+          python -m py_compile
+          kaliphonestudio/operator_diagnostics.py
+          kaliphonestudio/app.py
+          tests/test_operator_diagnostics.py
+          tests/test_app.py
+      - name: Run offline diagnostics and application contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest -q tests/test_operator_diagnostics.py tests/test_app.py
+      - name: Exercise redacted CLI diagnostics export
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python main.py --doctor --profile-id oneplus/avicii --json > /tmp/doctor.json
+          python main.py --recovery-guide --profile-id oneplus/avicii --json > /tmp/recovery.json
+          python main.py --export-diagnostics /tmp/operator-bundle.json --profile-id oneplus/avicii --json > /tmp/export.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from kaliphonestudio.operator_diagnostics import load_operator_bundle
+
+          doctor = json.loads(Path('/tmp/doctor.json').read_text())
+          assert doctor['physical_interaction_performed'] is False
+          assert doctor['hardware_verified'] is False
+          assert doctor['beta_gate_credit'] is False
+          bundle = load_operator_bundle(Path('/tmp/operator-bundle.json'))
+          assert bundle['privacy']['external_commands_executed'] is False
+          assert bundle['privacy']['device_queried'] is False
+          assert bundle['privacy']['absolute_tool_paths_exported'] is False
+          assert bundle['hardware_verified'] is False
+          assert bundle['beta_gate_credit'] is False
+          PY
