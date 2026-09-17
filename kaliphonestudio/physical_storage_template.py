@@ -26,6 +26,7 @@ from .physical_storage_discovery import (
     StorageEncryptionObservation,
     StorageFilesystemObservation,
     StorageFreeSpaceObservation,
+    PhysicalStorageDiscoveryError,
     parse_physical_storage_discovery_report,
 )
 from .profiles import DeviceProfile
@@ -134,16 +135,33 @@ def create_physical_storage_discovery_template(
         target_selected=False,
         storage_path_bound=False,
     )
-    parsed = parse_physical_storage_discovery_report(json.loads(report.canonical_json()))
+    try:
+        parsed = parse_physical_storage_discovery_report(json.loads(report.canonical_json()))
+    except (PhysicalStorageDiscoveryError, json.JSONDecodeError) as exc:
+        raise PhysicalStorageTemplateError("generated physical storage template failed strict validation") from exc
     if parsed != report:
         raise PhysicalStorageTemplateError("generated physical storage template canonicalization drifted")
     return report
+
+
+def _validated_payload(report: PhysicalStorageDiscoveryReport) -> str:
+    if not isinstance(report, PhysicalStorageDiscoveryReport):
+        raise PhysicalStorageTemplateError("physical storage discovery template must be typed report data")
+    try:
+        payload = report.canonical_json()
+        parsed = parse_physical_storage_discovery_report(json.loads(payload))
+    except (PhysicalStorageDiscoveryError, json.JSONDecodeError, TypeError) as exc:
+        raise PhysicalStorageTemplateError("physical storage discovery template failed strict validation") from exc
+    if parsed != report:
+        raise PhysicalStorageTemplateError("physical storage discovery template canonicalization drifted")
+    return payload
 
 
 def write_physical_storage_discovery_template(
     report: PhysicalStorageDiscoveryReport,
     destination: Path,
 ) -> str:
+    payload = _validated_payload(report)
     destination = Path(destination)
     if destination.exists() or destination.is_symlink():
         raise PhysicalStorageTemplateError("refusing to overwrite physical storage discovery template")
@@ -151,7 +169,6 @@ def write_physical_storage_discovery_template(
     temporary = destination.with_name(destination.name + ".tmp")
     if temporary.exists() or temporary.is_symlink():
         raise PhysicalStorageTemplateError("refusing stale physical storage discovery template temporary path")
-    payload = report.canonical_json()
     try:
         temporary.write_text(payload, encoding="utf-8", newline="\n")
         temporary.replace(destination)
