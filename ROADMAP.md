@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.56-dev**
+**Current development line — 0.6.57-dev**
 
 **58% complete**
 
@@ -44,13 +44,15 @@ Host-side preparation now complete:
 - [x] **0.6.56:** typed physical-storage discovery report/evidence contract bound to the exact handoff assessment, rescue diagnostics/functional probe, transcript/probe identity and reviewed rootfs chain.
 - [x] **0.6.56:** whole-block topology must cross-match exact rescue `KPS_DIAG_BLOCK` name/sector/removable observations; filesystem/encryption/free-space remain typed partition-role observations, never a target path.
 - [x] **0.6.56:** exact discovery-report bytes and a separate recovery-plan file are SHA-256 bound; a complete set can become review-ready but all target/write/storage/recovery/hardware/Beta claims remain false.
+- [x] **0.6.57:** safe operator template generator pre-fills only already-bound whole-block rescue topology and leaves filesystem/encryption/free-space explicitly unknown until genuinely observed.
+- [x] **0.6.57:** template output is strict-schema revalidated and immutable, and cannot express `/dev/...`, target selection, a mount/staging target or write authorization.
 
 Still physically blocked:
 
 - [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
-- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan and bind them through the 0.6.56 typed discovery evidence layer.
+- [ ] Generate the operator discovery template from the exact physical rescue evidence, fill only real read-only filesystem/encryption/free-space observations, bind the recovery plan and record the typed discovery evidence.
 - [ ] Manually review that exact discovery evidence; `discovery_ready_for_manual_review=true` is not itself approval.
 - [ ] Select and review a safe, reversible rootfs staging/handoff target **after** reviewed physical evidence exists; no guessed UFS/userdata path.
 - [ ] Execute explicitly confirmed temporary boot on the exact AC2003.
@@ -94,7 +96,7 @@ Stable requires a later, higher threshold: repeated device testing, stronger rec
 
 ## Immediate highest-impact work
 
-1. Keep the 0.6.56 physical-storage discovery evidence layer fail-closed and prepare operator-facing capture/templates that cannot express a target path or write authorization.
-2. Do **not** implement a storage-target selection algorithm before real AC2003 evidence exists; the next target-selection milestone must consume a manually reviewed exact discovery record rather than profile hints.
-3. When a physical AC2003 is available, collect the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect the storage discovery report/recovery plan before any storage write.
-4. Review physical rescue, storage discovery and Kali-rootfs markers as separate evidence layers; success in one layer must never auto-promote another.
+1. Do **not** implement storage-target selection before real AC2003 evidence exists; the next target-selection milestone must consume a manually reviewed exact discovery record, never profile hints or a generated template.
+2. Keep physical evidence acquisition read-only and auditable. When a real AC2003 is available, collect the Fastboot/OxygenOS baseline, validate the exact OTA/stock boot, instantiate the exact physical candidate, then generate/fill the storage-discovery template and bind the recovery plan.
+3. Review rescue, storage-discovery and Kali-rootfs observations as separate evidence layers; success in one layer must never auto-promote another.
+4. While hardware is unavailable, continue hardening verification/recovery/release tooling that can be proven host-side without inventing hardware success.
