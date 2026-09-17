@@ -4,6 +4,22 @@ on:
   workflow_run:
     workflows: ["kernel-real-repro"]
     types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - "devices/**/profile.json"
+      - "kaliphonestudio/device_tree.py"
+      - "kaliphonestudio/device_tree_build.py"
+      - "kaliphonestudio/device_tree_authority.py"
+      - "kaliphonestudio/candidate_device_tree_authority.py"
+      - "scripts/run_locked_device_tree_build.py"
+      - "scripts/verify_device_tree_repro_pair.py"
+      - "scripts/create_device_tree_authority.py"
+      - "tools/device-tree-format-locks.json"
+      - "evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json"
+      - "evidence/authorities/kernel/oneplus-avicii-4.19.300-2026-09-17/**"
+      - "BUILD_STATUS.json"
+      - ".github/workflows/device-tree-real-repro.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,13 +42,16 @@ jobs:
       - name: Install focused test dependency
         run: python -m pip install pytest
 
-      - name: Compile device-tree build contracts
+      - name: Compile device-tree build and authority contracts
         run: >-
           python -m py_compile
           kaliphonestudio/device_tree.py
           kaliphonestudio/device_tree_build.py
+          kaliphonestudio/device_tree_authority.py
+          kaliphonestudio/candidate_device_tree_authority.py
           scripts/run_locked_device_tree_build.py
           scripts/verify_device_tree_repro_pair.py
+          scripts/create_device_tree_authority.py
 
       - name: Run focused DTB/DTBO contract tests
         env:
@@ -41,13 +60,17 @@ jobs:
           python -m pytest -q
           tests/test_device_tree.py
           tests/test_device_tree_build.py
+          tests/test_device_tree_authority.py
+          tests/test_candidate_device_tree_authority.py
 
   real-device-tree-repro:
     if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -59,15 +82,52 @@ jobs:
       KERNEL_AUTHORITY_EVIDENCE: evidence/authorities/kernel/oneplus-avicii-4.19.300-2026-09-17
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - name: Check out exact triggering main commit
+      - name: Check out exact DT contract commit
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 1
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+
+      - name: Select exact successful kernel evidence run
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          event_name = os.environ["GITHUB_EVENT_NAME"]
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if event_name == "workflow_run":
+              workflow = event.get("workflow_run") or {}
+              if workflow.get("conclusion") != "success" or workflow.get("name") != "kernel-real-repro":
+                  raise SystemExit("workflow_run trigger is not a successful kernel-real-repro run")
+              run_id = workflow.get("id")
+              kernel_sha = workflow.get("head_sha")
+              source = "triggering-kernel-run"
+          else:
+              status = json.loads(Path("BUILD_STATUS.json").read_text(encoding="utf-8"))
+              if status.get("kernel_reproducibility_authority_state") != "passed-reviewed":
+                  raise SystemExit("BUILD_STATUS has no reviewed kernel reproducibility authority")
+              run_id = status.get("kernel_reproducibility_authority_run")
+              kernel_sha = status.get("kernel_authority_commit")
+              source = "reviewed-kernel-authority"
+          if not isinstance(run_id, int) or run_id <= 0:
+              raise SystemExit("invalid kernel run id")
+          if not isinstance(kernel_sha, str) or len(kernel_sha) != 40:
+              raise SystemExit("invalid kernel authority commit")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"kernel_run_id={run_id}", file=out)
+              print(f"kernel_sha={kernel_sha}", file=out)
+              print(f"kernel_evidence_source={source}", file=out)
+          print(f"kernel evidence source={source} run={run_id} commit={kernel_sha}")
+          PY
 
       - name: Install exact-build host prerequisites
         run: |
@@ -77,13 +137,13 @@ jobs:
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
 
-      - name: Download exact successful kernel outputs from triggering run
+      - name: Download exact successful kernel outputs
         uses: actions/download-artifact@v5
         with:
           name: kernel-real-repro-nonrelease
           path: kernel-artifact
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.context.outputs.kernel_run_id }}
 
       - name: Resolve exact source and compiler locks
         id: locks
@@ -107,6 +167,30 @@ jobs:
               print(f"toolchain_commit={lock.source_commit}", file=out)
               print(f"toolchain_subtree={lock.subtree}", file=out)
               print(f"toolchain_tree={lock.tree_sha1}", file=out)
+          PY
+
+      - name: Verify selected run is the reviewed kernel authority when reused
+        if: github.event_name != 'workflow_run'
+        shell: bash
+        env:
+          SELECTED_KERNEL_RUN: ${{ steps.context.outputs.kernel_run_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          status = json.loads(Path("BUILD_STATUS.json").read_text(encoding="utf-8"))
+          authority = json.loads(Path("evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json").read_text(encoding="utf-8"))
+          selected = int(os.environ["SELECTED_KERNEL_RUN"])
+          if status.get("kernel_reproducibility_authority_run") != selected:
+              raise SystemExit("selected kernel run does not match BUILD_STATUS authority")
+          if authority.get("authority_run_id") != selected:
+              raise SystemExit("selected kernel run does not match immutable kernel authority record")
+          if authority.get("reviewed") is not True or authority.get("strict_byte_identical") is not True:
+              raise SystemExit("kernel authority record is not reviewed/strict")
+          if authority.get("hardware_verified") is not False or authority.get("beta_gate_credit") is not False:
+              raise SystemExit("host kernel authority record illegally claims hardware/Beta credit")
           PY
 
       - name: Materialize exact source-locked Android Clang subtree
@@ -170,7 +254,7 @@ jobs:
           cmp kernel-artifact/evidence/device-tree-source-mtime-a.json \
               kernel-artifact/evidence/device-tree-source-mtime-b.json
 
-      - name: Validate downloaded kernel artifact layout
+      - name: Validate downloaded kernel artifact layout and reviewed bytes
         run: |
           set -euo pipefail
           test -f kernel-artifact/build-a/.config
@@ -179,6 +263,21 @@ jobs:
           test -f kernel-artifact/build-b/arch/arm64/boot/Image
           cmp kernel-artifact/build-a/.config kernel-artifact/build-b/.config
           cmp kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          authority = json.loads(Path("evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json").read_text(encoding="utf-8"))
+          for root in ("build-a", "build-b"):
+              config = Path("kernel-artifact") / root / ".config"
+              image = Path("kernel-artifact") / root / "arch/arm64/boot/Image"
+              config_bytes = config.read_bytes()
+              image_bytes = image.read_bytes()
+              if hashlib.sha256(config_bytes).hexdigest() != authority["config_sha256"] or len(config_bytes) != authority["config_size"]:
+                  raise SystemExit(f"{root} config does not match reviewed kernel authority")
+              if hashlib.sha256(image_bytes).hexdigest() != authority["image_sha256"] or len(image_bytes) != authority["image_size"]:
+                  raise SystemExit(f"{root} Image does not match reviewed kernel authority")
+          PY
           sha256sum \
             kernel-artifact/build-a/.config kernel-artifact/build-b/.config \
             kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
