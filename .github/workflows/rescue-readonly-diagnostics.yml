@@ -8,11 +8,14 @@ on:
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_rescue_functional_probes.py"
+      - "kaliphonestudio/physical_hardware_survey.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "scripts/record_physical_rescue_functional_probes.py"
+      - "scripts/record_physical_hardware_survey.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
       - "tests/test_physical_rescue_functional_probes.py"
+      - "tests/test_physical_hardware_survey.py"
       - "tests/test_rescue_init_readonly_policy.py"
       - ".github/workflows/rescue-readonly-diagnostics.yml"
   pull_request:
@@ -22,11 +25,14 @@ on:
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_rescue_functional_probes.py"
+      - "kaliphonestudio/physical_hardware_survey.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "scripts/record_physical_rescue_functional_probes.py"
+      - "scripts/record_physical_hardware_survey.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
       - "tests/test_physical_rescue_functional_probes.py"
+      - "tests/test_physical_hardware_survey.py"
       - "tests/test_rescue_init_readonly_policy.py"
       - ".github/workflows/rescue-readonly-diagnostics.yml"
   workflow_dispatch:
@@ -49,8 +55,10 @@ jobs:
           python -m py_compile
           kaliphonestudio/physical_rescue_diagnostics.py
           kaliphonestudio/physical_rescue_functional_probes.py
+          kaliphonestudio/physical_hardware_survey.py
           scripts/record_physical_rescue_diagnostics.py
           scripts/record_physical_rescue_functional_probes.py
+          scripts/record_physical_hardware_survey.py
       - name: Validate rescue init shell syntax
         run: sh -n rescue/init
       - name: Run focused read-only rescue diagnostic contracts
@@ -61,4 +69,5 @@ jobs:
           tests/test_physical_boot_observation.py
           tests/test_physical_rescue_diagnostics.py
           tests/test_physical_rescue_functional_probes.py
+          tests/test_physical_hardware_survey.py
           tests/test_rescue_init_readonly_policy.py
