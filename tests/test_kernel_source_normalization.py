@@ -23,7 +23,7 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def _repo(tmp_path: Path) -> tuple[Path, str]:
     repo = tmp_path / "kernel"
-    repo.mkdir()
+    repo.mkdir(parents=True)
     _git(repo, "init", "--quiet")
     _git(repo, "config", "user.name", "KaliPhoneStudio Tests")
     _git(repo, "config", "user.email", "tests@example.invalid")
