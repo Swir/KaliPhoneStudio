@@ -35,8 +35,20 @@ def test_progress_is_consistent_across_active_status_docs():
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
-    assert f"**{progress}% complete**" in readme
+    assert f"{progress}% complete" in readme
     assert f"**{progress}% complete**" in roadmap
+
+
+def test_readme_keeps_swir_readme_pro_discoverability_and_footer_contract():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert readme.startswith('<div align="center">')
+    assert "## 🔎 Search Keywords" in readme
+    keyword_section = readme.split("## 🔎 Search Keywords", 1)[1]
+    keyword_line = next((line for line in keyword_section.splitlines() if line.startswith("`")), "")
+    assert 8 <= keyword_line.count("`") // 2 <= 20
+    assert "assets/power-divider-v4.svg" in readme
+    assert "https://github.com/Swir" in readme
+    assert "All projects" in readme
 
 
 def test_first_device_profile_contract():
