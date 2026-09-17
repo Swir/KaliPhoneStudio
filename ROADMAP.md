@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio engineering** from **per-d
 
 The percentage is weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but do not receive the same weight as verified device milestones.
 
-## Current development line — 0.6.52-dev
+## Current development line — 0.6.53-dev
 
 ### Completed host-side foundations
 
@@ -33,6 +33,8 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Offline physical rescue observation evidence binds exact successful temporary-boot execution + exact rescue candidate + raw console transcript.
 - [x] Bounded read-only rescue sysfs inventory for block/SCSI/power/input/framebuffer/DRM signals.
 - [x] Offline diagnostics evidence binds the exact already-observed transcript and keeps every hardware verification flag false pending manual review.
+- [x] Explicit local-only `/run/kps-readonly-probe --confirm-read-only` helper performs bounded 4 KiB block reads to `/dev/null` plus paired battery sampling without persistent writes.
+- [x] Offline functional-probe evidence binds the exact physical observation, exact read-only diagnostics and same transcript while keeping storage/charging/hardware/Beta verification false.
 
 ### Immediate next gates
 
@@ -43,7 +45,8 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [ ] Prepare the exact local temporary-boot offer and pass fresh runtime device/state revalidation.
 - [ ] Attempt only a physical **temporary boot** first; no persistent write.
 - [ ] Capture the raw physical console/log stream and bind exact rescue probe + diagnostics blocks to the exact execution.
-- [ ] Manually review UFS/storage, power/charging, input/display signals and separately prove their required behavior; raw sysfs presence alone is insufficient.
+- [ ] If the local rescue shell is usable, explicitly invoke the bounded read-only functional probe and bind its exact block-read/battery records to the same transcript.
+- [ ] Manually review UFS/storage and power/charging behavior and separately prove the required behavior; sysfs presence, one 4 KiB read, or two telemetry samples are not Beta verdicts.
 - [ ] Prove Kali early userspace/rootfs and a usable rescue/log path.
 
 ## Phase A — Multi-device studio core
@@ -88,14 +91,16 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Deterministic rescue probe ID embedded in the exact candidate ramdisk.
 - [x] Exact machine-readable `/init` stage/probe markers and offline raw-transcript binding contract.
 - [x] Read-only machine-readable sysfs inventory with strict transcript binding and no persistent mounts/writes.
-- [ ] Observe and manually review exact rescue proof/diagnostic markers on the physical AC2003.
+- [x] Manual-only bounded raw-read/battery probe generated in initramfs RAM; exact `--confirm-read-only` argument required before any functional read.
+- [x] Fail-closed offline functional-probe evidence with exact observation/diagnostics/transcript cross-binding and no automatic hardware/Beta promotion.
+- [ ] Observe and manually review exact rescue proof/diagnostic/probe markers on the physical AC2003.
 - [ ] Prove Kali early userspace/rootfs on physical hardware.
 - [ ] Prove a usable physical rescue/log path beyond marker observation.
 - [ ] Exercise rollback/recovery on the exact physical baseline.
 
 ## Phase D — Physical AC2003 bring-up
 
-Nothing in this phase may be checked from host-only CI, a prepared offer, Fastboot return code, unreviewed transcript, or raw sysfs presence alone.
+Nothing in this phase may be checked from host-only CI, a prepared offer, Fastboot return code, unreviewed transcript, raw sysfs presence, or a bounded read-only probe alone.
 
 - [ ] Exact model/profile/serial recognized on physical phone.
 - [ ] Exact OxygenOS build/fingerprint captured.
@@ -103,14 +108,14 @@ Nothing in this phase may be checked from host-only CI, a prepared offer, Fastbo
 - [ ] Explicitly confirmed temporary boot succeeds **and independent reviewed physical evidence confirms actual boot progress**.
 - [ ] Rescue/log channel works.
 - [ ] Kernel reaches Kali early userspace/rootfs.
-- [ ] Required UFS/storage path is functionally verified, not merely enumerated.
+- [ ] Required UFS/storage path is functionally verified, not merely enumerated or sampled by one bounded read.
 - [ ] Display/touch is usable or release is explicitly console-only; inventory alone is insufficient.
 - [ ] USB rescue behavior verified.
 - [ ] Wi-Fi verified.
 - [ ] Bluetooth verified.
 - [ ] Modem/cellular documented for Beta scope.
 - [ ] Audio documented for Beta scope.
-- [ ] Charging/battery behavior is safe enough for testing, beyond read-only telemetry presence.
+- [ ] Charging/battery behavior is safe enough for testing, beyond telemetry or a two-sample read-only probe.
 - [ ] Suspend/resume/power behavior documented.
 - [ ] Recovery and A/B rollback exercised.
 
