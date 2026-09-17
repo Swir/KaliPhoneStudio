@@ -2,17 +2,36 @@
 
 This file tracks the current development line. Historical entries through **0.6.27-dev** remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). The detailed pre-sync `0.6.28-dev`–`0.6.42-dev` active-line changelog remains permanently recoverable from repository commit `43e9836bfdca651ad31727a303714e44c44929db` and earlier Git history.
 
+## 0.6.46-dev — reviewed kernel authority contract and candidate binding
+
+- Closed a provenance gap between strict A/B reproducibility and the executed builds: `kernel_build_binding` now requires the reproducibility record's build-A/build-B config and Image verifier-evidence digests to match the exact per-build run records, not only the final artifact bytes.
+- Added fail-closed `KernelAuthorityRecord` for a future successful real authority run. A record binds exact run/commit/artifact IDs, profile/source/kernel-plan/toolchain/recipe/environment, both executed-build evidence digests, strict reproducibility evidence, reproducibility-binding evidence and accepted config/Image hashes/sizes.
+- Kernel authority creation requires explicit `reviewed=True`, strict byte identity and distinct-build-root proof, while permanently keeping `hardware_verified=false` and `beta_gate_credit=false`.
+- Authority verification reconstructs the typed build/reproducibility binding from the plan, toolchain, A/B run records and strict reproducibility evidence before accepting the reviewed record, preventing detached/substituted chains.
+- Added candidate-level `FirstBootKernelAuthorityEvidence`: a schema-v8 first-boot candidate must match the exact reviewed authority's source, plan, toolchain lock, recipe/environment, A/B run records, strict reproducibility/binding evidence and final config/Image identity.
+- Added strict JSON/schema/digest validation, immutable writers, symlink-safe authority loading and negative tests for injected fields, detached evidence, artifact substitution and host-side hardware/Beta claims.
+- Project completion remains **54%**. The authority contract does not create an authority from a failed or still-running kernel build.
+
+## 0.6.45-dev — compat-vDSO path normalization after 16-byte strict failure
+
+- Reviewed real run `35181516724` as a **strict failure** despite the dramatic narrowing: final `.config` was still byte-identical, both Images were exactly 43,878,416 bytes, but only 16 Image bytes remained different across two 8-byte ranges at offsets `24740796..24740803` and `38215952..38215959`.
+- Image A SHA-256 was `5c34e4e86b858ec02cc28abd06673747620dc00d45160b0fc084df997f7faf9c`; Image B SHA-256 was `97d6ba26afbea7aa543803a9f15e111e6ed5826cbf4c3c3c819e896998a64e54`.
+- Build-tree evidence narrowed divergence to 14 of 4,597 selected artifacts. Deterministic IKHEADERS removed the prior `kernel/kheaders.o`, kallsyms, `System.map` and archive-related differences.
+- The four remaining target-linked divergent objects were the ARM32 compat-vDSO objects `note.o`, `sigreturn.o`, `vdso.o` and `vgettimeofday.o`. Remaining `scripts/dtc` / `scripts/kconfig` differences were host-tool objects, not target Image inputs.
+- The pinned vDSO32 Makefile uses its own `VDSO_CAFLAGS` and `CC_COMPAT ?= $(CC)`, so normal kernel `KCFLAGS` path remapping is not inherited. The profile now binds canonical source/output prefix maps into recursive GNU make `CC` using `$(KBUILD_SRC)` and `$(CURDIR)` so `CC_COMPAT` receives path-independent debug/macro identities.
+- Extended ELF diagnostics to support target ARM ELF32 compat-vDSO objects while excluding unrelated `scripts/*` host objects. The earlier ARM64-only classifier's fail-closed rejection is therefore fixed without weakening target validation.
+- Extended build-tree diagnostics to compare generated `kernel/kheaders_data.tar.xz` directly.
+- Full Python 3.11/3.12/3.13/3.14 CI and focused kernel contracts passed before PR #47 was merged as `e600a5de13fa91085464c7ce2d4a6327f39b96e8`.
+- Real A/B run `35183670399` is testing the exact compat-vDSO recursive prefix-map experiment. No result is claimed before strict completion/review.
+
 ## 0.6.44-dev — ELF divergence classification and deterministic IKHEADERS archive policy
 
 - Reviewed real kernel authority run `35177350001` as another **strict failure**, never as partial reproducibility credit. Both exact-source, source-mtime-normalized `jobs=1` builds produced identical final `.config` and equal 43,878,416-byte ARM64 Images, but 4,388,978 Image bytes still differed across 229,151 ranges from offset 302,366 through 43,633,488.
 - The new 0.6.43 build-tree evidence narrowed that failure to only **20 differing selected artifacts out of 4,597**, including `kernel/kheaders.o`, compat-vDSO32 objects, kallsyms objects, `System.map`, `vmlinux.o` and `vmlinux`.
-- Added fail-closed `kaliphonestudio.kernel_elf_diagnostics` plus an offline CLI. It parses only bounded ARM64 ELF64 little-endian candidates and classifies differences by executable, debug, metadata, relocation and data sections while rejecting unsafe paths, symlinks, malformed/non-AArch64 ELF and moving files.
-- Chained ELF-section evidence directly after the existing build-tree diagnostic so a future strict failure automatically uploads both diagnostic layers. Diagnostic evidence always keeps `hardware_verified=false` and `beta_gate_credit=false`.
-- Preserved `CONFIG_IKHEADERS`; reproducibility is **not** obtained by disabling it. Instead the avicii kernel plan now binds deterministic GNU tar order/mtime/uid/gid settings and single-threaded xz for upstream embedded-header archive generation.
+- Added fail-closed kernel ELF diagnostics and chained them after strict failure without changing acceptance.
+- Preserved `CONFIG_IKHEADERS`; reproducibility was not obtained by disabling it. Instead the avicii kernel plan bound deterministic GNU tar order/mtime/uid/gid settings and single-threaded xz for upstream embedded-header archive generation.
 - Added focused regression coverage for ELF parsing/classification, traversal/symlink rejection, wrong-machine rejection and deterministic embedded-header archive policy.
-- PR #45 passed the full Python 3.11/3.12/3.13/3.14 matrix plus focused kernel/source-lock/ramdisk workflows before merge as `43e9836bfdca651ad31727a303714e44c44929db`.
-- Real authority run `35181516724` is the first retry carrying the IKHEADERS policy and chained ELF diagnostics. Its result must be reviewed before any kernel reproducibility claim.
-- Project completion remains **54%**. No physical AC2003 or Beta gate receives credit from these host-side changes.
+- Project completion remained **54%**. No physical AC2003 or Beta gate received credit from these host-side changes.
 
 ## 0.6.43-dev — intermediate kernel build-tree diagnostics
 
