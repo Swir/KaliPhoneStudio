@@ -2,6 +2,19 @@
 
 This file tracks the current development line. Historical detailed entries remain available in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md) and Git history.
 
+## 0.6.51-dev — source-locked physical boot observation evidence
+
+- Added a machine-readable rescue marker `KPS_RESCUE_INIT_REACHED_V1` to the minimal rescue `/init`, emitted both to `/dev/kmsg` when available and to the local console.
+- Updated the immutable rescue payload lock to the exact new `/init` SHA-256 while preserving network/SSH-disabled rescue policy.
+- Added `RescueObservationContract`, which fails closed unless the checked rescue lock, canonical source lock, exact repository `/init` bytes and machine marker agree.
+- Added `PhysicalBootObservationEvidence` to bind a bounded raw serial/UART/USB-console capture to the exact schema-v1 temporary-boot execution and exact temporary-boot offer.
+- Observation import validates the exact temporary-boot command/execution policies and refuses detached execution/offer evidence or pre-existing hardware/Beta claims.
+- Raw captures retain exact SHA-256/size while a CR/LF-normalized digest supports stable textual comparison without discarding original bytes.
+- Detection records a Linux banner, source-locked rescue-init marker, local-rescue-shell marker and common kernel panic/Oops markers. A clean marker sequence may become `observation_review_eligible=true`, but it always remains `review_required=true`, `hardware_verified=false`, `beta_gate_credit=false` until separate physical review.
+- Added immutable offline `scripts/import_physical_boot_observation.py`; it does not access the phone and cannot turn log text into automatic hardware support.
+- Added focused tests for source-lock/init binding, init drift, clean rescue observation, panic handling, failed Fastboot command handling, detached execution, source-kind validation, raw-vs-normalized hashes and immutable evidence output.
+- Kept project completion at **58%** because no real AC2003 observation has been collected or reviewed. Beta remains blocked.
+
 ## 0.6.50-dev — fresh runtime revalidation before one temporary boot
 
 - Added device-independent `TemporaryBootRuntimeProbeEvidence` and `TemporaryBootExecutionEvidence` for the first real physical temporary-boot attempt path.
