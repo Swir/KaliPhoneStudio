@@ -262,8 +262,18 @@ def test_pass_candidate_requires_every_exact_required_observation():
 
 def test_observation_rejects_missing_context_identity_drift_and_write_claims():
     blocked = _plan(context=False)
-    with pytest.raises(Exception):
-        _plan_review(blocked)
+    # A blocked plan cannot obtain accepted-for-physical-execution review evidence.
+    blocked_review = _plan_review(blocked, accepted=False)
+    with pytest.raises(PhysicalHardwareTestObservationError, match="accepted exact test-plan review"):
+        bind_physical_hardware_test_observation(
+            blocked,
+            blocked_review,
+            _observation_record(blocked),
+            observation_record_sha256="8" * 64,
+            observation_record_size=100,
+            observation_notes_sha256="9" * 64,
+            observation_notes_size=100,
+        )
 
     plan = _plan()
     plan_review = _plan_review(plan)
