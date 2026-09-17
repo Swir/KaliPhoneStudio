@@ -73,7 +73,7 @@
   "ssh_default": "disabled",
   "materials": {
     "config_sha256": "cb20d012b38a019eea76be83ea25a17f6866ed2279ad69919b69921f2420bb1e",
-    "init_sha256": "329de79ba0f3404066685b3b424c9c00e1fb34f26cbc7303974ff9279247725f"
+    "init_sha256": "b3c6c50457726ff700c998498cb660cb5f3d521c56f7da6b8d4c77094e28b241"
   },
   "build": {
     "cross_compile": "aarch64-linux-gnu-",
