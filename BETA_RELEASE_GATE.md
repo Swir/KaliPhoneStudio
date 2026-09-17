@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint or host-side storage-discovery contract does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint, host-side storage-discovery contract or syntactically valid human-review record does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -23,7 +23,9 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Early-userspace transcript parser requires exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers and never auto-promotes them to hardware/Beta credit.
 - [x] Rootfs handoff **discovery contract** is profile-driven, exact-source/blob pinned, bound to the physical-candidate/rootfs authority chain and cannot select a storage path or authorize writes.
 - [x] Typed physical-storage discovery evidence can bind exact report/recovery-plan bytes to the exact handoff/rescue/rootfs chain while rejecting device paths, write claims and automatic target/storage/hardware/Beta promotion.
-- [ ] Capture and manually review the real storage/encryption/free-space/recovery evidence required by that contract and select/review the actual reversible rootfs staging/handoff strategy for the physical device.
+- [x] Explicit human storage-review evidence can bind an approve/reject decision to one exact discovery/report/recovery/device/candidate/rootfs chain; approval can unlock only offline strategy design and cannot select a target or authorize a write.
+- [ ] Capture and manually review the real storage/encryption/free-space/recovery evidence required by that contract and record the exact human review decision.
+- [ ] Select/review the actual reversible rootfs staging/handoff strategy and target only after the exact approved storage-review evidence exists.
 - [ ] Final release manifest/compatibility matrix/known issues and SHA-256 set are generated from the exact reviewed physical candidate.
 
 ## Physical AC2003 mandatory gate
@@ -35,8 +37,9 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] Matching stock `boot.img` extracted from the exact OTA and validated against that physical baseline.
 - [ ] Recovery path is documented before risky testing begins.
 - [ ] Exact reviewed physical candidate is instantiated from that baseline and reviewed authorities.
-- [ ] Rootfs-handoff discovery evidence from the real phone confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan and is manually reviewed.
-- [ ] A reversible rootfs handoff target is explicitly reviewed after discovery; no guessed UFS/userdata path is accepted.
+- [ ] Rootfs-handoff discovery evidence from the real phone confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan.
+- [ ] That exact physical-storage discovery evidence is manually reviewed and an exact 0.6.57 review record/evidence pair is retained.
+- [ ] A reversible rootfs handoff target is explicitly reviewed only after the prior review evidence allows strategy design; no guessed UFS/userdata path is accepted.
 - [ ] `fastboot boot` succeeds on the exact phone after explicit user confirmation.
 - [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
 - [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
@@ -63,6 +66,8 @@ The following remain useful diagnostics but **cannot** satisfy a physical checkb
 - the pinned LineageOS fstab/BoardConfig storage expectations;
 - a discovery-only rootfs handoff assessment;
 - a syntactically valid or even `discovery_ready_for_manual_review=true` storage record before manual review of the exact physical context;
+- a synthetic/mock review record or a real review record that is detached from the exact physical discovery evidence;
+- `strategy_design_allowed=true` by itself — this is permission to design an offline proposal, not approval of a target or write;
 - synthetic/mock storage reports or transcripts.
 
 ## Release publication rule
