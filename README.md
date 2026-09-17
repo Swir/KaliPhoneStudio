@@ -6,13 +6,13 @@ The repository is intentionally conservative about hardware claims: a device pro
 
 ## Project progress
 
-**56% complete**
+**58% complete**
 
-`███████████▏░░░░░░░░ 56%`
+`███████████▋░░░░░░░░ 58%`
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host-side reproducibility, provenance and safety are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> **Current development line: `0.6.46-dev`.** The reviewed Kali ARM64 rootfs authority remains strict-byte-identical, and the first reviewed `oneplus/avicii` kernel authority is now also strict-byte-identical host-side. Real run `35183670399` completed two independent exact-source, source-mtime-normalized `jobs=1` builds with identical final `.config` and identical 43,878,416-byte ARM64 `Image` outputs. The accepted kernel Image SHA-256 is `be4440dc335d53c752270c484fe589a9bc1ef08f9100e885478b50df67cbe712`; final `.config` SHA-256 is `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3`. The reviewed authority is pinned to main commit `e600a5de13fa91085464c7ce2d4a6327f39b96e8` and workflow artifact `10482645697`. This is **host-side reproducibility only**: no physical AC2003 or Beta credit is granted.
+> **Current development line: `0.6.47-dev`.** The reviewed Kali ARM64 rootfs and `oneplus/avicii` kernel authorities remain strict-byte-identical host-side, and the first reviewed DTB/DTBO authority is now also accepted. Real DT authority run `35196447576` reused the exact reviewed kernel Image, deterministically rehydrated its final `.config`, then completed two independent exact-source DT builds with byte-identical `lito.dtb`, raw `avicii-overlay.dtbo` and packed `dtbo.img`. Accepted DTB SHA-256 is `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce`; packed DTBO SHA-256 is `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895`. All three reviewed authorities remain **host-side only**: no physical AC2003 or Beta credit is granted.
 
 ## Source of truth and architecture
 
@@ -94,6 +94,7 @@ Profile inspection is offline and explicitly reports `hardware_verified=false` a
 - Strict execution binding also requires the reproducibility record to match each build's exact config-verifier and Image-verifier evidence digests.
 - `KernelAuthorityRecord` binds the reviewed run/commit/artifact IDs, exact plan/toolchain/recipe/environment, both build records, strict reproducibility/binding evidence and final config/Image identities. It permanently records `hardware_verified=false` and `beta_gate_credit=false`.
 - A separate first-boot kernel-authority binding requires a candidate to match that exact reviewed authority before release-candidate preparation.
+- Historical Actions artifacts that omitted hidden `.config` files can now be safely reused for dependent DT work: KaliPhoneStudio deterministically rehydrates only the exact final config from the pinned source/profile/toolchain policy, verifies its SHA-256/size against the reviewed kernel authority, and verifies the existing reviewed Image remains unchanged. The Image is not rebuilt in this path.
 
 ### Kernel reproducibility evidence
 
@@ -114,11 +115,15 @@ The reviewed authority record is `evidence/authorities/oneplus-avicii-kernel-4.1
 ### DTB / DTBO
 
 - Source-locked FDT and Android DT table format references.
-- Structural DTB/DTBO verification.
-- Partition-limit checks.
-- Exact SHA-256/size binding to the approved boot plan.
+- Profile-driven DT plan pins `dtbs`, `arch/arm64/boot/dts/vendor/20801/lito.dtb`, raw `avicii-overlay.dtbo`, 4096-byte DT table pages and table version 0.
+- Structural DTB/DTBO verification and partition-limit checks.
+- Exact source/toolchain/kernel-authority binding before any DT build.
+- Two independent DT build roots are required to produce byte-identical selected DTB, raw overlay and packed `dtbo.img`.
+- Real authority run `35196447576` is **strict SUCCESS**: DTB SHA-256 `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce` (406,620 bytes), raw overlay SHA-256 `b3991f2fda96d3675778299b45b9802823022ef25d593c5d00c756ceea35b90c` (345,405 bytes), packed DTBO SHA-256 `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` (352,256 bytes, one entry).
+- Reviewed authority record: `evidence/authorities/oneplus-avicii-dtb-dtbo-2026-09-17.json`; the exact plan/build/reproducibility and config-rehydration evidence is preserved under `evidence/authorities/device-tree/oneplus-avicii-2026-09-17/`.
+- The authority is explicitly bound to reviewed kernel authority SHA-256 `0bdc44c4625e04214981eca428872642419fb8ad3c135a96d40f25e781a7d5f2`.
 
-Physical DTB/DTBO functionality is still unverified. The next host-side candidate step is to bind final DTB/DTBO artifacts to the reviewed kernel authority and the exact first-boot candidate without claiming device success.
+This proves host-side DT reproducibility only. Physical bootloader/kernel acceptance remains unverified until an exact AC2003 candidate is temporarily booted.
 
 ## Kali ARM64 rootfs
 
@@ -138,8 +143,9 @@ The rootfs authority proves host-side reproducibility only. It does not prove bo
 ## First-boot and rescue foundations
 
 - First-boot candidate schema v8 binds exact firmware, temporary-boot authorization, boot plan, executed/reproducible kernel/compiler provenance, DTB/DTBO and strict rootfs evidence.
-- Reviewed rootfs authority can be linked to a concrete candidate only after the exact physical firmware baseline and stock boot provenance exist.
-- Reviewed kernel authority can likewise be linked only to a candidate whose exact kernel plan/toolchain/build/repro/config/Image identities match the reviewed host authority; this never substitutes for physical boot evidence.
+- Reviewed rootfs, kernel and device-tree authorities have separate fail-closed candidate bindings.
+- `FirstBootAuthorityBundleEvidence` adds a final host-side cross-binding: all three reviewed authorities must refer to the exact same schema-v8 manifest/profile, the DT authority must reference the same reviewed kernel authority, and candidate kernel/rootfs/DTB/DTBO artifact identities are rechecked before one compact provenance bundle can be emitted.
+- No physical-firmware first-boot candidate exists yet because the real AC2003 Fastboot/OxygenOS baseline and matching stock boot provenance have not been captured.
 - Deterministic device-independent provisioning overlay contains no credentials, keeps the root account locked and remote access disabled by default.
 - Deterministic rescue initramfs supports gzip/LZ4 with source-locked static ARM64 BusyBox payload and exact boot-plan binding.
 - Rescue reproducibility passes host-side; the physical rescue/log path remains unverified.
@@ -152,7 +158,7 @@ For the first AC2003 this includes at minimum:
 
 - exact physical Fastboot/OxygenOS build + fingerprint capture,
 - matching stock `boot.img` from the exact OTA,
-- final DTB/DTBO bound to the reviewed strict kernel and exact candidate,
+- binding the reviewed kernel/rootfs/DTB/DTBO authorities to that exact physical-firmware first-boot candidate,
 - successful physical temporary boot,
 - usable rescue/log channel,
 - Kali early userspace/rootfs proof,
@@ -173,7 +179,7 @@ Primary Python CI matrix:
 - Python 3.13
 - Python 3.14
 
-Focused workflows additionally exercise source locks, kernel contracts/reproducibility/authority, rootfs reproducibility, ramdisk formats and other provenance/safety gates.
+Focused workflows additionally exercise source locks, kernel contracts/reproducibility/authority, DTB/DTBO reproducibility/authority, rootfs reproducibility, ramdisk formats and other provenance/safety gates.
 
 Run locally:
 
