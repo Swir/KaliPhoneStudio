@@ -13,6 +13,7 @@ on:
       - "kaliphonestudio/candidate.py"
       - "kaliphonestudio/candidate_kernel_authority.py"
       - "devices/**/profile.json"
+      - "evidence/authorities/**/*.json"
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/review_kernel_authority.py"
       - "tests/test_kernel_contract.py"
@@ -20,6 +21,7 @@ on:
       - "tests/test_kernel_repro.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_authority.py"
+      - "tests/test_checked_kernel_authority.py"
       - "tests/test_kernel_toolchain_bundle.py"
       - "tests/test_candidate.py"
       - "tests/test_candidate_kernel_authority.py"
@@ -37,6 +39,7 @@ on:
       - "kaliphonestudio/candidate.py"
       - "kaliphonestudio/candidate_kernel_authority.py"
       - "devices/**/profile.json"
+      - "evidence/authorities/**/*.json"
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/review_kernel_authority.py"
       - "tests/test_kernel_contract.py"
@@ -44,6 +47,7 @@ on:
       - "tests/test_kernel_repro.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_authority.py"
+      - "tests/test_checked_kernel_authority.py"
       - "tests/test_kernel_toolchain_bundle.py"
       - "tests/test_candidate.py"
       - "tests/test_candidate_kernel_authority.py"
@@ -93,6 +97,7 @@ jobs:
           tests/test_kernel_repro.py
           tests/test_kernel_build_binding.py
           tests/test_kernel_authority.py
+          tests/test_checked_kernel_authority.py
           tests/test_kernel_toolchain_bundle.py
           tests/test_candidate.py
           tests/test_candidate_kernel_authority.py
