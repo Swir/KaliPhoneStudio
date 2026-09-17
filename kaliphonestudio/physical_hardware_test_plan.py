@@ -1,8 +1,9 @@
 """Bind an accepted physical hardware-survey review to profile-driven tests.
 
-The resulting plan is deliberately pending-only. It performs no phone I/O,
+The resulting plan is deliberately non-executing. It performs no phone I/O,
 executes no subsystem activation, authorizes no write, and grants no physical
-hardware or Beta credit.
+hardware or Beta credit. Required presence/context signals are carried into the
+plan so a later executor cannot silently treat missing context as readiness.
 """
 from __future__ import annotations
 
@@ -69,6 +70,20 @@ def _sha(value: object, label: str) -> str:
     return value
 
 
+def _bounded_string_list(value: object, label: str, *, allow_empty: bool) -> list[str]:
+    if not isinstance(value, list) or (not allow_empty and not value):
+        raise PhysicalHardwareTestPlanError(f"{label} must be a {'possibly empty' if allow_empty else 'non-empty'} list")
+    if any(not isinstance(item, str) or not item.strip() or len(item) > 512 for item in value):
+        raise PhysicalHardwareTestPlanError(f"{label} must contain bounded non-empty strings")
+    if len(value) != len(set(value)):
+        raise PhysicalHardwareTestPlanError(f"{label} must not contain duplicates")
+    return value
+
+
+def _context_signals_satisfied(review: PhysicalHardwareReviewEvidence, signals: list[str]) -> bool:
+    return all(getattr(review, signal, False) is True for signal in signals)
+
+
 def build_physical_hardware_test_plan(
     profile: DeviceProfile,
     review: PhysicalHardwareReviewEvidence,
@@ -89,19 +104,27 @@ def build_physical_hardware_test_plan(
     except (KeyError, TypeError, FunctionalHardwareContractError) as exc:
         raise PhysicalHardwareTestPlanError(f"profile functional hardware contract is invalid: {exc}") from exc
 
-    tests = tuple(
-        {
-            "id": item["id"],
-            "required_for_beta": item["required_for_beta"],
-            "manual_review_required": True,
-            "destructive": False,
-            "persistent_write_allowed": False,
-            "required_context_signals": list(item["required_context_signals"]),
-            "required_observations": list(item["required_observations"]),
-            "status": "pending",
-        }
-        for item in contract["tests"]
-    )
+    test_rows: list[dict[str, Any]] = []
+    for item in contract["tests"]:
+        signals = list(item["required_context_signals"])
+        context_ready = _context_signals_satisfied(review, signals)
+        test_rows.append(
+            {
+                "id": item["id"],
+                "required_for_beta": item["required_for_beta"],
+                "manual_review_required": True,
+                "destructive": False,
+                "persistent_write_allowed": False,
+                "required_context_signals": signals,
+                "context_signals_satisfied": context_ready,
+                "required_observations": list(item["required_observations"]),
+                "status": "pending",
+            }
+        )
+    tests = tuple(test_rows)
+    beta_tests = [item for item in tests if item["required_for_beta"]]
+    plan_ready = bool(beta_tests) and all(item["context_signals_satisfied"] for item in beta_tests)
+
     evidence = PhysicalHardwareTestPlanEvidence(
         schema_version=1,
         plan_policy=_PLAN_POLICY,
@@ -116,8 +139,8 @@ def build_physical_hardware_test_plan(
         functional_hardware_contract_sha256=contract_sha,
         tests=tests,
         test_count=len(tests),
-        beta_required_test_count=sum(1 for item in tests if item["required_for_beta"]),
-        plan_ready_for_physical_execution=True,
+        beta_required_test_count=len(beta_tests),
+        plan_ready_for_physical_execution=plan_ready,
         functional_tests_executed=False,
         functional_hardware_verified=False,
         phone_storage_written=False,
@@ -149,27 +172,40 @@ def validate_physical_hardware_test_plan(evidence: PhysicalHardwareTestPlanEvide
         raise PhysicalHardwareTestPlanError("physical hardware test plan must contain tests")
     ids: list[str] = []
     beta_count = 0
+    beta_context_ready = True
     expected_fields = {
         "id", "required_for_beta", "manual_review_required", "destructive",
-        "persistent_write_allowed", "required_context_signals", "required_observations", "status",
+        "persistent_write_allowed", "required_context_signals", "context_signals_satisfied",
+        "required_observations", "status",
     }
     for item in evidence.tests:
         if not isinstance(item, dict) or set(item) != expected_fields:
             raise PhysicalHardwareTestPlanError("physical hardware test plan test fields drifted")
-        ids.append(item["id"])
+        test_id = item["id"]
+        if not isinstance(test_id, str) or not test_id or len(test_id) > 64:
+            raise PhysicalHardwareTestPlanError("physical hardware test plan contains an invalid test id")
+        ids.append(test_id)
         if item["status"] != "pending":
             raise PhysicalHardwareTestPlanError("new physical hardware test plans must remain pending-only")
         if item["manual_review_required"] is not True or item["destructive"] is not False or item["persistent_write_allowed"] is not False:
             raise PhysicalHardwareTestPlanError("physical hardware test plan contains unsafe permissions")
         if not isinstance(item["required_for_beta"], bool):
             raise PhysicalHardwareTestPlanError("physical hardware test Beta requirement must be boolean")
-        beta_count += int(item["required_for_beta"])
+        if not isinstance(item["context_signals_satisfied"], bool):
+            raise PhysicalHardwareTestPlanError("physical hardware test context readiness must be boolean")
+        _bounded_string_list(item["required_context_signals"], "required_context_signals", allow_empty=True)
+        _bounded_string_list(item["required_observations"], "required_observations", allow_empty=False)
+        if item["required_for_beta"]:
+            beta_count += 1
+            beta_context_ready = beta_context_ready and item["context_signals_satisfied"]
     if len(ids) != len(set(ids)):
         raise PhysicalHardwareTestPlanError("physical hardware test plan contains duplicate test ids")
     if evidence.test_count != len(evidence.tests) or evidence.beta_required_test_count != beta_count or beta_count <= 0:
         raise PhysicalHardwareTestPlanError("physical hardware test plan counters drifted")
-    if evidence.plan_ready_for_physical_execution is not True:
-        raise PhysicalHardwareTestPlanError("physical hardware test plan readiness flag drifted")
+    if not isinstance(evidence.plan_ready_for_physical_execution, bool):
+        raise PhysicalHardwareTestPlanError("physical hardware test plan readiness must be boolean")
+    if evidence.plan_ready_for_physical_execution is not beta_context_ready:
+        raise PhysicalHardwareTestPlanError("physical hardware test plan readiness does not match Beta-required context signals")
     if any(value is not False for value in (
         evidence.functional_tests_executed,
         evidence.functional_hardware_verified,
