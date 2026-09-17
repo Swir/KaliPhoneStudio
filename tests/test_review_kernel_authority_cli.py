@@ -98,6 +98,10 @@ def _argv(paths: dict[str, Path]) -> list[str]:
     ]
 
 
+def _reviewed_argv(paths: dict[str, Path]) -> list[str]:
+    return _argv(paths)[:-2] + ["--reviewed", "--out", str(paths["authority"])]
+
+
 def test_review_cli_refuses_implicit_review(tmp_path: Path):
     paths = _chain(tmp_path)
     result = subprocess.run(_argv(paths), cwd=ROOT, capture_output=True, text=True, check=False)
@@ -106,10 +110,23 @@ def test_review_cli_refuses_implicit_review(tmp_path: Path):
     assert not paths["authority"].exists()
 
 
+def test_review_cli_refuses_stale_staging_file(tmp_path: Path):
+    paths = _chain(tmp_path)
+    staged = paths["authority"].with_name(paths["authority"].name + ".reviewing")
+    staged.write_text("stale", encoding="utf-8")
+    result = subprocess.run(
+        _reviewed_argv(paths), cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    assert result.returncode != 0
+    assert "stale kernel authority staging path" in (result.stdout + result.stderr)
+    assert not paths["authority"].exists()
+    assert staged.read_text(encoding="utf-8") == "stale"
+
+
 def test_review_cli_creates_and_roundtrip_verifies_authority(tmp_path: Path):
     paths = _chain(tmp_path)
     result = subprocess.run(
-        _argv(paths)[:-2] + ["--reviewed", "--out", str(paths["authority"])],
+        _reviewed_argv(paths),
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -126,3 +143,4 @@ def test_review_cli_creates_and_roundtrip_verifies_authority(tmp_path: Path):
     saved = json.loads(paths["authority"].read_text(encoding="utf-8"))
     assert saved["authority_run_id"] == 123456
     assert saved["authority_artifact_id"] == 654321
+    assert not paths["authority"].with_name(paths["authority"].name + ".reviewing").exists()
