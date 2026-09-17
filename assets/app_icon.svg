@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">KaliPhoneStudio project icon</title>
+  <desc id="desc">Dark electric-cyan smartphone and terminal symbol representing safe Linux phone engineering.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#02050A"/>
+      <stop offset="0.55" stop-color="#07111C"/>
+      <stop offset="1" stop-color="#02050A"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0088FF"/>
+      <stop offset="0.5" stop-color="#62E5FF"/>
+      <stop offset="1" stop-color="#0088FF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#62E5FF" stroke-opacity="0.045"/>
+    </pattern>
+  </defs>
+  <rect x="10" y="10" width="492" height="492" rx="112" fill="url(#bg)" stroke="#62E5FF" stroke-opacity="0.28" stroke-width="4"/>
+  <rect x="12" y="12" width="488" height="488" rx="110" fill="url(#grid)"/>
+  <g filter="url(#glow)" fill="none" stroke="url(#cyan)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="137" y="72" width="238" height="368" rx="42" stroke-width="15"/>
+    <path d="M220 111h72" stroke-width="11"/>
+    <circle cx="256" cy="397" r="10" stroke-width="8"/>
+  </g>
+  <g fill="none" stroke="#F4FAFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M190 218l47 38-47 38" stroke-width="22"/>
+    <path d="M267 300h66" stroke="#62E5FF" stroke-width="20"/>
+  </g>
+  <path d="M331 155l-31 52h30l-19 48 58-70h-32l23-30z" fill="#62E5FF" filter="url(#glow)"/>
+</svg>

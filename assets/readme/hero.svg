@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">KaliPhoneStudio — multi-device Kali Linux phone engineering</title>
+  <desc id="desc">Dark electric-cyan SWIR project banner with a smartphone terminal mark and a safe bring-up tagline.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#02050A"/>
+      <stop offset="0.55" stop-color="#07111C"/>
+      <stop offset="1" stop-color="#02050A"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0088FF"/>
+      <stop offset="0.5" stop-color="#62E5FF"/>
+      <stop offset="1" stop-color="#0088FF"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#62E5FF" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="320" rx="26" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1198" height="318" rx="25" fill="none" stroke="#62E5FF" stroke-opacity="0.25"/>
+  <rect width="1200" height="320" rx="26" fill="url(#grid)"/>
+  <path d="M0 256C190 204 296 306 470 255s318-36 470-3 188 32 260-15" fill="none" stroke="url(#cyan)" stroke-opacity="0.27" stroke-width="2"/>
+  <path d="M790 46h370M990 72h170" fill="none" stroke="#62E5FF" stroke-opacity="0.16"/>
+
+  <g transform="translate(72 59)">
+    <rect width="180" height="202" rx="38" fill="#07111C" stroke="#62E5FF" stroke-opacity="0.48" stroke-width="2"/>
+    <rect x="43" y="20" width="94" height="158" rx="18" fill="none" stroke="url(#cyan)" stroke-width="7" filter="url(#glow)"/>
+    <path d="M76 83l20 17-20 17" fill="none" stroke="#F4FAFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M105 121h22" stroke="#62E5FF" stroke-width="7" stroke-linecap="round"/>
+    <path d="M127 55l-12 20h12l-8 19 25-27h-14l10-12z" fill="#62E5FF" filter="url(#glow)"/>
+    <circle cx="90" cy="160" r="4" fill="#62E5FF"/>
+  </g>
+
+  <text x="300" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="4" fill="#62E5FF">SWIR PROJECT</text>
+  <text x="300" y="145" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#F4FAFF">KaliPhoneStudio</text>
+  <text x="302" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="23" font-weight="500" fill="#B8D2E0">Evidence-driven Kali Linux phone bring-up</text>
+  <text x="302" y="232" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="1.3" fill="#62E5FF">MULTI-DEVICE  •  ARM64  •  TEMPORARY-BOOT-FIRST</text>
+  <g transform="translate(1045 245)">
+    <circle cx="0" cy="0" r="4" fill="#62E5FF" filter="url(#glow)"/>
+    <circle cx="25" cy="0" r="4" fill="#0088FF"/>
+    <circle cx="50" cy="0" r="4" fill="#62E5FF" opacity="0.5"/>
+  </g>
+</svg>

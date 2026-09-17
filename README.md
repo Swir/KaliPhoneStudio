@@ -1,10 +1,10 @@
+<!-- SWIR-README-STANDARD:v2 -->
+
 <div align="center">
 
-# ⚡ KaliPhoneStudio
+<img width="100%" src="assets/readme/hero.svg" alt="KaliPhoneStudio — evidence-driven Kali Linux phone bring-up" />
 
-### Multi-device engineering studio for porting Kali Linux / NetHunter Pro as the primary phone OS/userspace
-
-**Profile-driven bring-up • Reproducible ARM64 artifacts • Temporary-boot-first safety**
+<br>
 
 ![Python](https://img.shields.io/badge/Python-3.11--3.14-02050A?style=for-the-badge&logo=python&logoColor=62E5FF)
 ![Architecture](https://img.shields.io/badge/Architecture-ARM64-02050A?style=for-the-badge&logo=arm&logoColor=62E5FF)
@@ -13,11 +13,24 @@
 
 [![Tests](https://github.com/Swir/KaliPhoneStudio/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Swir/KaliPhoneStudio/actions/workflows/tests.yml)
 
+**KaliPhoneStudio is a multi-device engineering studio for porting Kali Linux / NetHunter Pro as the primary phone OS/userspace, without Android as the user-facing layer.**
+
+[**Highlights**](#highlights) · [**Quick Start**](#quick-start) · [**Compatibility**](#compatibility) · [**Roadmap**](#roadmap-and-releases) · [**Safety**](#safety-and-limitations)
+
 </div>
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
 ## Project status
+
+| Item | Status |
+|---|---|
+| Current development line | `0.6.57-dev` |
+| Completion | **58%** |
+| Current stage | Development / physical bring-up |
+| First device profile | OnePlus Nord AC2003 — `oneplus/avicii` |
+| Latest public release | **Not published yet** |
+| Beta gate | **BLOCKED** |
 
 **Current development line: `0.6.57-dev`**
 
@@ -128,7 +141,16 @@ The current storage pipeline intentionally stops before target selection.
 
 For avicii, the exact pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6e8d2483e313f561ad35ded7355`. It describes userdata as F2FS with `fileencryption=ice` and `wrappedkey` on UFS with separate metadata encryption state. KaliPhoneStudio treats `userdata` only as a discovery role/hint, never as an approved rootfs target.
 
-Offline storage-review recorder:
+Create a safe-by-default review template only after real discovery evidence exists:
+
+```bash
+python scripts/prepare_physical_storage_review.py \
+  --discovery-evidence evidence/physical-storage-discovery.json \
+  --reviewer operator-1 \
+  --out evidence/operator-storage-review.json
+```
+
+Then, after an actual manual review, bind its exact record and notes:
 
 ```bash
 python scripts/review_physical_storage_discovery.py \
@@ -138,7 +160,7 @@ python scripts/review_physical_storage_discovery.py \
   --out evidence/physical-storage-review.json
 ```
 
-This command performs evidence binding only. It does not connect to a phone, mount storage, choose a partition or authorize a write.
+Both commands perform evidence handling only. They do not connect to a phone, mount storage, choose a partition or authorize a write. See [`docs/PHYSICAL_STORAGE_REVIEW.md`](docs/PHYSICAL_STORAGE_REVIEW.md).
 
 ## Kali early-userspace proof
 
