@@ -10,7 +10,7 @@
 
 Progress is deliberately weighted toward **real device bring-up, hardware validation, recovery and release readiness**. Host-side CI, reproducibility and safety infrastructure are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> Current development line: **0.6.39-dev**. The first real Kali ARM64 rootfs authority has completed strict A/B reproducibility successfully and its reviewed evidence is now recorded fail-closed in the repository. The accepted canonical artifact is SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, size `137460600`, with 269 installed packages in the normalized manifest. This clears a major host-side reproducibility milestone but grants **no** hardware/Beta credit. Real kernel authority run `35161227840` still failed strict Image equality despite identical final `.config`; the next authority run keeps A/B builds independent but forces each vendor-kernel make graph to `-j1` to isolate build-order nondeterminism. **No AC2003 hardware feature receives Beta credit until the physical gate passes.**
+> Current development line: **0.6.40-dev**. The first real Kali ARM64 rootfs authority has completed strict A/B reproducibility successfully and its reviewed evidence is recorded fail-closed in the repository. The accepted canonical artifact is SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, size `137460600`, with 269 installed packages in the normalized manifest. A new candidate-level authority contract now prevents that reviewed authority from being detached from the exact first-boot manifest and its raw-A/B/canonicalization provenance; this remains host-side evidence and grants **no** hardware/Beta credit. Real kernel authority run `35161227840` failed strict Image equality despite identical final `.config`; a new authority run is executing independent A/B builds with each vendor-kernel make graph forced to `-j1` to isolate build-order nondeterminism. **No AC2003 hardware feature receives Beta credit until the physical gate passes.**
 
 ## Source of truth and architecture
 
@@ -77,7 +77,7 @@ Profile JSON inspection explicitly reports `hardware_verified=false` and `beta_g
 - Source-locked FDT/Android DT table references and structural DTB/DTBO verification bound to the approved boot plan.
 - First-boot candidate schema v8 binds exact firmware, boot plan, kernel execution/compiler provenance, DTB/DTBO and rootfs evidence without claiming hardware success.
 
-Real kernel authority run `35161227840` was a **strict failure**, not a partial pass. Both exact-source builds produced identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `9c0bd74eff37d1159e64295489cad635a2cb1fb48d6d8ae6f51b4c495b1136ae` differed from Image B SHA-256 `560b2adb85deecfa5e762ad507abb215b7f1ae4cf59bec3bcdfa8716b7374184`. Bounded diagnostics counted `11695369` differing bytes across `960780` contiguous ranges, beginning at offset `73` and extending through `43876937`. Kernel reproducibility therefore remains false. The next authority run leaves the two independent A/B builds concurrent but executes each internal vendor-kernel make graph with `jobs=1`; the jobs value is already part of the evidence-bearing canonical build recipe, so this experiment does not weaken provenance or acceptance.
+Real kernel authority run `35161227840` was a **strict failure**, not a partial pass. Both exact-source builds produced identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `9c0bd74eff37d1159e64295489cad635a2cb1fb48d6d8ae6f51b4c495b1136ae` differed from Image B SHA-256 `560b2adb85deecfa5e762ad507abb215b7f1ae4cf59bec3bcdfa8716b7374184`. Bounded diagnostics counted `11695369` differing bytes across `960780` contiguous ranges, beginning at offset `73` and extending through `43876937`. Kernel reproducibility therefore remains false. The current retry leaves the two independent A/B builds concurrent but executes each internal vendor-kernel make graph with `jobs=1`; the jobs value is already part of the evidence-bearing canonical build recipe, so this experiment does not weaken provenance or acceptance.
 
 ### Kali ARM64 rootfs
 
@@ -92,6 +92,7 @@ Real kernel authority run `35161227840` was a **strict failure**, not a partial 
 - Candidate-level schema-v1 rootfs provenance evidence additionally binds the exact first-boot manifest digest to that canonicalization binding/policy, both transformation-evidence digests and both raw input hashes/sizes; all of it remains `beta_gate_credit=false` and `hardware_verified=false`.
 - Real authority run `35158577624` is **SUCCESS**: both independently built/canonicalized ARM64 rootfs outputs passed strict byte equality and package-manifest equality. The accepted artifact is SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, size `137460600`, package-manifest SHA-256 `11a3609a23c263c43794414b7b2f2e587133fb247c2a146321c0bdef55db3fbd`, 269 packages.
 - The reviewed authority is pinned in `evidence/authorities/kali-arm64-rootfs-2026.2-minimal.json` and verified by `kaliphonestudio.rootfs_authority`; it binds run/commit/artifact IDs, source lock, signed repository snapshot, exact `InRelease`, both raw A/B inputs, both canonicalization records, policy digest and the strict artifact evidence. It explicitly records `hardware_verified=false` and `beta_gate_credit=false`.
+- `kaliphonestudio.candidate_rootfs_authority` adds a second fail-closed link from a concrete first-boot manifest and its rootfs-provenance evidence to the exact reviewed authority record. It rejects detached manifests, artifact/package/source/snapshot substitution, raw A/B or canonicalization substitution, unreviewed records and any host-side hardware/Beta claim.
 
 ### Generic first-boot provisioning
 
@@ -134,7 +135,7 @@ The first public Beta remains **BLOCKED** until the exact physical AC2003 provid
 
 - real Fastboot identification and exact OxygenOS build/fingerprint;
 - matching stock `boot.img` from the exact OTA;
-- reviewed reproducible kernel + DTB/DTBO candidate and binding of the accepted reviewed rootfs authority/canonicalization provenance to that exact candidate;
+- reviewed reproducible kernel + DTB/DTBO candidate and an exact candidate-level link to the accepted reviewed rootfs authority/canonicalization provenance;
 - successful physical temporary `fastboot boot`;
 - usable rescue/logging path;
 - kernel reaching Kali early userspace/rootfs;
@@ -142,7 +143,7 @@ The first public Beta remains **BLOCKED** until the exact physical AC2003 provid
 - exercised OxygenOS recovery/rollback path;
 - release compatibility matrix, manifest and SHA-256 checksums.
 
-Passing host CI, accepting a host-side rootfs authority, or generating a provisioning overlay alone can never publish a Beta. See [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+Passing host CI, accepting a host-side rootfs authority, generating a candidate-authority binding, or generating a provisioning overlay alone can never publish a Beta. See [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Development
 
