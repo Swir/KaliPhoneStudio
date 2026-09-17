@@ -176,6 +176,7 @@
     "The compat-vDSO reproducibility experiment passes canonical debug/macro prefix maps through the locked clang CC command using recursive KBUILD_SRC/CURDIR make variables because the pinned vdso32 Makefile intentionally does not inherit global KBUILD CFLAGS; this is host-only evidence and does not grant hardware support.",
     "The device-tree host contract builds dtbs from the exact reviewed kernel source/config/toolchain and expects the profile-selected lito.dtb plus avicii-overlay.dtbo before creating a deterministic Android DT table image; this does not prove physical device-tree functionality.",
     "The rootfs handoff contract is discovery-only: the pinned Lineage fstab reports encrypted/wrapped-key userdata on UFS, so no raw block path or staging target is selected before exact-device storage/encryption/free-space/recovery evidence is reviewed.",
+    "Physical storage discovery records kernel names and partition roles only, binds exact report/recovery-plan bytes to the rescue/rootfs evidence chain, and still cannot select a target or authorize a write.",
     "Do not mark recovery verified until restore has been exercised on the exact physical AC2003 baseline."
   ],
   "test_contract": {
@@ -191,7 +192,8 @@
       "compat-vDSO clang command carries canonical source/output path maps through recursive make variables",
       "source-locked compiler kernel build and two-build reproducibility verification",
       "profile-driven DTB/DTBO output selection and strict A/B artifact reproducibility verification",
-      "discovery-only rootfs handoff policy is source-pinned, forbids system/A-B targets, and cannot authorize storage writes"
+      "discovery-only rootfs handoff policy is source-pinned, forbids system/A-B targets, and cannot authorize storage writes",
+      "typed physical storage discovery evidence cross-binds rescue topology and rootfs handoff identities without expressing a target path or hardware/Beta claim"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",
