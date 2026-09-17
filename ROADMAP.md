@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.41-dev
+## Current development line — 0.6.42-dev
 
 - [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
 - [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
@@ -29,7 +29,10 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Prove the two `jobs=1` build logs become command-for-command identical after replacing only A/B absolute source/output roots; the unexplained difference therefore occurs below the visible make command graph.
 - [x] Add fail-closed Git-tracked kernel source mtime normalization: exact HEAD + clean-tree verification, canonical mode/blob/path manifest, `.git`/untracked exclusion, atomic evidence and no hardware/Beta credit.
 - [x] Wire A/B source-mtime normalization into the real kernel workflow while keeping outer concurrency and `jobs=1`, so the next authority experiment changes one variable only.
-- [ ] Review the source-mtime-normalized real A/B kernel authority retry; accept only strict byte-identical final `.config` and `Image`, otherwise continue evidence-driven nondeterminism isolation.
+- [x] Review run `35170273612` correctly as a **preflight infrastructure failure**, not a kernel result: the exact locked compiler subtree fetched and matched its tree, then a redundant second Gitiles metadata request returned HTTP 503 before either kernel checkout/build.
+- [x] Add fail-closed local verification for an already-fetched compiler checkout: SHA-1 object format, exact HEAD, credential-free HTTPS origin, clean tracked state, locked subtree/bin/version/manifest object identities and exact `AndroidVersion.txt` bytes must all match the lock.
+- [x] Wire that local immutable-object proof into the expensive real kernel authority workflow while keeping independent Gitiles source-lock CI as a separate trust check; strict compiler-byte/banner and final kernel equality checks are unchanged.
+- [ ] Review the next source-mtime-normalized real A/B kernel authority retry; accept only strict byte-identical final `.config` and `Image`, otherwise continue evidence-driven nondeterminism isolation.
 
 ## Phase A — Multi-device Studio Core
 
@@ -75,6 +78,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Final `.config` evidence and ARM64 `Image` structural/hash evidence.
 - [x] Strict two-root kernel reproducibility contract.
 - [x] Android Clang `clang-r416183b` source/object lock and materialized compiler verification.
+- [x] Independent Gitiles verification of exact compiler source objects.
+- [x] Fail-closed local reconstruction of the same compiler source evidence from an already-fetched exact Git checkout, avoiding a redundant network metadata dependency in expensive authority runs.
 - [x] Compiler selection/build-config binding to the exact kernel plan.
 - [x] Exact-source kernel runner with canonical recipe/environment/run evidence.
 - [x] A/B executed-build provenance binding to strict kernel reproducibility evidence.
@@ -87,6 +92,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Review run `35161227840`: identical final `.config`, equal Image size, but `11695369` differing Image bytes across `960780` ranges; strict reproducibility remains false.
 - [x] Review run `35166301228`: serial internal `jobs=1` reduced but did not eliminate divergence; identical final `.config`, equal Image size, `11293315` differing bytes across `897561` ranges from offset `71` through `43876937`.
 - [x] Normalize only verified clean Git-tracked source mtimes to `SOURCE_DATE_EPOCH=0`, hash canonical Git mode/blob/path identity, and require path-independent A/B normalization evidence equality before the next build pair.
+- [x] Review run `35170273612` as no kernel result because it stopped on HTTP 503 in redundant post-fetch Gitiles metadata verification; no reproducibility credit or failure is assigned to the mtime experiment.
 - [x] Source-locked FDT and Android DT table format references.
 - [x] Structural DTB and DTBO verification bound to the exact boot plan.
 - [ ] Review and accept first real byte-identical kernel A/B evidence.

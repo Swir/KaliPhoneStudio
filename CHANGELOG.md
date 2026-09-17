@@ -2,6 +2,16 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.42-dev — fail-closed local toolchain object proof for real kernel authority
+
+- Reviewed real kernel workflow run `35170273612` and classified it correctly as a **preflight infrastructure failure**, not a kernel reproducibility result: the exact locked Android Clang commit/subtree fetched successfully and matched its pinned tree, but a redundant second Gitiles request for `AndroidVersion.txt` returned HTTP 503 before either kernel checkout or build started.
+- Added `kaliphonestudio.kernel_toolchain_checkout`, a device-independent verifier for an already-fetched toolchain Git checkout. It requires SHA-1 object format, exact locked HEAD, a matching credential-free HTTPS origin, clean tracked content, exact locked subtree/bin/version/manifest object IDs and object types, plus exact immutable `AndroidVersion.txt` bytes.
+- Added `scripts/verify_kernel_toolchain_checkout.py` and focused regression coverage for dirty tracked content, wrong origin and locked-object substitution. The generated source evidence intentionally uses the same canonical schema-v1 identity fields as the independent Gitiles verifier and keeps `beta_gate_credit=false`.
+- Changed the expensive real kernel authority workflow to prove the exact Git objects it has already fetched before materialized compiler SHA-256/banner verification, eliminating only the redundant second metadata HTTP dependency. The independent `kernel-toolchain-lock` workflow continues to verify the pinned upstream Gitiles objects separately.
+- Kept the next kernel experiment unchanged: independent A/B source/output roots, outer concurrency, internal `jobs=1`, exact tracked-source mtime normalization, locked compiler and strict final `.config` plus ARM64 `Image` byte equality. No acceptance criterion was weakened.
+- PR branch verification passed the full `tests` matrix plus the focused `kernel-real-repro` contract and `kernel-toolchain-lock` workflows before merge preparation.
+- Project completion remains **54%**. Local compiler-object verification is host-side provenance/reliability hardening only and satisfies no physical AC2003/Beta gate.
+
 ## 0.6.41-dev — evidence-bearing kernel source-mtime normalization
 
 - Reviewed real kernel authority run `35166301228` instead of granting partial credit: both source-locked internal-`jobs=1` builds produced identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and equal 43,878,416-byte Images, but Image SHA-256 values `6bf2626db6deb670e7771ac3e320a262c94a319aee1f239726dffe4b4265decd` and `018b0b815273fd63b2235abf342ef7bbf4e8c2324d707252e6f22112581192a7` differed. Diagnostics counted 11,293,315 differing bytes across 897,561 ranges from offset 71 through 43,876,937, so strict kernel reproducibility remains false.
@@ -36,7 +46,7 @@ Historical development entries through **0.6.27-dev** are preserved verbatim in 
 - Added a device-independent `FirstBootProvisioningPlan` bound to typed, reproducible ARM64 rootfs evidence; malformed hashes/counts/sizes, unsafe hostname/locale/timezone values and non-reproducible/non-ARM64 evidence fail closed.
 - Added a deterministic USTAR provisioning overlay containing only hostname, locale, timezone, a systemd preset disabling Dropbear/OpenSSH units and the canonical provisioning manifest.
 - Provisioning requires interactive local user creation, keeps the root password locked, accepts/embeds no password/hash/private key and keeps remote access disabled by default.
-- Added independent bundle verification for exact SHA-256/size, rootfs/plan binding, member set/order, canonical uid/gid/owner/mode/mtime and exact payload bytes; bundle/evidence outputs refuse overwrite.
+- Added independent bundle verification for exact SHA-256/size, rootfs/plan binding, member set/order, canonical uid/gid, owner/group, mode, order and zero mtime; bundle/evidence outputs refuse overwrite.
 - Added `scripts/build_first_boot_provisioning.py` for offline generation with machine-readable safety output and direct-script import hardening.
 - Initial CI correctly exposed two regression assumptions (the manifest legitimately contains the `root_password_locked` policy field and `PurePosixPath` normalizes duplicate slashes); both were repaired in the same iteration and the regression suite was expanded.
 - Added end-to-end CLI coverage and synchronized README, ROADMAP, BUILD_STATUS and package version. Project completion remains 52% because no physical AC2003 hardware gate is credited.

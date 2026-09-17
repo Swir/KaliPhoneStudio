@@ -10,7 +10,7 @@
 
 Progress is deliberately weighted toward **real device bring-up, hardware validation, recovery and release readiness**. Host-side CI, reproducibility and safety infrastructure are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> Current development line: **0.6.41-dev**. The first real Kali ARM64 rootfs authority remains reviewed and strict-byte-identical; its accepted canonical artifact is SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, size `137460600`, with 269 installed packages. Kernel authority run `35166301228` proved that forcing both independent vendor-kernel builds to internal `jobs=1` is **not** sufficient: final `.config` stayed byte-identical and both Images remained `43878416` bytes, but `11293315` Image bytes still differed across `897561` ranges. After replacing only A/B absolute source/output roots, the two build logs are command-for-command identical until final Image evidence. 0.6.41 therefore changes one new variable only: each exact clean Git-tracked kernel checkout is normalized to the same source mtime epoch before the A/B build, with canonical path-independent normalization evidence. Strict Image equality is still mandatory. **No AC2003 hardware feature receives Beta credit until the physical gate passes.**
+> Current development line: **0.6.42-dev**. The first real Kali ARM64 rootfs authority remains reviewed and strict-byte-identical; its accepted canonical artifact is SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, size `137460600`, with 269 installed packages. Kernel authority run `35166301228` proved that forcing both independent vendor-kernel builds to internal `jobs=1` is **not** sufficient: final `.config` stayed byte-identical and both Images remained `43878416` bytes, but `11293315` Image bytes still differed across `897561` ranges. 0.6.41 added exact tracked-source mtime normalization as the next single-variable experiment. The first attempt to run that experiment, `35170273612`, did **not** build either kernel: the exact locked Android Clang subtree fetched successfully, then a redundant second Gitiles metadata request returned HTTP 503. 0.6.42 removes that duplicate network dependency from the expensive authority job by proving the already-fetched compiler checkout through exact local Git object identities before materialized-byte verification. The independent Gitiles source-lock workflow remains in place. Strict Image equality is still mandatory. **No AC2003 hardware feature receives Beta credit until the physical gate passes.**
 
 ## Source of truth and architecture
 
@@ -70,15 +70,16 @@ Profile JSON inspection explicitly reports `hardware_verified=false` and `beta_g
 - Source-locked `mkbootimg`/`unpack_bootimg`, deterministic double assembly and round-trip verification.
 - Exact-source kernel plan bound to profile, source commit, expected version, config material, make flags and required `CONFIG_*` states.
 - Android Clang `clang-r416183b` source/object lock plus materialized compiler SHA-256/banner verification.
+- Independent Gitiles source-lock verification remains available, while the expensive real kernel workflow now reconstructs the same canonical source evidence from the already-fetched exact Git checkout: SHA-1 object format, exact HEAD, credential-free HTTPS origin, clean tracked state, locked subtree/bin/version/manifest object IDs and exact `AndroidVersion.txt` bytes are all checked before the compiler can be used.
 - Exact executed A/B kernel build records bound to strict reproducibility evidence.
 - Deterministic required-kernel-config application before build and fail-closed final `.config` verification.
 - `oneplus/avicii` requires `CONFIG_RD_LZ4=y`; engineering module signing is disabled in the reproducibility-sensitive bring-up policy.
 - Independent kernel source/output roots are mapped to fixed virtual roots with `-fdebug-prefix-map`, `-fmacro-prefix-map` and `KBUILD_ABS_SRCTREE=0`; build user/host/timestamp/version and `SOURCE_DATE_EPOCH` are fixed and evidence-bound.
-- Exact clean Git-tracked kernel source mtimes can now be normalized to `SOURCE_DATE_EPOCH=0` using a path-independent policy. The normalizer verifies the full expected HEAD, rejects dirty tracked content, hashes a canonical Git mode/blob/path manifest, touches only tracked regular files/symlinks, never traverses `.git` or untracked files, re-checks cleanliness and emits `hardware_verified=false` / `beta_gate_credit=false` evidence.
+- Exact clean Git-tracked kernel source mtimes can be normalized to `SOURCE_DATE_EPOCH=0` using a path-independent policy. The normalizer verifies the full expected HEAD, rejects dirty tracked content, hashes a canonical Git mode/blob/path manifest, touches only tracked regular files/symlinks, never traverses `.git` or untracked files, re-checks cleanliness and emits `hardware_verified=false` / `beta_gate_credit=false` evidence.
 - Source-locked FDT/Android DT table references and structural DTB/DTBO verification bound to the approved boot plan.
 - First-boot candidate schema v8 binds exact firmware, boot plan, kernel execution/compiler provenance, DTB/DTBO and rootfs evidence without claiming hardware success.
 
-Real kernel authority run `35166301228` is a **strict failure**, not a partial pass. Both exact-source `jobs=1` builds produced identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `6bf2626db6deb670e7771ac3e320a262c94a319aee1f239726dffe4b4265decd` differed from Image B SHA-256 `018b0b815273fd63b2235abf342ef7bbf4e8c2324d707252e6f22112581192a7`. Bounded diagnostics counted `11293315` differing bytes across `897561` contiguous ranges, beginning at offset `71` and extending through `43876937`. This is lower than the previous `jobs>1` failure but still far from acceptable. The next real authority retry keeps the independent A/B roots, outer concurrency and `jobs=1`, while normalizing every verified tracked source entry to one epoch before either build starts. A/B normalization evidence must itself be byte-identical; strict final Image equality remains unchanged.
+Real kernel authority run `35166301228` is a **strict failure**, not a partial pass. Both exact-source `jobs=1` builds produced identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and identical Image size `43878416`, but Image A SHA-256 `6bf2626db6deb670e7771ac3e320a262c94a319aee1f239726dffe4b4265decd` differed from Image B SHA-256 `018b0b815273fd63b2235abf342ef7bbf4e8c2324d707252e6f22112581192a7`. Bounded diagnostics counted `11293315` differing bytes across `897561` contiguous ranges, beginning at offset `71` and extending through `43876937`. Run `35170273612` is **not** a newer kernel result: it stopped during toolchain preflight on an HTTP 503 from a redundant Gitiles metadata request after the exact compiler subtree had already fetched successfully. The next authority retry keeps independent A/B roots, outer concurrency, internal `jobs=1` and source-mtime normalization, but verifies the fetched compiler object graph locally so this experiment can actually reach the kernel builds. Strict final Image equality remains unchanged.
 
 ### Kali ARM64 rootfs
 
@@ -120,7 +121,7 @@ Primary Python matrix:
 - Python 3.13
 - Python 3.14
 
-Application/profile tests run in the minimal CI environment without installing Qt; the GUI dependency is lazy-loaded only when the GUI is launched. Expensive real kernel/rootfs jobs remain independent artifact-authority checks.
+Application/profile tests run in the minimal CI environment without installing Qt; the GUI dependency is lazy-loaded only when the GUI is launched. Expensive real kernel/rootfs jobs remain independent artifact-authority checks. The toolchain source lock is independently checked through Gitiles, while a real kernel authority run verifies the exact Git objects it already fetched instead of depending on a second metadata HTTP request.
 
 See [`BUILD_STATUS.json`](BUILD_STATUS.json) for current authority run IDs and [`ROADMAP.md`](ROADMAP.md) for milestone status.
 
@@ -144,7 +145,7 @@ The first public Beta remains **BLOCKED** until the exact physical AC2003 provid
 - exercised OxygenOS recovery/rollback path;
 - release compatibility matrix, manifest and SHA-256 checksums.
 
-Passing host CI, accepting a host-side rootfs authority, generating a candidate-authority binding, normalizing kernel-source metadata, or generating a provisioning overlay alone can never publish a Beta. See [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+Passing host CI, accepting a host-side rootfs authority, generating a candidate-authority binding, normalizing kernel-source metadata, locally verifying fetched compiler Git objects, or generating a provisioning overlay alone can never publish a Beta. See [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Development
 
@@ -158,6 +159,7 @@ Selected offline engineering entry points:
 
 ```powershell
 python scripts/verify_kernel_toolchain_upstream.py --lock tools/kernel-toolchain-lock.json --out evidence/kernel-toolchain-source.json
+python scripts/verify_kernel_toolchain_checkout.py --lock tools/kernel-toolchain-lock.json --repository toolchain-repo --out evidence/kernel-toolchain-source-local.json
 python scripts/normalize_kernel_source_mtimes.py --checkout kernel-a --expected-commit fb4b4374d3b9ad0f10ba38d159585129f092fb3d --out evidence/kernel-source-mtime-a.json
 python scripts/diagnose_kernel_image_repro.py --image-a build-a/arch/arm64/boot/Image --image-b build-b/arch/arm64/boot/Image --out evidence/kernel-image-divergence.json
 python scripts/import_fastboot_baseline.py --profile-id oneplus/avicii --transcript fastboot-getvar-all.txt --firmware-build "EXACT_BUILD" --firmware-fingerprint "EXACT_FINGERPRINT" --out evidence/fastboot-baseline.json
