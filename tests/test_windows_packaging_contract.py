@@ -22,14 +22,18 @@ def test_windows_build_is_onedir_and_bundles_offline_safety_inputs() -> None:
     assert '"--console"' in script
     assert '"KaliPhoneStudio"' in script
     assert '"KaliPhoneStudioCLI"' in script
-    for data_binding in (
-        '"devices;devices"',
-        '"assets;assets"',
-        '"tools;tools"',
-        '"BUILD_STATUS.json;."',
-        '"BETA_RELEASE_GATE.md;."',
+    # Data sources must be absolute so --specpath cannot redirect resolution into
+    # build/pyinstaller/spec; destinations stay stable inside PyInstaller _MEIPASS.
+    for variable, destination in (
+        ("$DevicesPath", "devices"),
+        ("$AssetsPath", "assets"),
+        ("$ToolsPath", "tools"),
+        ("$BuildStatusPath", "."),
+        ("$BetaGatePath", "."),
     ):
-        assert data_binding in script
+        assert variable in script
+        assert f"${{{variable[1:]}}};{destination}" in script
+    assert "--specpath" in script
     assert '"PySide6.QtSvg"' in script
     assert "unsigned development host artifacts" in script
     assert "Beta releases" in script

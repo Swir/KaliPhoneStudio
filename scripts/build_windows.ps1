@@ -27,6 +27,14 @@ $BuildRoot = Join-Path $RepoRoot "build\pyinstaller"
 $SpecRoot = Join-Path $BuildRoot "spec"
 New-Item -ItemType Directory -Force -Path $BuildRoot, $SpecRoot | Out-Null
 
+# PyInstaller resolves --add-data sources relative to the generated .spec file,
+# so use absolute source paths while keeping stable relative destinations.
+$DevicesPath = Join-Path $RepoRoot "devices"
+$AssetsPath = Join-Path $RepoRoot "assets"
+$ToolsPath = Join-Path $RepoRoot "tools"
+$BuildStatusPath = Join-Path $RepoRoot "BUILD_STATUS.json"
+$BetaGatePath = Join-Path $RepoRoot "BETA_RELEASE_GATE.md"
+
 $CommonArgs = @(
     "-m", "PyInstaller",
     "--noconfirm",
@@ -36,11 +44,11 @@ $CommonArgs = @(
     "--paths", $RepoRoot,
     "--distpath", (Join-Path $RepoRoot $DistPath),
     "--specpath", $SpecRoot,
-    "--add-data", "devices;devices",
-    "--add-data", "assets;assets",
-    "--add-data", "tools;tools",
-    "--add-data", "BUILD_STATUS.json;.",
-    "--add-data", "BETA_RELEASE_GATE.md;.",
+    "--add-data", "${DevicesPath};devices",
+    "--add-data", "${AssetsPath};assets",
+    "--add-data", "${ToolsPath};tools",
+    "--add-data", "${BuildStatusPath};.",
+    "--add-data", "${BetaGatePath};.",
     "--hidden-import", "PySide6.QtSvg"
 )
 
