@@ -4,13 +4,13 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 ## Overall project progress
 
-**52% complete**
+**54% complete**
 
-`██████████▍░░░░░░░░░ 52%`
+`██████████▊░░░░░░░░░ 54%`
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.38-dev
+## Current development line — 0.6.39-dev
 
 - [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
 - [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
@@ -24,8 +24,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Exact-source kernel runner applies profile-required `CONFIG_*` policy, fixed build identity/time values and canonical path remapping before strict comparison.
 - [x] Record the latest real kernel authority failure rather than granting partial credit: final `.config` is byte-identical and Image size matches, but Image bytes differ.
 - [x] Add bounded streaming kernel Image divergence diagnostics that report exact differing-byte/range counts and offsets without relaxing strict equality.
-- [ ] Use the active real A/B kernel run diagnostics to identify and remove any remaining Image nondeterminism, then obtain strict byte-identical evidence.
-- [ ] Accept a concrete reproducible Kali ARM64 rootfs only after the active post-fix real A/B build passes strict byte equality, package-evidence equality and canonicalization-provenance review.
+- [x] Review real rootfs authority run `35158577624`, accept the strict byte-identical ARM64 artifact evidence and pin a fail-closed authority record without hardware/Beta credit.
+- [ ] Run the next real A/B kernel authority with independent outer builds but serial (`jobs=1`) internal make graphs; if it still fails, continue evidence-driven nondeterminism isolation.
 
 ## Phase A — Multi-device Studio Core
 
@@ -80,6 +80,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Canonical compiler source/output path remapping with `KBUILD_ABS_SRCTREE=0`, `-fdebug-prefix-map` and `-fmacro-prefix-map`.
 - [x] Fixed `KBUILD_BUILD_USER`, `KBUILD_BUILD_HOST`, `KBUILD_BUILD_TIMESTAMP`, `KBUILD_BUILD_VERSION`, `SOURCE_DATE_EPOCH`, locale and timezone in the evidence-bearing build environment.
 - [x] Non-release bounded Image divergence diagnostics integrated after strict mismatch.
+- [x] Review run `35161227840`: identical final `.config`, equal Image size, but `11695369` differing Image bytes across `960780` ranges; strict reproducibility remains false.
+- [x] Prepare evidence-bearing serial internal (`jobs=1`) kernel authority retry while retaining independent/concurrent A/B roots.
 - [x] Source-locked FDT and Android DT table format references.
 - [x] Structural DTB and DTBO verification bound to the exact boot plan.
 - [ ] Review and accept first real byte-identical kernel A/B evidence.
@@ -92,6 +94,7 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Rootfs canonicalization provenance is bound to the strict reproducible rootfs artifact, source lock and signed repository snapshot.
 - [x] Schema-v1 first-boot rootfs provenance evidence binds the exact first-boot manifest digest to the canonicalization policy/binding, both A/B audit evidence digests and both raw rootfs input hashes/sizes.
 - [x] Schema-v1 first-boot provisioning plan/bundle is bound to strict reproducible ARM64 rootfs evidence, contains only deterministic non-secret defaults and requires interactive local user creation.
+- [ ] Bind the reviewed rootfs authority to the exact physical-firmware first-boot candidate after the AC2003 baseline and matching stock boot provenance exist.
 - [ ] Promote host candidate evidence to a release-candidate manifest only after required physical gates exist.
 
 ## Phase B — Common Kali Phone Userspace
@@ -111,7 +114,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Canonicalization emits per-build non-release audit evidence and never substitutes for strict byte equality.
 - [x] Canonicalization binding ties both A/B audit records/raw hashes to exact source/snapshot and the strict accepted canonical artifact.
 - [x] Candidate-level provenance link prevents accepted canonicalization evidence from being substituted or detached from the first-boot manifest.
-- [ ] Produce and review the first byte-identical ARM64 rootfs artifact.
+- [x] Produce and review the first byte-identical ARM64 rootfs artifact: authority run `35158577624`, artifact SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, 269-package manifest.
+- [x] Check in a fail-closed authority record binding exact run/commit/artifact IDs, source lock, signed repository snapshot/InRelease, raw A/B inputs, both canonicalization records/policy and strict evidence; `hardware_verified=false`, `beta_gate_credit=false`.
 - [x] Generic first-boot provisioning independent of device name (host-side bundle/verification foundation; physical first boot still required).
 - [ ] Phosh stage on the verified common rootfs.
 - [ ] Common mobile defaults: scaling, keyboard and lock/power integration.
