@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind one actually executed physical functional-test observation to the exact plan."""
+"""Bind one actually executed physical functional-test observation to an accepted exact plan review."""
 from __future__ import annotations
 
 import argparse
@@ -14,6 +14,7 @@ from kaliphonestudio.physical_hardware_test_observation import (
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--test-plan", type=Path, required=True)
+    parser.add_argument("--test-plan-review-evidence", type=Path, required=True)
     parser.add_argument("--test-id", required=True)
     parser.add_argument("--observation-record", type=Path, required=True)
     parser.add_argument("--observation-notes", type=Path, required=True)
@@ -22,6 +23,7 @@ def main() -> int:
     try:
         evidence = bind_physical_hardware_test_observation_from_files(
             args.test_plan,
+            args.test_plan_review_evidence,
             args.test_id,
             args.observation_record,
             args.observation_notes,
@@ -32,6 +34,7 @@ def main() -> int:
     print(f"functional observation evidence: {args.out}")
     print(f"sha256: {digest}")
     print(f"test: {evidence.test_id}; outcome: {evidence.outcome}; manual review required: true")
+    print(f"accepted exact plan review: {evidence.physical_hardware_test_plan_review_sha256}")
     print("hardware/Beta credit: false; persistent write: false")
     return 0
 

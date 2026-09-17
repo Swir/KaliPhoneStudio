@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="72" viewBox="0 0 900 72" role="img" aria-labelledby="title desc">
+  <title id="title">KaliPhoneStudio compact roadmap progress — 58.0%</title>
+  <desc id="desc">KaliPhoneStudio compact roadmap dashboard; progress 58.0%; Host authorities: 3/3 reviewed; status BLOCKED; Beta readiness BLOCKED.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02050A"/><stop offset="1" stop-color="#07111C"/></linearGradient>
+    <linearGradient id="progressGradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0088FF"/><stop offset="1" stop-color="#62E5FF"/></linearGradient>
+    <filter id="softGlow" x="-20%" y="-100%" width="140%" height="300%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <clipPath id="trackClip"><rect x="170" y="43" width="700" height="12" rx="5"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="898" height="70" rx="16" fill="url(#bg)" stroke="#62E5FF" stroke-opacity="0.24" stroke-width="2"/>
+  <text x="28" y="28" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">KaliPhoneStudio</text>
+  <text x="870" y="28" text-anchor="end" fill="#62E5FF" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="800">58.0% • BLOCKED</text>
+  <text x="28" y="55" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="12">3/3 authorities</text>
+  <rect x="170" y="43" width="700" height="12" rx="5" fill="#02050A" stroke="#62E5FF" stroke-opacity="0.28"/>
+  <rect x="170" y="43" width="406.000" height="12" rx="5" fill="url(#progressGradient)" filter="url(#softGlow)" clip-path="url(#trackClip)"/>
+</svg>
