@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle or exact-file dossier does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, bounded hardware-presence signal, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle or exact-file dossier does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -19,6 +19,7 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Boot image assembly/round-trip and partition-size checks are fail-closed.
 - [x] Temporary boot is serial/profile/firmware/candidate bound and cannot silently become a flash/write action.
 - [x] Rescue initramfs/payload is deterministic, network/SSH disabled by default, and has an exact probe identity.
+- [x] Bounded rescue hardware-presence survey is sysfs-only, exact-transcript/probe/diagnostics bound and cannot activate a subsystem or promote observed presence to functional hardware/Beta verification.
 - [x] Kali early-userspace proof overlay is deterministic and bound to exact candidate/rootfs authority identities.
 - [x] Early-userspace transcript parser requires exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers and never auto-promotes them to hardware/Beta credit.
 - [x] Rootfs handoff **discovery contract** is profile-driven, exact-source/blob pinned, bound to the physical-candidate/rootfs authority chain and cannot select a storage path or authorize writes.
@@ -41,6 +42,7 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] Matching stock `boot.img` extracted from the exact OTA and validated against that physical baseline.
 - [ ] Recovery path is documented before risky testing begins.
 - [ ] Exact reviewed physical candidate is instantiated from that baseline and reviewed authorities.
+- [ ] Bounded rescue hardware-presence survey is captured from that exact candidate/transcript and manually reviewed as contextual evidence only.
 - [ ] Rootfs-handoff discovery evidence from the real phone confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan.
 - [ ] That exact discovery record is manually reviewed and bound; `accepted_for_strategy_design=true` only authorizes later strategy design, not a write or target selection.
 - [ ] The real candidate/rescue/storage evidence is cross-bound into one reviewed physical bring-up session without identity/transcript/rootfs drift.
@@ -66,6 +68,7 @@ The following remain useful diagnostics but **cannot** satisfy a physical checkb
 - reproducible kernel/rootfs/DT artifacts without phone testing;
 - a `fastboot boot` process return code without observed phone-side evidence;
 - rescue `init-reached` marker without Kali-rootfs proof;
+- bounded USB/network/rfkill/sound/thermal/input/graphics/power sysfs presence records without separate functional verification;
 - a Kali early-userspace marker set without manual review of the exact candidate/physical context;
 - one bounded 4096-byte block read;
 - two battery telemetry samples;
