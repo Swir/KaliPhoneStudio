@@ -2,8 +2,10 @@
 
 This module never activates hardware and performs no phone I/O. It binds an
 operator-authored observation record and notes to one exact pending test from a
-``PhysicalHardwareTestPlanEvidence``. A recorded observation is only a candidate
-for later manual review: it never grants hardware or Beta credit by itself.
+``PhysicalHardwareTestPlanEvidence`` only after the original canonical plan has
+an independently accepted exact-plan review. A recorded observation is only a
+candidate for later manual review: it never grants hardware or Beta credit by
+itself.
 """
 from __future__ import annotations
 
@@ -20,8 +22,14 @@ from .physical_hardware_test_plan import (
     load_physical_hardware_test_plan,
     validate_physical_hardware_test_plan,
 )
+from .physical_hardware_test_plan_review import (
+    PhysicalHardwareTestPlanReviewError,
+    PhysicalHardwareTestPlanReviewEvidence,
+    load_physical_hardware_test_plan_review_evidence,
+    validate_physical_hardware_test_plan_review_evidence,
+)
 
-_OBSERVATION_POLICY = "manual-physical-hardware-functional-observation-v1"
+_OBSERVATION_POLICY = "manual-physical-hardware-functional-observation-v2"
 _ALLOWED_OUTCOMES = frozenset({"pass_candidate", "failed", "inconclusive"})
 _MAX_RECORD_BYTES = 512 * 1024
 _MAX_NOTES_BYTES = 2 * 1024 * 1024
@@ -63,6 +71,12 @@ class PhysicalHardwareTestObservationEvidence:
     profile_id: str
     device_serial: str
     physical_hardware_test_plan_sha256: str
+    physical_hardware_test_plan_review_sha256: str
+    physical_hardware_test_plan_file_sha256: str
+    physical_hardware_test_plan_review_record_sha256: str
+    physical_hardware_test_plan_review_notes_sha256: str
+    plan_review_reviewer: str
+    plan_review_accepted_for_physical_execution: bool
     physical_hardware_review_sha256: str
     physical_hardware_survey_sha256: str
     physical_boot_observation_sha256: str
@@ -158,6 +172,56 @@ def _plan_test(plan: PhysicalHardwareTestPlanEvidence, test_id: str) -> dict[str
     return matches[0]
 
 
+def _validate_exact_plan_review(
+    plan: PhysicalHardwareTestPlanEvidence,
+    review: PhysicalHardwareTestPlanReviewEvidence,
+) -> None:
+    try:
+        validate_physical_hardware_test_plan(plan)
+        validate_physical_hardware_test_plan_review_evidence(review)
+    except (PhysicalHardwareTestPlanError, PhysicalHardwareTestPlanReviewError) as exc:
+        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+
+    if review.accepted_for_physical_execution is not True or review.decision != "accepted":
+        raise PhysicalHardwareTestObservationError(
+            "functional observation requires an accepted exact test-plan review"
+        )
+    if review.plan_ready_for_physical_execution is not True or review.manual_test_execution_required is not True:
+        raise PhysicalHardwareTestObservationError(
+            "accepted exact test-plan review is not ready for manual physical execution"
+        )
+    if review.profile_id != plan.profile_id or review.device_serial != plan.device_serial:
+        raise PhysicalHardwareTestObservationError(
+            "accepted test-plan review identity does not match exact test plan"
+        )
+
+    canonical = plan.canonical_json().encode("utf-8")
+    expected = {
+        "physical_hardware_test_plan_sha256": plan.evidence_sha256(),
+        "physical_hardware_test_plan_file_sha256": sha256(canonical).hexdigest(),
+        "physical_hardware_review_sha256": plan.physical_hardware_review_sha256,
+        "physical_hardware_survey_sha256": plan.physical_hardware_survey_sha256,
+        "physical_boot_observation_sha256": plan.physical_boot_observation_sha256,
+        "physical_rescue_diagnostics_sha256": plan.physical_rescue_diagnostics_sha256,
+        "transcript_sha256": plan.transcript_sha256,
+        "rescue_probe_id": plan.rescue_probe_id,
+        "functional_hardware_contract_sha256": plan.functional_hardware_contract_sha256,
+    }
+    for name, value in expected.items():
+        if getattr(review, name) != value:
+            raise PhysicalHardwareTestObservationError(
+                f"accepted test-plan review drifted from exact plan: {name}"
+            )
+    if review.physical_hardware_test_plan_file_size != len(canonical):
+        raise PhysicalHardwareTestObservationError(
+            "accepted test-plan review file size drifted from exact plan"
+        )
+    if review.test_count != plan.test_count or review.beta_required_test_count != plan.beta_required_test_count:
+        raise PhysicalHardwareTestObservationError(
+            "accepted test-plan review test counts drifted from exact plan"
+        )
+
+
 def parse_physical_hardware_test_observation_record(
     raw: object,
     *,
@@ -165,15 +229,21 @@ def parse_physical_hardware_test_observation_record(
 ) -> PhysicalHardwareTestObservationRecord:
     expected = {item.name for item in fields(PhysicalHardwareTestObservationRecord)}
     if not isinstance(raw, dict) or set(raw) != expected:
-        raise PhysicalHardwareTestObservationError("functional observation record fields do not match schema-v1")
-    if raw["schema_version"] != 1 or raw["observation_policy"] != _OBSERVATION_POLICY:
-        raise PhysicalHardwareTestObservationError("unsupported functional observation record schema/policy")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation record fields do not match schema-v2"
+        )
+    if raw["schema_version"] != 2 or raw["observation_policy"] != _OBSERVATION_POLICY:
+        raise PhysicalHardwareTestObservationError(
+            "unsupported functional observation record schema/policy"
+        )
     _safe_text(raw["profile_id"], "functional observation profile id", 128)
     _safe_text(raw["device_serial"], "functional observation device serial", 256)
     _safe_text(raw["test_id"], "functional observation test id", 64)
     operator = raw["operator"]
     if not isinstance(operator, str) or not _SAFE_OPERATOR_RE.fullmatch(operator):
-        raise PhysicalHardwareTestObservationError("functional observation operator must be a safe bounded identifier")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation operator must be a safe bounded identifier"
+        )
     if raw["outcome"] not in _ALLOWED_OUTCOMES:
         raise PhysicalHardwareTestObservationError("functional observation outcome is unsupported")
     bool_fields = (
@@ -235,18 +305,18 @@ def read_physical_hardware_test_observation_notes(path: Path) -> tuple[str, int]
 
 def make_inconclusive_physical_hardware_test_observation_record(
     plan: PhysicalHardwareTestPlanEvidence,
+    plan_review: PhysicalHardwareTestPlanReviewEvidence,
     test_id: str,
     operator: str,
 ) -> PhysicalHardwareTestObservationRecord:
-    try:
-        validate_physical_hardware_test_plan(plan)
-    except PhysicalHardwareTestPlanError as exc:
-        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    _validate_exact_plan_review(plan, plan_review)
     row = _plan_test(plan, test_id)
     if not isinstance(operator, str) or not _SAFE_OPERATOR_RE.fullmatch(operator):
-        raise PhysicalHardwareTestObservationError("functional observation operator must be a safe bounded identifier")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation operator must be a safe bounded identifier"
+        )
     return PhysicalHardwareTestObservationRecord(
-        schema_version=1,
+        schema_version=2,
         observation_policy=_OBSERVATION_POLICY,
         profile_id=plan.profile_id,
         device_serial=plan.device_serial,
@@ -269,6 +339,7 @@ def make_inconclusive_physical_hardware_test_observation_record(
 
 def bind_physical_hardware_test_observation(
     plan: PhysicalHardwareTestPlanEvidence,
+    plan_review: PhysicalHardwareTestPlanReviewEvidence,
     record: PhysicalHardwareTestObservationRecord,
     *,
     observation_record_sha256: str,
@@ -276,12 +347,11 @@ def bind_physical_hardware_test_observation(
     observation_notes_sha256: str,
     observation_notes_size: int,
 ) -> PhysicalHardwareTestObservationEvidence:
-    try:
-        validate_physical_hardware_test_plan(plan)
-    except PhysicalHardwareTestPlanError as exc:
-        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    _validate_exact_plan_review(plan, plan_review)
     if record.profile_id != plan.profile_id or record.device_serial != plan.device_serial:
-        raise PhysicalHardwareTestObservationError("functional observation identity does not match exact test plan")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation identity does not match exact test plan"
+        )
     row = _plan_test(plan, record.test_id)
     required_observations = tuple(row["required_observations"])
     parsed = parse_physical_hardware_test_observation_record(
@@ -289,16 +359,26 @@ def bind_physical_hardware_test_observation(
         required_observations=required_observations,
     )
     if row["status"] != "pending":
-        raise PhysicalHardwareTestObservationError("functional observation requires an exact pending test")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation requires an exact pending test"
+        )
     if row["context_signals_satisfied"] is not True:
-        raise PhysicalHardwareTestObservationError("functional observation cannot be bound while required context signals are missing")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation cannot be bound while required context signals are missing"
+        )
 
     evidence = PhysicalHardwareTestObservationEvidence(
-        schema_version=1,
+        schema_version=2,
         observation_policy=_OBSERVATION_POLICY,
         profile_id=plan.profile_id,
         device_serial=plan.device_serial,
         physical_hardware_test_plan_sha256=plan.evidence_sha256(),
+        physical_hardware_test_plan_review_sha256=plan_review.evidence_sha256(),
+        physical_hardware_test_plan_file_sha256=plan_review.physical_hardware_test_plan_file_sha256,
+        physical_hardware_test_plan_review_record_sha256=plan_review.review_record_sha256,
+        physical_hardware_test_plan_review_notes_sha256=plan_review.review_notes_sha256,
+        plan_review_reviewer=plan_review.reviewer,
+        plan_review_accepted_for_physical_execution=True,
         physical_hardware_review_sha256=plan.physical_hardware_review_sha256,
         physical_hardware_survey_sha256=plan.physical_hardware_survey_sha256,
         physical_boot_observation_sha256=plan.physical_boot_observation_sha256,
@@ -311,10 +391,18 @@ def bind_physical_hardware_test_observation(
         required_context_signals=tuple(row["required_context_signals"]),
         context_signals_satisfied=True,
         required_observations=required_observations,
-        observation_record_sha256=_sha(observation_record_sha256, "functional observation record"),
-        observation_record_size=_positive(observation_record_size, "functional observation record size"),
-        observation_notes_sha256=_sha(observation_notes_sha256, "functional observation notes"),
-        observation_notes_size=_positive(observation_notes_size, "functional observation notes size"),
+        observation_record_sha256=_sha(
+            observation_record_sha256, "functional observation record"
+        ),
+        observation_record_size=_positive(
+            observation_record_size, "functional observation record size"
+        ),
+        observation_notes_sha256=_sha(
+            observation_notes_sha256, "functional observation notes"
+        ),
+        observation_notes_size=_positive(
+            observation_notes_size, "functional observation notes size"
+        ),
         operator=parsed.operator,
         outcome=parsed.outcome,
         physical_test_executed=True,
@@ -337,19 +425,29 @@ def bind_physical_hardware_test_observation(
 def validate_physical_hardware_test_observation_evidence(
     evidence: PhysicalHardwareTestObservationEvidence,
 ) -> None:
-    if not isinstance(evidence, PhysicalHardwareTestObservationEvidence) or evidence.schema_version != 1:
-        raise PhysicalHardwareTestObservationError("physical functional observation must be schema-v1 typed evidence")
+    if not isinstance(evidence, PhysicalHardwareTestObservationEvidence) or evidence.schema_version != 2:
+        raise PhysicalHardwareTestObservationError(
+            "physical functional observation must be schema-v2 typed evidence"
+        )
     if evidence.observation_policy != _OBSERVATION_POLICY:
-        raise PhysicalHardwareTestObservationError("physical functional observation policy is unsupported")
+        raise PhysicalHardwareTestObservationError(
+            "physical functional observation policy is unsupported"
+        )
     _safe_text(evidence.profile_id, "functional observation profile id", 128)
     _safe_text(evidence.device_serial, "functional observation device serial", 256)
     _safe_text(evidence.test_id, "functional observation test id", 64)
     if not _SAFE_OPERATOR_RE.fullmatch(evidence.operator):
         raise PhysicalHardwareTestObservationError("functional observation operator identifier is invalid")
+    if not _SAFE_OPERATOR_RE.fullmatch(evidence.plan_review_reviewer):
+        raise PhysicalHardwareTestObservationError("functional observation plan reviewer identifier is invalid")
     if evidence.outcome not in _ALLOWED_OUTCOMES:
         raise PhysicalHardwareTestObservationError("functional observation outcome is unsupported")
     for value, label in (
         (evidence.physical_hardware_test_plan_sha256, "physical hardware test plan"),
+        (evidence.physical_hardware_test_plan_review_sha256, "physical hardware test plan review"),
+        (evidence.physical_hardware_test_plan_file_sha256, "physical hardware test plan file"),
+        (evidence.physical_hardware_test_plan_review_record_sha256, "physical hardware test plan review record"),
+        (evidence.physical_hardware_test_plan_review_notes_sha256, "physical hardware test plan review notes"),
         (evidence.physical_hardware_review_sha256, "physical hardware review"),
         (evidence.physical_hardware_survey_sha256, "physical hardware survey"),
         (evidence.physical_boot_observation_sha256, "physical boot observation"),
@@ -363,6 +461,10 @@ def validate_physical_hardware_test_observation_evidence(
         _sha(value, label)
     _positive(evidence.observation_record_size, "functional observation record size")
     _positive(evidence.observation_notes_size, "functional observation notes size")
+    if evidence.plan_review_accepted_for_physical_execution is not True:
+        raise PhysicalHardwareTestObservationError(
+            "functional observation lacks accepted exact test-plan review authorization"
+        )
     if not isinstance(evidence.required_for_beta, bool) or evidence.context_signals_satisfied is not True:
         raise PhysicalHardwareTestObservationError("functional observation test metadata is invalid")
     if not isinstance(evidence.required_context_signals, tuple) or any(
@@ -405,7 +507,7 @@ def load_physical_hardware_test_observation_evidence(path: Path) -> PhysicalHard
         raise PhysicalHardwareTestObservationError("functional observation evidence is not valid UTF-8 JSON") from exc
     expected = {item.name for item in fields(PhysicalHardwareTestObservationEvidence)}
     if not isinstance(value, dict) or set(value) != expected:
-        raise PhysicalHardwareTestObservationError("functional observation evidence fields do not match schema-v1")
+        raise PhysicalHardwareTestObservationError("functional observation evidence fields do not match schema-v2")
     for name in ("required_context_signals", "required_observations", "required_observation_checks"):
         if not isinstance(value.get(name), list):
             raise PhysicalHardwareTestObservationError("functional observation evidence list fields are invalid")
@@ -439,14 +541,17 @@ def write_physical_hardware_test_observation_evidence(
 
 def bind_physical_hardware_test_observation_from_files(
     plan_path: Path,
+    plan_review_path: Path,
     test_id: str,
     record_path: Path,
     notes_path: Path,
 ) -> PhysicalHardwareTestObservationEvidence:
     try:
         plan = load_physical_hardware_test_plan(plan_path)
-    except PhysicalHardwareTestPlanError as exc:
+        plan_review = load_physical_hardware_test_plan_review_evidence(plan_review_path)
+    except (PhysicalHardwareTestPlanError, PhysicalHardwareTestPlanReviewError) as exc:
         raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    _validate_exact_plan_review(plan, plan_review)
     row = _plan_test(plan, test_id)
     required = tuple(row["required_observations"])
     record, record_sha, record_size = load_physical_hardware_test_observation_record(
@@ -454,10 +559,13 @@ def bind_physical_hardware_test_observation_from_files(
         required_observations=required,
     )
     if record.test_id != test_id:
-        raise PhysicalHardwareTestObservationError("functional observation record test id does not match requested test")
+        raise PhysicalHardwareTestObservationError(
+            "functional observation record test id does not match requested test"
+        )
     notes_sha, notes_size = read_physical_hardware_test_observation_notes(notes_path)
     return bind_physical_hardware_test_observation(
         plan,
+        plan_review,
         record,
         observation_record_sha256=record_sha,
         observation_record_size=record_size,

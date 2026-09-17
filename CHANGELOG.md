@@ -2,6 +2,18 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.64-dev — accepted-plan-review-bound physical observations and deterministic progress SVGs
+
+- Upgraded `kaliphonestudio.physical_hardware_test_observation` to schema-v2 so no physical per-test observation can be prepared or bound unless the original canonical test plan has a separate `accepted_for_physical_execution=true` exact-plan review.
+- Every schema-v2 observation now carries the exact plan-review evidence SHA-256, canonical plan-file SHA-256, review-record SHA-256, review-notes SHA-256 and reviewer identity in addition to the existing profile/device/survey/boot/rescue/transcript/probe/functional-contract chain.
+- Added fail-closed cross-checking for plan/review profile and serial identity, semantic plan digest, canonical plan bytes/size, test counts, upstream evidence digests and plan readiness. Rejected, detached or drifted plan reviews cannot produce valid physical observation evidence.
+- Updated the safe observation-template and observation-recording CLIs to require `--test-plan-review-evidence`; neither command performs phone I/O or grants hardware/Beta credit.
+- Extended focused regression tests and `physical-hardware-functional-results` CI around rejected/detached review handling, immutable schema-v2 round trips and forbidden write/hardware/Beta promotion.
+- Implemented **SWIR Progress SVG PRO v1** with deterministic `progress-card.svg`, `progress-mini.svg`, a reusable N/A template, generator/check, XML/geometry/math tests and dedicated CI. The assets read the authoritative `BUILD_STATUS.json` project ledger and render Beta readiness separately.
+- For the current 58% ledger value, the generated fill is exactly 638/1100 px on the card and 406/700 px on the mini. Unknown progress renders N/A with no fabricated fill.
+- Embedded the card in README and mini in ROADMAP with textual fallback while preserving SWIR README PRO v2, Search Keywords and the protected 58% text bar.
+- Project completion remains **58%** and Beta remains **BLOCKED** because no new physical AC2003 gate has been passed.
+
 ## 0.6.63-dev — independent exact physical test-plan manual review
 
 - Added `kaliphonestudio.physical_hardware_test_plan_review` as a separate fail-closed review boundary between deterministic plan generation and any real-device functional-test session.

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="180" viewBox="0 0 1200 180" role="img" aria-labelledby="title desc">
+  <title id="title">KaliPhoneStudio roadmap progress — 58.0%</title>
+  <desc id="desc">KaliPhoneStudio; Current project roadmap; progress 58.0%; status BLOCKED; Host authorities: 3/3 reviewed; Beta readiness BLOCKED.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02050A"/><stop offset="1" stop-color="#07111C"/></linearGradient>
+    <linearGradient id="progressGradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0088FF"/><stop offset="1" stop-color="#62E5FF"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#62E5FF" stroke-opacity="0.045" stroke-width="1"/></pattern>
+    <filter id="softGlow" x="-20%" y="-100%" width="140%" height="300%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <clipPath id="trackClip"><rect x="50" y="112" width="1100" height="18" rx="7"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="1198" height="178" rx="20" fill="url(#bg)" stroke="#62E5FF" stroke-opacity="0.24" stroke-width="2"/>
+  <rect x="1" y="1" width="1198" height="178" rx="20" fill="url(#grid)"/>
+  <text x="50" y="38" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="2">SWIR PROJECT • CURRENT PROJECT ROADMAP</text>
+  <text x="50" y="76" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="700">KaliPhoneStudio</text>
+  <text x="1150" y="76" text-anchor="end" fill="#62E5FF" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="800">58.0%</text>
+  <text x="50" y="99" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="14">Version 0.6.64-dev • Status BLOCKED • Beta readiness BLOCKED</text>
+  <rect x="50" y="112" width="1100" height="18" rx="7" fill="#02050A" stroke="#62E5FF" stroke-opacity="0.28"/>
+  <rect x="50" y="112" width="638.000" height="18" rx="7" fill="url(#progressGradient)" filter="url(#softGlow)" clip-path="url(#trackClip)"/>
+  <text x="50" y="154" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600">Host authorities: 3/3 reviewed</text>
+  <text x="1150" y="154" text-anchor="end" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="13">Source: BUILD_STATUS.json • Beta gate shown separately</text>
+</svg>

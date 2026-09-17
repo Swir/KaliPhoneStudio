@@ -1,116 +1,140 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.63-dev**
+Current development line — 0.6.64-dev
 
 **58% complete**
 
-`███████████▋░░░░░░░░ 58%`
+```text
+[█████████████████████████████---------------------] 58%
+```
 
-Progress intentionally does not rise for host-only plumbing while the physical-device risk gates remain unchanged.
+<div align="center">
+  <img src="assets/readme/progress-mini.svg" alt="KaliPhoneStudio compact roadmap progress dashboard" width="900" />
+</div>
 
-## Milestone A — multi-device core and provenance — COMPLETE host-side
+**Roadmap dashboard:** **58.0%** — **BLOCKED** · **Host authorities: 3/3 reviewed** · Beta readiness: **BLOCKED**.
 
-- [x] Device-independent `kaliphonestudio/` core.
-- [x] `devices/<vendor>/<codename>/profile.json` runtime registry/schema contract.
-- [x] Profile-driven identity, confirmation token, partition/boot constraints and test contract.
-- [x] Profile hooks restricted to explicitly registered in-process callbacks; no profile shell injection.
-- [x] Exact source/tool locking and checksum/object provenance.
-- [x] Read-only Fastboot baseline evidence and exact tool identity.
-- [x] Exact OTA/payload/stock-boot provenance and physical-baseline bundle.
-- [x] Guarded temporary-boot authorization/execution path with no persistent write.
+The compact dashboard is generated from the same authoritative `BUILD_STATUS.json` ledger as the README card. Fill width is `track_width × project_progress_percent / 100`; raw checkboxes are not interpreted as equal-weight work, and Beta readiness remains a separate gate.
 
-## Milestone B — reproducible first-boot ingredients — COMPLETE host-side
+> Progress is an internal reviewed roadmap ledger, not an estimate of remaining calendar time. A host-side milestone does not imply physical hardware support.
 
-- [x] Reviewed Kali ARM64 rootfs authority (`35158577624`).
-- [x] Reviewed avicii kernel authority (`35183670399`).
-- [x] Reviewed avicii DTB/DTBO authority (`35196447576`).
-- [x] Exact candidate binding across kernel/rootfs/device-tree authorities.
-- [x] Deterministic boot-image assembly and round-trip verification.
-- [x] Deterministic rescue initramfs and static ARM64 payload reproducibility.
-- [x] Deterministic first-boot provisioning foundation with locked root and remote access disabled.
+## Milestone A — multi-device host foundation — complete for current scope
 
-## Milestone C — physical bring-up evidence — IN PROGRESS
+- [x] Python package `kaliphonestudio` and profile registry.
+- [x] Profile-scoped identity/serial verification and confirmation token.
+- [x] Profile-driven boot/partition/recovery/test contracts.
+- [x] First profile: `oneplus/avicii` / OnePlus Nord AC2003.
+- [x] Generic safety/temporary-boot paths avoid global AC2003 hard-coding where device policy can be profile-driven.
+- [x] Source/tool locking and provenance contracts.
+- [x] Python 3.11–3.14 CI matrix.
 
-Host-side preparation now complete:
+## Milestone B — reproducible host candidate foundation — complete for current scope
 
-- [x] Rescue `init-reached` marker + deterministic rescue probe id.
-- [x] Offline transcript binding to one successful non-persistent temporary boot.
-- [x] Read-only rescue sysfs diagnostics.
-- [x] Explicit manual-only bounded block-read and paired battery probes.
-- [x] **0.6.60:** bounded automatic sysfs-only hardware-presence survey covering USB UDC/device identity, network interfaces, rfkill, sound, thermal, input, framebuffer/DRM and power-supply state without activating those subsystems.
-- [x] **0.6.61:** fail-closed manual hardware-survey review contract binds the exact survey to canonical review-record bytes and separate notes.
-- [x] **0.6.61:** contextual acceptance requires a non-empty survey plus explicit physical-context, integrity, USB, network/radio, audio, input/display, thermal/power and limitations review; all functional/hardware/Beta flags remain false.
-- [x] **0.6.61:** profile-driven physical functional-hardware test plan binds the exact accepted survey review to pending-only, non-destructive, no-write tests and fails readiness closed when required context signals are absent.
-- [x] **0.6.62:** exact physical functional-test observation evidence binds one actually executed test to the exact plan/test/candidate identity, canonical operator record and separate notes; a `pass_candidate` requires every exact required observation but still grants no hardware/Beta credit.
-- [x] **0.6.62:** separate manual functional-test review binds accepted pass/fail/inconclusive outcomes only after exact-plan, exact-observation, physical-context, required-observation, notes/limitations and no-write checks are complete.
-- [x] **0.6.62:** deterministic exact-plan functional-test summary reports pending/reviewed-pass/fail/inconclusive/rejected coverage and Beta-required reviewed-pass counts while keeping project support/hardware/Beta promotion false.
-- [x] **0.6.63:** independent exact test-plan manual-review evidence binds the original canonical plan file bytes, upstream identity chain, review record and notes; a plan becomes eligible only as a manual physical-test checklist after all review checks pass and the plan itself is ready.
-- [x] Deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
-- [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
-- [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract bound to exact physical candidate and reviewed rootfs authority without target selection or write authorization.
-- [x] **0.6.56:** typed physical-storage discovery report/evidence bound to exact rescue/rootfs chain, report bytes and recovery-plan digest.
-- [x] **0.6.57:** fail-closed manual storage-review record bound to exact discovery evidence, review record and notes.
-- [x] **0.6.58:** immutable physical bring-up session cross-binds candidate, rescue, storage discovery/review and optional Kali early-userspace evidence.
-- [x] **0.6.59:** exact-file physical bring-up dossier verifies the canonical session and all bound original evidence/raw files by SHA-256 and size.
-- [x] **0.6.59:** post-transfer dossier reverification and a separate manual dossier-review gate keep target/write/hardware/Beta claims false.
+- [x] Exact Kali ARM64 rootfs source lock, canonicalization, reproducibility evidence and reviewed authority.
+- [x] Exact kernel source/toolchain lock, normalized build inputs, reproducibility evidence and reviewed authority.
+- [x] Exact DTB/DTBO source/build binding, reproducibility evidence and reviewed authority bound to the reviewed kernel.
+- [x] First-boot candidate authority bundle binds reviewed rootfs/kernel/device-tree state.
+- [x] Boot image inspection/round-trip/size contracts fail closed.
+- [x] Deterministic rescue payload and probe identity.
+- [x] Exact Kali early-userspace proof overlay and markers.
 
-Still physically blocked:
+## Milestone C — physical AC2003 bring-up — in progress / blocked on real hardware evidence
 
-- [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
-- [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
-- [ ] Instantiate one exact physical first-boot candidate.
-- [ ] Capture the real bounded hardware-presence survey and bind an accepted-as-context manual review; contextual acceptance still gives no functional credit.
-- [ ] Build the exact profile-driven functional-test plan from that real accepted survey review.
-- [ ] Independently review the original canonical physical functional-test plan and bind an accepted exact-plan review before using it as the real-device test checklist.
-- [ ] Execute and bind real subsystem-specific tests to that exact reviewed plan, then independently review each observation; no synthetic/host-only result counts.
-- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan under the typed discovery contract.
-- [ ] Complete and bind a manual review of that exact storage discovery; `accepted_for_strategy_design=true` is not target approval.
-- [ ] Cross-bind real candidate/rescue/storage records into one physical bring-up session.
-- [ ] Build, independently reverify and manually review the exact-file dossier from that real session.
-- [ ] Select and separately review a safe, reversible rootfs staging/handoff target only after accepted physical discovery/dossier review; no guessed UFS/userdata path.
-- [ ] Execute explicitly confirmed temporary boot on the exact AC2003.
-- [ ] Capture usable console/log evidence and manually review rescue markers.
-- [ ] Reach the exact reviewed Kali rootfs and manually review the early-systemd marker chain.
-- [ ] Verify required UFS/storage behavior beyond bounded diagnostic reads.
-- [ ] Verify charging/battery safety for bring-up sessions.
-- [ ] Verify display/touch or explicitly constrain Beta to reviewed console-only scope.
-- [ ] Exercise recovery/rollback on the exact firmware baseline.
+Host-side contracts are prepared, but **none of the items below may be promoted from host-only or synthetic evidence**.
 
-## Milestone D — hardware enablement
+- [x] Read-only Fastboot baseline capture/import tooling.
+- [x] Exact physical stock-baseline/candidate gate contracts.
+- [x] Serial/profile/firmware/candidate-bound one-shot temporary-boot execution path with explicit confirmation.
+- [x] Physical rescue observation, exact rescue probe markers and bounded read-only diagnostics.
+- [x] Bounded hardware-presence survey with no subsystem activation.
+- [x] Exact manual contextual review of the hardware survey.
+- [x] Profile-driven pending-only functional-hardware test plan.
+- [x] 0.6.63 independent exact plan-file manual review before physical execution.
+- [x] 0.6.64 schema-v2 per-test observation contract now requires that accepted exact plan review and carries its plan-file/review-record/review-notes identities into every later physical observation.
+- [x] Independent per-test result review and exact-plan status summary remain separate from project support/Beta promotion.
+- [x] Discovery-only rootfs-handoff policy and exact pinned storage-layout source validation.
+- [x] Typed physical storage discovery evidence contract.
+- [x] Manual physical-storage review contract.
+- [x] Cross-bound physical bring-up session evidence contract.
+- [x] Exact-file physical bring-up dossier + independent dossier review.
+- [ ] Capture a real AC2003 Fastboot/OxygenOS baseline and exact firmware fingerprint.
+- [ ] Extract/validate matching stock `boot.img` from the exact OTA.
+- [ ] Review/instantiate the exact physical candidate for that real baseline.
+- [ ] Complete real temporary `fastboot boot` and capture the phone-side rescue markers.
+- [ ] Capture and accept a real hardware survey review from the exact candidate.
+- [ ] Generate and accept the exact functional-test plan review for that physical context.
+- [ ] Execute and independently review every applicable Beta-required schema-v2 functional test observation.
+- [ ] Capture and accept storage/encryption/free-space/recovery evidence from the real phone.
+- [ ] Review the exact physical bring-up session and source-file dossier.
+- [ ] Select/review an actual reversible rootfs staging/handoff strategy only after accepted physical storage evidence and dossier review.
+- [ ] Confirm intended Kali early userspace/rootfs on the physical run.
+- [ ] Validate required UFS/storage behavior beyond bounded diagnostic reads.
+- [ ] Validate safe charging/battery behavior for the supported scope.
+- [ ] Validate display/touch, or explicitly review/document a console-only Beta scope.
+- [ ] Validate required USB/rescue behavior.
+- [ ] Exercise recovery/rollback on the exact physical baseline.
 
-No item here may be marked complete from host CI, sysfs presence, contextual review, a generated/reviewed test plan or synthetic functional-test records alone.
+## Milestone D — rootfs handoff and user-space integration — gated by Milestone C evidence
 
-- [ ] Display/framebuffer/DRM.
-- [ ] Touch/input.
-- [ ] USB host/device and rescue path.
+- [x] Deterministic Kali early-userspace proof overlay exists host-side.
+- [x] Exact rootfs authority/candidate identities are available for physical proof.
+- [x] Profile-driven discovery expectations exist without selecting a guessed `/dev/...` path.
+- [ ] Choose the real reversible staging/handoff target only after reviewed physical storage evidence.
+- [ ] Make the exact reviewed Kali rootfs available through that approved strategy.
+- [ ] Confirm systemd early userspace on the physical phone.
+- [ ] Integrate/validate Phosh for the declared release scope.
+- [ ] Validate persistent configuration without violating rollback/recovery policy.
+
+## Milestone E — subsystem bring-up
+
+Each subsystem requires real physical evidence before it can be called working.
+
+- [ ] UFS/storage.
+- [ ] Display.
+- [ ] Touch.
+- [ ] USB/rescue.
 - [ ] Wi-Fi.
 - [ ] Bluetooth.
-- [ ] Modem/telephony policy and safety scope.
+- [ ] Modem/cellular.
 - [ ] Audio.
-- [ ] Sensors required by supported scope.
-- [ ] Power/charging/thermal behavior.
-- [ ] Suspend/resume.
-- [ ] UFS/storage integrity under the selected rootfs strategy.
+- [ ] Charging/battery.
+- [ ] Suspend/resume and broader power behavior.
+- [ ] Thermal behavior.
 
-## Milestone E — first working Beta
+## Milestone F — host application and operator UX
 
-Required before release:
+- [x] Current Python host application and profile registry foundation.
+- [x] Fail-closed evidence/operator CLI paths for baseline, candidate, temporary boot, rescue, storage and functional-hardware review.
+- [ ] Consolidate the safety/evidence flow into a polished Windows GUI/CLI without bypassing explicit confirmation boundaries.
+- [ ] Add clearer diagnostics export and guided recovery workflow.
+- [ ] Package Windows executable only after the CLI safety contracts stay equivalent under packaging.
 
-- [ ] All mandatory physical gates in `BETA_RELEASE_GATE.md` reviewed and recorded.
-- [ ] Every Beta-required physical functional test has real exact-device evidence and an accepted manual review, from an independently accepted exact test plan, or a documented explicitly reviewed scope exception where the gate permits one.
-- [ ] Exact compatibility matrix and known issues.
-- [ ] Release manifest with SHA-256 for every published binary/image.
-- [ ] Recovery instructions validated on the exact supported firmware.
-- [ ] Windows GUI/CLI path can reproduce/verify the supported flow without hidden substitutions.
-- [ ] No empty/symbolic release; published assets must be the exact reviewed candidate.
+## Milestone G — Beta release
 
-## Milestone F — Stable
+- [x] [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md) exists and separates host-side from physical mandatory checks.
+- [x] 0.6.64 deterministic SWIR Progress SVG PRO card/mini/template are generated from the authoritative project ledger; they are presentation only and grant no release credit.
+- [ ] Every applicable mandatory physical AC2003 gate is passed and manually reviewed.
+- [ ] Exact release manifest + SHA-256 set is generated from the reviewed physical candidate.
+- [ ] Compatibility matrix and known issues reflect only physically verified scope.
+- [ ] Real binaries/images and instructions are attached to the exact candidate GitHub prerelease.
+- [ ] Publish first Beta.
 
-Stable requires repeated device testing, stronger recovery confidence, broader hardware coverage, upgrade/rollback behavior and a materially lower known-risk surface than Beta.
+## Milestone H — Stable
 
-## Immediate highest-impact work
+Stable requires a later, higher threshold than Beta, including wider repeat testing, rollback confidence and declared supported hardware behavior. A Beta success does not automatically satisfy Stable.
 
-1. Keep rescue diagnostics, hardware survey/review, functional test plan/exact-plan review/observation/result-review/summary, storage discovery/review, session and dossier layers fail-closed; none may turn host-only or synthetic evidence into support or authorize a storage write.
-2. Do **not** implement storage-target selection before a real AC2003 discovery record has passed exact manual review and dossier audit.
-3. When a physical AC2003 is available, capture the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect rescue marker/diagnostic/hardware-survey evidence and manual review before building and independently reviewing the functional-test plan.
-4. Run each functional test manually against the exact real candidate using only the independently reviewed exact plan, bind the exact observation and independent result review, and treat the aggregate summary only as release-gate input — never automatic Beta credit.
+## Progress presentation contract
+
+KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual dashboard:
+
+- authoritative numeric source: `BUILD_STATUS.json -> project_progress_percent`;
+- measured scope: **Current project roadmap**;
+- fill geometry: `track_width × project_progress_percent / 100`;
+- current host-authority counter: the three reviewed reproducibility authority state fields in `BUILD_STATUS.json`;
+- unknown/unverifiable progress renders **N/A**, never fabricated `0%`/`100%`;
+- project progress and Beta release readiness are separate signals;
+- the protected text bar and percent remain human-readable fallbacks.
+
+## Immediate next work
+
+The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, run the established baseline → stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → storage review/dossier chain. Only then design and review the reversible rootfs handoff target for that exact device state.

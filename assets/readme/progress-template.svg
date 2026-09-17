@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="180" viewBox="0 0 1200 180" role="img" aria-labelledby="title desc">
+  <title id="title">SWIR Progress SVG PRO template — N/A</title>
+  <desc id="desc">Reusable TEMPLATE / NOT PROJECT DATA. Progress is N/A and no fill is rendered.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02050A"/><stop offset="1" stop-color="#07111C"/></linearGradient>
+    <linearGradient id="progressGradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0088FF"/><stop offset="1" stop-color="#62E5FF"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#62E5FF" stroke-opacity="0.045" stroke-width="1"/></pattern>
+    <clipPath id="trackClip"><rect x="50" y="112" width="1100" height="18" rx="7"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="1198" height="178" rx="20" fill="url(#bg)" stroke="#62E5FF" stroke-opacity="0.24" stroke-width="2"/>
+  <rect x="1" y="1" width="1198" height="178" rx="20" fill="url(#grid)"/>
+  <text x="50" y="38" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="2">SWIR PROGRESS SVG PRO • TEMPLATE / NOT PROJECT DATA</text>
+  <text x="50" y="76" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="700">PROJECT NAME</text>
+  <text x="1150" y="76" text-anchor="end" fill="#62E5FF" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="800">N/A</text>
+  <text x="50" y="99" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="14">Measured scope: VERIFY SOURCE BEFORE GENERATION • Status N/A • Beta readiness N/A</text>
+  <rect x="50" y="112" width="1100" height="18" rx="7" fill="#02050A" stroke="#62E5FF" stroke-opacity="0.28"/>
+  <text x="50" y="154" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600">Counter: N/A</text>
+  <text x="1150" y="154" text-anchor="end" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="13">TEMPLATE ONLY • NEVER EMBED AS LIVE PROGRESS</text>
+</svg>
