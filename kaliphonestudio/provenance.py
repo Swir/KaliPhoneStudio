@@ -7,6 +7,7 @@ claim that the image has booted on physical hardware.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from hashlib import sha256
 import json
 from pathlib import Path
 import re
@@ -36,13 +37,25 @@ class StockBootProvenance:
     boot_header_version: int
     firmware_metadata: dict[str, str]
 
+    def canonical_json(self) -> str:
+        return json.dumps(asdict(self), sort_keys=True, separators=(",", ":")) + "\n"
+
+    def evidence_sha256(self) -> str:
+        return sha256(self.canonical_json().encode("utf-8")).hexdigest()
+
     def to_json(self) -> str:
+        """Human-readable representation retained for existing evidence files."""
         return json.dumps(asdict(self), indent=2, sort_keys=True) + "\n"
 
 
 def _require_sha(name: str, value: str) -> None:
-    if not _SHA256_RE.fullmatch(value):
+    if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
         raise ProvenanceError(f"{name} must be a lowercase SHA-256")
+
+
+def _require_positive_int(name: str, value: int) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ProvenanceError(f"{name} must be a positive integer")
 
 
 def build_stock_boot_provenance(
@@ -58,11 +71,18 @@ def build_stock_boot_provenance(
     _require_sha("payload hash", payload.payload_sha256)
     _require_sha("payload metadata hash", payload.metadata_sha256)
     _require_sha("boot hash", boot.sha256)
+    _require_positive_int("OTA size", ota.size)
+    _require_positive_int("payload size", payload.file_size)
+    _require_positive_int("boot size", boot.size)
     if ota.payload_size != payload.file_size:
         raise ProvenanceError("OTA payload size does not match inspected payload bytes")
-    if boot.header_version is None:
+    if not isinstance(boot.header_version, int) or isinstance(boot.header_version, bool) or boot.header_version < 0:
         raise ProvenanceError("boot image has no validated header version")
-    metadata = {str(k): str(v) for k, v in sorted(ota.metadata.items()) if str(k).strip()}
+    metadata: dict[str, str] = {}
+    for key, value in sorted(ota.metadata.items()):
+        if not isinstance(key, str) or not key.strip() or not isinstance(value, str) or not value.strip():
+            raise ProvenanceError("exact OTA firmware metadata contains invalid entries")
+        metadata[key] = value
     if not metadata:
         raise ProvenanceError("exact OTA firmware metadata is required for stock provenance")
     return StockBootProvenance(
@@ -81,10 +101,13 @@ def build_stock_boot_provenance(
 
 
 def write_immutable_provenance(record: StockBootProvenance, path: Path) -> None:
-    """Create evidence once; refuse to overwrite different provenance."""
+    """Create evidence once; refuse symlinks or different existing provenance."""
+    path = Path(path)
     content = record.to_json()
+    if path.is_symlink():
+        raise ProvenanceError("refusing symlink provenance path")
     if path.exists():
-        if path.read_text(encoding="utf-8") != content:
+        if not path.is_file() or path.read_text(encoding="utf-8") != content:
             raise ProvenanceError("provenance record already exists with different evidence")
         return
     path.parent.mkdir(parents=True, exist_ok=True)
