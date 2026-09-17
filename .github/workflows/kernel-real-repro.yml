@@ -12,14 +12,17 @@ on:
       - "kaliphonestudio/kernel_toolchain_binding.py"
       - "kaliphonestudio/kernel_build_runner.py"
       - "kaliphonestudio/kernel_build_binding.py"
+      - "kaliphonestudio/kernel_source_normalization.py"
       - "tools/kernel-toolchain-lock.json"
       - "scripts/run_locked_kernel_build.py"
       - "scripts/bind_kernel_reproducible_builds.py"
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
+      - "scripts/normalize_kernel_source_mtimes.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
+      - "tests/test_kernel_source_normalization.py"
       - ".github/workflows/kernel-real-repro.yml"
   pull_request:
     paths:
@@ -31,14 +34,17 @@ on:
       - "kaliphonestudio/kernel_toolchain_binding.py"
       - "kaliphonestudio/kernel_build_runner.py"
       - "kaliphonestudio/kernel_build_binding.py"
+      - "kaliphonestudio/kernel_source_normalization.py"
       - "tools/kernel-toolchain-lock.json"
       - "scripts/run_locked_kernel_build.py"
       - "scripts/bind_kernel_reproducible_builds.py"
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
+      - "scripts/normalize_kernel_source_mtimes.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
+      - "tests/test_kernel_source_normalization.py"
       - ".github/workflows/kernel-real-repro.yml"
   workflow_dispatch:
 
@@ -59,16 +65,18 @@ jobs:
       - name: Install focused test dependency
         run: python -m pip install pytest
 
-      - name: Compile build runner, verifier and diagnostics
+      - name: Compile build runner, source normalizer, verifier and diagnostics
         run: >-
           python -m py_compile
           kaliphonestudio/kernel_build_runner.py
           kaliphonestudio/kernel_build_binding.py
           kaliphonestudio/kernel_repro_diagnostics.py
+          kaliphonestudio/kernel_source_normalization.py
           scripts/run_locked_kernel_build.py
           scripts/bind_kernel_reproducible_builds.py
           scripts/verify_kernel_repro_pair.py
           scripts/diagnose_kernel_image_repro.py
+          scripts/normalize_kernel_source_mtimes.py
 
       - name: Run focused kernel build-runner contract tests
         env:
@@ -79,6 +87,7 @@ jobs:
           tests/test_kernel_build_binding.py
           tests/test_kernel_repro.py
           tests/test_kernel_repro_diagnostics.py
+          tests/test_kernel_source_normalization.py
           tests/test_kernel_toolchain.py
           tests/test_kernel_toolchain_binding.py
 
@@ -194,6 +203,23 @@ jobs:
           test "$(git -C kernel-b rev-parse HEAD)" = "$SOURCE_COMMIT"
           test "$(realpath kernel-a)" != "$(realpath kernel-b)"
 
+      - name: Normalize Git-tracked source mtimes and compare policy evidence
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ steps.locks.outputs.kernel_commit }}
+        run: |
+          set -euo pipefail
+          python scripts/normalize_kernel_source_mtimes.py \
+            --checkout kernel-a \
+            --expected-commit "$SOURCE_COMMIT" \
+            --out evidence/kernel-source-mtime-a.json
+          python scripts/normalize_kernel_source_mtimes.py \
+            --checkout kernel-b \
+            --expected-commit "$SOURCE_COMMIT" \
+            --out evidence/kernel-source-mtime-b.json
+          cmp evidence/kernel-source-mtime-a.json evidence/kernel-source-mtime-b.json
+          sha256sum evidence/kernel-source-mtime-a.json evidence/kernel-source-mtime-b.json
+
       - name: Verify exact kernel checkout selects the locked compiler revision
         run: |
           python scripts/verify_kernel_toolchain_binding.py \
@@ -202,16 +228,17 @@ jobs:
             --lock "$TOOLCHAIN_LOCK" \
             --out evidence/kernel-toolchain-binding.json
 
-      - name: Build independent kernels concurrently with serial internal make graphs
+      - name: Build independent kernels concurrently with normalized source mtimes
         id: build_pair
         shell: bash
         env:
           TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
         run: |
-          # The previous authority run produced identical .config files and equal-size
-          # Images but 11,695,369 differing bytes across 960,780 ranges. Keep the two
-          # independent A/B builds concurrent, but force each vendor-kernel make graph
-          # to -j1 so build-order races cannot hide inside either authority build.
+          # Serial internal make graphs still failed strict equality in authority run
+          # 35166301228: 11,293,315 bytes differed across 897,561 ranges even though
+          # normalized build logs were command-for-command identical after A/B path
+          # substitution. Keep -j1 and change one variable only: exact tracked source
+          # mtimes are now normalized to SOURCE_DATE_EPOCH before either build starts.
           set +e
           mkdir -p build-logs
           python scripts/run_locked_kernel_build.py \

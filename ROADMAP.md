@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
 
-## Current development line — 0.6.40-dev
+## Current development line — 0.6.41-dev
 
 - [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
 - [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
@@ -24,9 +24,12 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Add an offline provisioning CLI and independent bundle-byte/metadata verifier.
 - [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
 - [x] Exact-source kernel runner applies profile-required `CONFIG_*` policy, fixed build identity/time values and canonical path remapping before strict comparison.
-- [x] Record the latest real kernel authority failure rather than granting partial credit: final `.config` is byte-identical and Image size matches, but Image bytes differ.
 - [x] Add bounded streaming kernel Image divergence diagnostics that report exact differing-byte/range counts and offsets without relaxing strict equality.
-- [ ] Review the running real A/B kernel authority retry with independent outer builds and serial (`jobs=1`) internal make graphs; if it still fails, continue evidence-driven nondeterminism isolation.
+- [x] Review serial-internal-make authority run `35166301228`: final `.config` remains byte-identical and Image size remains equal, but Image bytes still fail strict equality (`11293315` differing bytes across `897561` ranges).
+- [x] Prove the two `jobs=1` build logs become command-for-command identical after replacing only A/B absolute source/output roots; the unexplained difference therefore occurs below the visible make command graph.
+- [x] Add fail-closed Git-tracked kernel source mtime normalization: exact HEAD + clean-tree verification, canonical mode/blob/path manifest, `.git`/untracked exclusion, atomic evidence and no hardware/Beta credit.
+- [x] Wire A/B source-mtime normalization into the real kernel workflow while keeping outer concurrency and `jobs=1`, so the next authority experiment changes one variable only.
+- [ ] Review the source-mtime-normalized real A/B kernel authority retry; accept only strict byte-identical final `.config` and `Image`, otherwise continue evidence-driven nondeterminism isolation.
 
 ## Phase A — Multi-device Studio Core
 
@@ -82,7 +85,8 @@ The percentage is intentionally weighted toward physical boot, hardware validati
 - [x] Fixed `KBUILD_BUILD_USER`, `KBUILD_BUILD_HOST`, `KBUILD_BUILD_TIMESTAMP`, `KBUILD_BUILD_VERSION`, `SOURCE_DATE_EPOCH`, locale and timezone in the evidence-bearing build environment.
 - [x] Non-release bounded Image divergence diagnostics integrated after strict mismatch.
 - [x] Review run `35161227840`: identical final `.config`, equal Image size, but `11695369` differing Image bytes across `960780` ranges; strict reproducibility remains false.
-- [x] Launch evidence-bearing serial internal (`jobs=1`) kernel authority retry while retaining independent/concurrent A/B roots.
+- [x] Review run `35166301228`: serial internal `jobs=1` reduced but did not eliminate divergence; identical final `.config`, equal Image size, `11293315` differing bytes across `897561` ranges from offset `71` through `43876937`.
+- [x] Normalize only verified clean Git-tracked source mtimes to `SOURCE_DATE_EPOCH=0`, hash canonical Git mode/blob/path identity, and require path-independent A/B normalization evidence equality before the next build pair.
 - [x] Source-locked FDT and Android DT table format references.
 - [x] Structural DTB and DTBO verification bound to the exact boot plan.
 - [ ] Review and accept first real byte-identical kernel A/B evidence.
