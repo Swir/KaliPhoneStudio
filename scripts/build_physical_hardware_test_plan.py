@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a pending-only physical functional-hardware test plan from reviewed evidence."""
+"""Build a non-executing physical functional-hardware test plan from reviewed evidence."""
 from __future__ import annotations
 
 import argparse
@@ -23,9 +23,13 @@ def main() -> int:
     profile = get_profile(args.devices_root, args.profile_id)
     plan = build_physical_hardware_test_plan_from_file(profile, args.hardware_review_evidence)
     digest = write_physical_hardware_test_plan(plan, args.output)
+    blocked = [item["id"] for item in plan.tests if not item["context_signals_satisfied"]]
     print(f"physical hardware test plan: {args.output}")
     print(f"sha256: {digest}")
     print(f"tests: {plan.test_count}; Beta-required: {plan.beta_required_test_count}; all status=pending")
+    print(f"Beta-required context ready: {str(plan.plan_ready_for_physical_execution).lower()}")
+    if blocked:
+        print("missing declared context signals for: " + ", ".join(blocked))
     print("hardware/Beta credit: false; phone storage written: false")
     return 0
 
