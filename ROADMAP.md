@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.57-dev**
+**Current development line — 0.6.58-dev**
 
 **58% complete**
 
@@ -46,14 +46,17 @@ Host-side preparation now complete:
 - [x] **0.6.56:** exact discovery-report bytes and a separate recovery-plan file are SHA-256 bound; a complete set can become review-ready but all target/write/storage/recovery/hardware/Beta claims remain false.
 - [x] **0.6.57:** fail-closed manual-review record binds exact review-record and review-notes bytes to one exact physical-storage discovery evidence chain.
 - [x] **0.6.57:** acceptance for later strategy design requires a review-ready source plus explicit checks of physical context, topology, filesystem, encryption, free space, recovery plan and evidence chain; acceptance still cannot select a target or authorize writes.
+- [x] **0.6.58:** one immutable physical bring-up session can cross-bind the exact candidate gate, rescue observation, diagnostics, functional probes, storage discovery and manual storage review so evidence from different phones/firmware/candidates/transcripts cannot be silently mixed.
+- [x] **0.6.58:** optional Kali early-userspace evidence can join the session only when manifest, authority bundle, rootfs authority and strict rootfs artifact identities match; the session still forces all target/write/hardware/Beta claims false.
 
 Still physically blocked:
 
 - [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
-- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan and bind them through the 0.6.56 typed discovery evidence layer.
-- [ ] Complete and bind a manual review of that exact discovery evidence through the 0.6.57 review contract; `accepted_for_strategy_design=true` is not itself a target approval.
+- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan and bind them through the typed discovery evidence layer.
+- [ ] Complete and bind a manual review of that exact discovery evidence; `accepted_for_strategy_design=true` is not itself a target approval.
+- [ ] Produce one cross-bound physical bring-up session from those real records so the exact candidate/rescue/storage chain can be audited as a unit.
 - [ ] Select and review a safe, reversible rootfs staging/handoff target **after** accepted physical discovery review exists; no guessed UFS/userdata path.
 - [ ] Execute explicitly confirmed temporary boot on the exact AC2003.
 - [ ] Capture usable console/log evidence and manually review rescue markers.
@@ -96,7 +99,7 @@ Stable requires a later, higher threshold: repeated device testing, stronger rec
 
 ## Immediate highest-impact work
 
-1. Keep the 0.6.56 discovery and 0.6.57 manual-review layers fail-closed; neither may produce a device path, target selection or write authorization.
+1. Keep discovery, manual-review and physical-session layers fail-closed; none may produce a device path, target selection or write authorization.
 2. Do **not** implement a storage-target selection algorithm before a real AC2003 discovery record has been accepted by the exact manual-review contract. A later target-selection milestone must consume that reviewed evidence rather than profile hints.
 3. When a physical AC2003 is available, collect the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect and manually review storage discovery/recovery evidence before any storage write.
-4. Review physical rescue, storage discovery, storage manual review and Kali-rootfs markers as separate evidence layers; success in one layer must never auto-promote another.
+4. Cross-bind the resulting real candidate/rescue/storage records into the 0.6.58 session bundle before any later strategy review, and keep rescue, storage and Kali-rootfs verification as separate physical judgments.
