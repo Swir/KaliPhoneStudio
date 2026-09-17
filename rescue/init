@@ -1,6 +1,7 @@
 #!/bin/sh
 # KaliPhoneStudio minimal early rescue userspace.
-# Deliberately no network/SSH bring-up. Physical-console diagnostics only.
+# Deliberately no network/SSH bring-up and no persistent storage mounts.
+# Physical-console diagnostics are read-only sysfs/procfs inventory only.
 
 export PATH=/bin:/sbin
 export HOME=/
@@ -41,9 +42,102 @@ if [ -r "$KPS_PROBE_FILE" ]; then
     esac
 fi
 
+# Keep physical bring-up inventory strictly read-only. It does not mount,
+# fsck, decrypt, write, charge-control, initialize display, or touch input nodes.
+# Every field is reduced to a bounded ASCII token for deterministic offline parsing.
+kps_read_token() {
+    if [ -r "$1" ]; then
+        tr -d '\r\n' < "$1" 2>/dev/null | tr -cd 'A-Za-z0-9._:+-' | cut -c1-128
+    else
+        printf '%s' '-'
+    fi
+}
+
+kps_token_or_dash() {
+    value="$1"
+    if [ -n "$value" ]; then
+        printf '%s' "$value"
+    else
+        printf '%s' '-'
+    fi
+}
+
+KPS_DIAG_POLICY="readonly-sysfs-inventory-v1"
+echo "KPS_DIAG_BEGIN=$KPS_DIAG_POLICY"
+
+count=0
+for node in /sys/block/*; do
+    [ -e "$node" ] || continue
+    [ "$count" -lt 64 ] || break
+    name="${node##*/}"
+    size="$(kps_read_token "$node/size")"
+    removable="$(kps_read_token "$node/removable")"
+    echo "KPS_DIAG_BLOCK=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$size")|$(kps_token_or_dash "$removable")"
+    count=$((count + 1))
+done
+
+count=0
+for host in /sys/class/scsi_host/host*; do
+    [ -e "$host" ] || continue
+    [ "$count" -lt 64 ] || break
+    name="${host##*/}"
+    proc_name="$(kps_read_token "$host/proc_name")"
+    echo "KPS_DIAG_SCSI_HOST=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$proc_name")"
+    count=$((count + 1))
+done
+
+count=0
+for supply in /sys/class/power_supply/*; do
+    [ -e "$supply" ] || continue
+    [ "$count" -lt 64 ] || break
+    name="${supply##*/}"
+    type="$(kps_read_token "$supply/type")"
+    status="$(kps_read_token "$supply/status")"
+    capacity="$(kps_read_token "$supply/capacity")"
+    online="$(kps_read_token "$supply/online")"
+    voltage="$(kps_read_token "$supply/voltage_now")"
+    current="$(kps_read_token "$supply/current_now")"
+    temp="$(kps_read_token "$supply/temp")"
+    echo "KPS_DIAG_POWER=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$type")|$(kps_token_or_dash "$status")|$(kps_token_or_dash "$capacity")|$(kps_token_or_dash "$online")|$(kps_token_or_dash "$voltage")|$(kps_token_or_dash "$current")|$(kps_token_or_dash "$temp")"
+    count=$((count + 1))
+done
+
+count=0
+for event in /sys/class/input/event*; do
+    [ -e "$event" ] || continue
+    [ "$count" -lt 64 ] || break
+    name="${event##*/}"
+    device_name="$(kps_read_token "$event/device/name")"
+    echo "KPS_DIAG_INPUT=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$device_name")"
+    count=$((count + 1))
+done
+
+count=0
+for fb in /sys/class/graphics/fb*; do
+    [ -e "$fb" ] || continue
+    [ "$count" -lt 64 ] || break
+    name="${fb##*/}"
+    driver="$(kps_read_token "$fb/name")"
+    echo "KPS_DIAG_GRAPHICS=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$driver")"
+    count=$((count + 1))
+done
+
+count=0
+for connector in /sys/class/drm/card*-*; do
+    [ -e "$connector" ] || continue
+    [ "$count" -lt 64 ] || break
+    [ -r "$connector/status" ] || continue
+    name="${connector##*/}"
+    status="$(kps_read_token "$connector/status")"
+    echo "KPS_DIAG_DRM=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$status")"
+    count=$((count + 1))
+done
+
+echo "KPS_DIAG_END=$KPS_DIAG_POLICY"
+
 echo ""
 echo "KaliPhoneStudio rescue userspace"
-echo "network=disabled ssh=disabled"
+echo "network=disabled ssh=disabled storage_auto_mount=disabled diagnostics=read-only"
 if [ -r /proc/cmdline ]; then
     echo "cmdline: $(cat /proc/cmdline)"
 fi
