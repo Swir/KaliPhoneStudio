@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.55-dev**
+**Current development line — 0.6.56-dev**
 
 **58% complete**
 
@@ -41,14 +41,18 @@ Host-side preparation now complete:
 - [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
 - [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract that binds one exact physical-candidate gate to one exact reviewed rootfs authority without selecting a device path or authorizing writes.
 - [x] **0.6.55:** exact pinned avicii `fstab.qcom` blob verification in CI plus policy checks that keep A/B/system/super/metadata partitions forbidden during discovery.
+- [x] **0.6.56:** typed physical-storage discovery report/evidence contract bound to the exact handoff assessment, rescue diagnostics/functional probe, transcript/probe identity and reviewed rootfs chain.
+- [x] **0.6.56:** whole-block topology must cross-match exact rescue `KPS_DIAG_BLOCK` name/sector/removable observations; filesystem/encryption/free-space remain typed partition-role observations, never a target path.
+- [x] **0.6.56:** exact discovery-report bytes and a separate recovery-plan file are SHA-256 bound; a complete set can become review-ready but all target/write/storage/recovery/hardware/Beta claims remain false.
 
 Still physically blocked:
 
 - [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
-- [ ] Capture exact physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan under the new discovery contract.
-- [ ] Select and review a safe, reversible rootfs staging/handoff target **after** that physical evidence exists; no guessed UFS/userdata path.
+- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan and bind them through the 0.6.56 typed discovery evidence layer.
+- [ ] Manually review that exact discovery evidence; `discovery_ready_for_manual_review=true` is not itself approval.
+- [ ] Select and review a safe, reversible rootfs staging/handoff target **after** reviewed physical evidence exists; no guessed UFS/userdata path.
 - [ ] Execute explicitly confirmed temporary boot on the exact AC2003.
 - [ ] Capture usable console/log evidence and manually review rescue markers.
 - [ ] Reach the exact reviewed Kali rootfs and manually review the early-systemd marker chain.
@@ -90,7 +94,7 @@ Stable requires a later, higher threshold: repeated device testing, stronger rec
 
 ## Immediate highest-impact work
 
-1. Extend the new discovery-only rootfs handoff layer with a typed **physical storage discovery evidence** format that records topology/filesystem/encryption/free-space observations without selecting or modifying a target.
-2. Keep every observation bound to the exact physical candidate/rootfs authority and require explicit review before a later target-selection milestone can exist.
-3. When a physical AC2003 is available, collect the real read-only Fastboot baseline first, then collect rootfs-handoff discovery evidence before any storage write.
-4. Review physical rescue and Kali-rootfs markers separately; rescue success must never be treated as Kali-rootfs success.
+1. Keep the 0.6.56 physical-storage discovery evidence layer fail-closed and prepare operator-facing capture/templates that cannot express a target path or write authorization.
+2. Do **not** implement a storage-target selection algorithm before real AC2003 evidence exists; the next target-selection milestone must consume a manually reviewed exact discovery record rather than profile hints.
+3. When a physical AC2003 is available, collect the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect the storage discovery report/recovery plan before any storage write.
+4. Review physical rescue, storage discovery and Kali-rootfs markers as separate evidence layers; success in one layer must never auto-promote another.
