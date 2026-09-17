@@ -13,16 +13,7 @@
   "bootloader_board_name": "lito",
   "firmware_hints": ["avicii", "AC2003"],
   "fastboot_probe": {
-    "required_vars": [
-      "product",
-      "serialno",
-      "current-slot",
-      "slot-count",
-      "unlocked",
-      "secure",
-      "version-bootloader",
-      "version-baseband"
-    ],
+    "required_vars": ["product", "serialno", "current-slot", "slot-count", "unlocked", "secure", "version-bootloader", "version-baseband"],
     "identity_var": "product",
     "serial_var": "serialno",
     "current_slot_var": "current-slot",
@@ -33,21 +24,8 @@
     "baseband_version_var": "version-baseband",
     "expected_slot_count": 2
   },
-  "boot": {
-    "header_version": 2,
-    "page_size": 4096,
-    "kernel_image": "Image",
-    "include_dtb": true,
-    "separate_dtbo": true,
-    "ramdisk_compression": "lz4"
-  },
-  "partition_limits": {
-    "boot": 100663296,
-    "dtbo": 25165824,
-    "recovery": 100663296,
-    "userdata": 236009631744,
-    "super": 15032385536
-  },
+  "boot": {"header_version": 2, "page_size": 4096, "kernel_image": "Image", "include_dtb": true, "separate_dtbo": true, "ramdisk_compression": "lz4"},
+  "partition_limits": {"boot": 100663296, "dtbo": 25165824, "recovery": 100663296, "userdata": 236009631744, "super": 15032385536},
   "kernel": {
     "source_name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline",
     "expected_version": "4.19.300",
@@ -55,45 +33,10 @@
     "image_name": "Image",
     "defconfig": "vendor/lito-perf_defconfig",
     "config_fragments": ["vendor/debugfs.config"],
-    "make_flags": {
-      "ARCH": "arm64",
-      "LLVM": "1",
-      "LLVM_IAS": "1",
-      "CROSS_COMPILE": "aarch64-linux-gnu-",
-      "CROSS_COMPILE_COMPAT": "arm-linux-gnueabi-",
-      "CC": "clang -fdebug-prefix-map=$(KBUILD_SRC)=/usr/src/kaliphonestudio-kernel -fmacro-prefix-map=$(KBUILD_SRC)=/usr/src/kaliphonestudio-kernel -fdebug-prefix-map=$(CURDIR)=/usr/src/kaliphonestudio-kernel-build -fmacro-prefix-map=$(CURDIR)=/usr/src/kaliphonestudio-kernel-build",
-      "HOSTCC": "clang",
-      "HOSTCXX": "clang++",
-      "BRAND_SHOW_FLAG": "oneplus",
-      "TAR_OPTIONS": "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner",
-      "XZ_OPT": "-T1"
-    },
-    "required_configs": {
-      "CONFIG_ARCH_LITO": "y",
-      "CONFIG_ARCH_QCOM": "y",
-      "CONFIG_BLK_DEV_INITRD": "y",
-      "CONFIG_INPUT_EVDEV": "y",
-      "CONFIG_INPUT_TOUCHSCREEN": "y",
-      "CONFIG_MODULE_SIG": "n",
-      "CONFIG_MODULE_SIG_FORCE": "n",
-      "CONFIG_NAMESPACES": "y",
-      "CONFIG_RD_LZ4": "y",
-      "CONFIG_SCSI_UFSHCD": "y",
-      "CONFIG_SCSI_UFS_QCOM": "y",
-      "CONFIG_SECCOMP": "y",
-      "CONFIG_SERIAL_MSM_GENI": "y"
-    }
+    "make_flags": {"ARCH": "arm64", "LLVM": "1", "LLVM_IAS": "1", "CROSS_COMPILE": "aarch64-linux-gnu-", "CROSS_COMPILE_COMPAT": "arm-linux-gnueabi-", "CC": "clang -fdebug-prefix-map=$(KBUILD_SRC)=/usr/src/kaliphonestudio-kernel -fmacro-prefix-map=$(KBUILD_SRC)=/usr/src/kaliphonestudio-kernel -fdebug-prefix-map=$(CURDIR)=/usr/src/kaliphonestudio-kernel-build -fmacro-prefix-map=$(CURDIR)=/usr/src/kaliphonestudio-kernel-build", "HOSTCC": "clang", "HOSTCXX": "clang++", "BRAND_SHOW_FLAG": "oneplus", "TAR_OPTIONS": "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner", "XZ_OPT": "-T1"},
+    "required_configs": {"CONFIG_ARCH_LITO": "y", "CONFIG_ARCH_QCOM": "y", "CONFIG_BLK_DEV_INITRD": "y", "CONFIG_INPUT_EVDEV": "y", "CONFIG_INPUT_TOUCHSCREEN": "y", "CONFIG_MODULE_SIG": "n", "CONFIG_MODULE_SIG_FORCE": "n", "CONFIG_NAMESPACES": "y", "CONFIG_RD_LZ4": "y", "CONFIG_SCSI_UFSHCD": "y", "CONFIG_SCSI_UFS_QCOM": "y", "CONFIG_SECCOMP": "y", "CONFIG_SERIAL_MSM_GENI": "y"}
   },
-  "device_tree": {
-    "source_name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline",
-    "build_target": "dtbs",
-    "dtb_output": "arch/arm64/boot/dts/vendor/20801/lito.dtb",
-    "dtbo_outputs": [
-      "arch/arm64/boot/dts/vendor/20801/avicii-overlay.dtbo"
-    ],
-    "dtbo_page_size": 4096,
-    "dtbo_table_version": 0
-  },
+  "device_tree": {"source_name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline", "build_target": "dtbs", "dtb_output": "arch/arm64/boot/dts/vendor/20801/lito.dtb", "dtbo_outputs": ["arch/arm64/boot/dts/vendor/20801/avicii-overlay.dtbo"], "dtbo_page_size": 4096, "dtbo_table_version": 0},
   "rootfs_handoff": {
     "schema_version": 1,
     "state": "discovery-only",
@@ -105,48 +48,12 @@
     "expected_filesystems": ["f2fs"],
     "encryption_features": ["fileencryption=ice", "wrappedkey"],
     "metadata_partition": "metadata",
-    "required_physical_evidence": [
-      "block-topology",
-      "filesystem-identity",
-      "encryption-state",
-      "free-space",
-      "recovery-plan"
-    ],
-    "forbidden_partitions": [
-      "boot",
-      "dtbo",
-      "odm",
-      "product",
-      "recovery",
-      "system",
-      "system_ext",
-      "vbmeta",
-      "vbmeta_system",
-      "vendor",
-      "metadata",
-      "super",
-      "persist",
-      "misc",
-      "spunvm",
-      "modem",
-      "dsp",
-      "bluetooth"
-    ],
+    "required_physical_evidence": ["block-topology", "filesystem-identity", "encryption-state", "free-space", "recovery-plan"],
+    "forbidden_partitions": ["boot", "dtbo", "odm", "product", "recovery", "system", "system_ext", "vbmeta", "vbmeta_system", "vendor", "metadata", "super", "persist", "misc", "spunvm", "modem", "dsp", "bluetooth"],
     "target_selection_allowed": false,
     "persistent_write_authorized": false
   },
-  "kernel_cmdline": [
-    "androidboot.hardware=qcom",
-    "androidboot.memcg=1",
-    "androidboot.usbcontroller=a600000.dwc3",
-    "cgroup.memory=nokmem,nosocket",
-    "loop.max_part=7",
-    "lpm_levels.sleep_disabled=1",
-    "msm_rtb.filter=0x237",
-    "reboot=panic_warm",
-    "service_locator.enable=1",
-    "swiotlb=2048"
-  ],
+  "kernel_cmdline": ["androidboot.hardware=qcom", "androidboot.memcg=1", "androidboot.usbcontroller=a600000.dwc3", "cgroup.memory=nokmem,nosocket", "loop.max_part=7", "lpm_levels.sleep_disabled=1", "msm_rtb.filter=0x237", "reboot=panic_warm", "service_locator.enable=1", "swiotlb=2048"],
   "ab_device": true,
   "ab_partitions": ["boot", "dtbo", "odm", "product", "recovery", "system", "system_ext", "vbmeta", "vbmeta_system", "vendor"],
   "display": {"density": 440},
@@ -156,16 +63,8 @@
   "metadata_partition": true,
   "avb_enabled": true,
   "sources": [
-    {
-      "name": "LineageOS android_device_oneplus_avicii lineage-22.1 baseline",
-      "url": "https://github.com/LineageOS/android_device_oneplus_avicii",
-      "commit": "3f1270c2871e9893332073eb0f8f5f9499abbf13"
-    },
-    {
-      "name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline",
-      "url": "https://github.com/LineageOS/android_kernel_oneplus_sm7250",
-      "commit": "fb4b4374d3b9ad0f10ba38d159585129f092fb3d"
-    }
+    {"name": "LineageOS android_device_oneplus_avicii lineage-22.1 baseline", "url": "https://github.com/LineageOS/android_device_oneplus_avicii", "commit": "3f1270c2871e9893332073eb0f8f5f9499abbf13"},
+    {"name": "LineageOS android_kernel_oneplus_sm7250 lineage-21 baseline", "url": "https://github.com/LineageOS/android_kernel_oneplus_sm7250", "commit": "fb4b4374d3b9ad0f10ba38d159585129f092fb3d"}
   ],
   "recovery_notes": [
     "Capture the exact OxygenOS build/fingerprint and stock recovery path before device writes.",
@@ -193,7 +92,8 @@
       "source-locked compiler kernel build and two-build reproducibility verification",
       "profile-driven DTB/DTBO output selection and strict A/B artifact reproducibility verification",
       "discovery-only rootfs handoff policy is source-pinned, forbids system/A-B targets, and cannot authorize storage writes",
-      "typed physical storage discovery evidence cross-binds rescue topology and rootfs handoff identities without expressing a target path or hardware/Beta claim"
+      "typed physical storage discovery evidence cross-binds rescue topology and rootfs handoff identities without expressing a target path or hardware/Beta claim",
+      "profile-driven functional hardware test plan is fail-closed, pending-only and cannot authorize destructive or persistent-write tests"
     ],
     "hardware_beta": [
       "exact physical device and firmware identification",
@@ -203,6 +103,23 @@
       "Kali early userspace reached",
       "storage and charging safety verified",
       "documented recovery exercised"
-    ]
+    ],
+    "functional_hardware": {
+      "schema_version": 1,
+      "policy": "profile-functional-hardware-tests-v1",
+      "tests": [
+        {"id": "usb_rescue", "required_for_beta": true, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["usb_signal_observed"], "required_observations": ["exact candidate remains reachable through the documented rescue/logging path after temporary boot", "observed USB behavior is manually reviewed against the exact physical transcript"]},
+        {"id": "display", "required_for_beta": true, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["display_signal_observed"], "required_observations": ["usable physical display output is observed on the exact candidate, or a separate console-only Beta scope is explicitly reviewed"]},
+        {"id": "touch", "required_for_beta": true, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["input_signal_observed"], "required_observations": ["touch input is physically exercised and attributable to the exact device, or a separate console-only Beta scope is explicitly reviewed"]},
+        {"id": "wifi", "required_for_beta": false, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["wifi_signal_observed"], "required_observations": ["Wi-Fi functionality is physically exercised under Kali userspace and manually reviewed"]},
+        {"id": "bluetooth", "required_for_beta": false, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["bluetooth_signal_observed"], "required_observations": ["Bluetooth functionality is physically exercised under Kali userspace and manually reviewed"]},
+        {"id": "audio", "required_for_beta": false, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["audio_signal_observed"], "required_observations": ["audio output or capture is physically exercised under Kali userspace and manually reviewed"]},
+        {"id": "modem", "required_for_beta": false, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": [], "required_observations": ["modem behavior is tested separately without treating network-interface presence as proof of cellular functionality"]},
+        {"id": "power_charging", "required_for_beta": true, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["power_signal_observed"], "required_observations": ["battery telemetry remains sane during the bounded test session", "charging behavior required for safe testing is physically observed without changing charge policy"]},
+        {"id": "thermal", "required_for_beta": false, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": ["thermal_signal_observed"], "required_observations": ["thermal telemetry remains available and is manually reviewed during physical bring-up"]},
+        {"id": "storage", "required_for_beta": true, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": [], "required_observations": ["UFS topology, filesystem, encryption and free-space evidence is reviewed beyond the bounded rescue probe", "no storage verification is inferred from a single bounded read"]},
+        {"id": "recovery", "required_for_beta": true, "manual_review_required": true, "destructive": false, "persistent_write_allowed": false, "required_context_signals": [], "required_observations": ["documented recovery and rollback path is exercised on the exact physical firmware baseline before Beta credit"]}
+      ]
+    }
   }
 }

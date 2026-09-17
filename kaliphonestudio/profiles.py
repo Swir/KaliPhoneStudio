@@ -8,6 +8,11 @@ import re
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from .functional_hardware_contract import (
+    FunctionalHardwareContractError,
+    validate_functional_hardware_contract,
+)
+
 
 PROFILE_SCHEMA_VERSION = 2
 _SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -329,6 +334,12 @@ def validate_profile(data: dict[str, Any]) -> None:
         raise ProfileError("test_contract must be an object")
     for key in ("host", "hardware_beta"):
         _nonempty_strings(contract.get(key), f"test_contract.{key}")
+    if "functional_hardware" not in contract:
+        raise ProfileError("test_contract.functional_hardware is required for every device profile")
+    try:
+        validate_functional_hardware_contract(contract["functional_hardware"])
+    except FunctionalHardwareContractError as exc:
+        raise ProfileError(f"test_contract.functional_hardware is invalid: {exc}") from exc
 
 
 def load_profile(path: Path) -> DeviceProfile:
