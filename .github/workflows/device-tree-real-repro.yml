@@ -12,9 +12,12 @@ on:
       - "kaliphonestudio/device_tree_build.py"
       - "kaliphonestudio/device_tree_authority.py"
       - "kaliphonestudio/candidate_device_tree_authority.py"
+      - "kaliphonestudio/kernel_authority_materialization.py"
       - "scripts/run_locked_device_tree_build.py"
       - "scripts/verify_device_tree_repro_pair.py"
       - "scripts/create_device_tree_authority.py"
+      - "scripts/materialize_reviewed_kernel_build_root.py"
+      - "tests/test_kernel_authority_materialization.py"
       - "tools/device-tree-format-locks.json"
       - "evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json"
       - "evidence/authorities/kernel/oneplus-avicii-4.19.300-2026-09-17/**"
@@ -49,9 +52,11 @@ jobs:
           kaliphonestudio/device_tree_build.py
           kaliphonestudio/device_tree_authority.py
           kaliphonestudio/candidate_device_tree_authority.py
+          kaliphonestudio/kernel_authority_materialization.py
           scripts/run_locked_device_tree_build.py
           scripts/verify_device_tree_repro_pair.py
           scripts/create_device_tree_authority.py
+          scripts/materialize_reviewed_kernel_build_root.py
 
       - name: Run focused DTB/DTBO contract tests
         env:
@@ -62,6 +67,7 @@ jobs:
           tests/test_device_tree_build.py
           tests/test_device_tree_authority.py
           tests/test_candidate_device_tree_authority.py
+          tests/test_kernel_authority_materialization.py
 
   real-device-tree-repro:
     if: >-
@@ -254,14 +260,11 @@ jobs:
           cmp kernel-artifact/evidence/device-tree-source-mtime-a.json \
               kernel-artifact/evidence/device-tree-source-mtime-b.json
 
-      - name: Validate downloaded kernel artifact layout and reviewed bytes
+      - name: Validate downloaded reviewed Images
         run: |
           set -euo pipefail
-          test -f kernel-artifact/build-a/.config
-          test -f kernel-artifact/build-b/.config
           test -f kernel-artifact/build-a/arch/arm64/boot/Image
           test -f kernel-artifact/build-b/arch/arm64/boot/Image
-          cmp kernel-artifact/build-a/.config kernel-artifact/build-b/.config
           cmp kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
           python - <<'PY'
           import hashlib
@@ -269,15 +272,40 @@ jobs:
           from pathlib import Path
           authority = json.loads(Path("evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json").read_text(encoding="utf-8"))
           for root in ("build-a", "build-b"):
-              config = Path("kernel-artifact") / root / ".config"
               image = Path("kernel-artifact") / root / "arch/arm64/boot/Image"
-              config_bytes = config.read_bytes()
               image_bytes = image.read_bytes()
-              if hashlib.sha256(config_bytes).hexdigest() != authority["config_sha256"] or len(config_bytes) != authority["config_size"]:
-                  raise SystemExit(f"{root} config does not match reviewed kernel authority")
               if hashlib.sha256(image_bytes).hexdigest() != authority["image_sha256"] or len(image_bytes) != authority["image_size"]:
                   raise SystemExit(f"{root} Image does not match reviewed kernel authority")
           PY
+
+      - name: Rehydrate exact reviewed configs without rebuilding Image
+        shell: bash
+        env:
+          TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
+        run: |
+          set -euo pipefail
+          python scripts/materialize_reviewed_kernel_build_root.py \
+            --profile-id "$PROFILE_ID" \
+            --toolchain-lock "$TOOLCHAIN_LOCK" \
+            --kernel-authority "$KERNEL_AUTHORITY" \
+            --checkout kernel-a \
+            --toolchain-root "$TOOLCHAIN_ROOT" \
+            --build-root kernel-artifact/build-a \
+            --jobs 1 \
+            --out kernel-artifact/evidence/device-tree-kernel-root-a.json
+          python scripts/materialize_reviewed_kernel_build_root.py \
+            --profile-id "$PROFILE_ID" \
+            --toolchain-lock "$TOOLCHAIN_LOCK" \
+            --kernel-authority "$KERNEL_AUTHORITY" \
+            --checkout kernel-b \
+            --toolchain-root "$TOOLCHAIN_ROOT" \
+            --build-root kernel-artifact/build-b \
+            --jobs 1 \
+            --out kernel-artifact/evidence/device-tree-kernel-root-b.json
+          cmp kernel-artifact/build-a/.config kernel-artifact/build-b/.config
+          cmp kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
+          cmp kernel-artifact/evidence/device-tree-kernel-root-a.json \
+              kernel-artifact/evidence/device-tree-kernel-root-b.json
           sha256sum \
             kernel-artifact/build-a/.config kernel-artifact/build-b/.config \
             kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
