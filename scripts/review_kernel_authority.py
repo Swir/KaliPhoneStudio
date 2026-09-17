@@ -4,7 +4,9 @@
 This command never talks to a phone. It accepts only an already-successful strict
 A/B kernel evidence chain plus explicit GitHub run/commit/artifact identity. The
 operator must pass ``--reviewed`` deliberately. The resulting authority always
-keeps ``hardware_verified=false`` and ``beta_gate_credit=false``.
+keeps ``hardware_verified=false`` and ``beta_gate_credit=false``. The requested
+final path is published only after a staged record reloads and verifies against
+the complete evidence chain.
 """
 from __future__ import annotations
 
@@ -66,6 +68,9 @@ def main() -> int:
         raise SystemExit("refusing kernel authority creation without explicit --reviewed")
     if args.out.exists():
         raise SystemExit(f"refusing to overwrite existing authority: {args.out}")
+    staged = args.out.with_name(args.out.name + ".reviewing")
+    if staged.exists():
+        raise SystemExit(f"refusing stale kernel authority staging path: {staged}")
 
     profile = get_profile(args.devices_root, args.profile_id)
     plan = create_kernel_build_plan(profile)
@@ -88,19 +93,25 @@ def main() -> int:
         build_b=build_b,
         reviewed=True,
     )
-    digest = write_kernel_authority(authority, args.out)
 
-    verified = load_and_verify_kernel_authority(
-        args.out,
-        plan,
-        lock,
-        args.repro_evidence,
-        args.binding_evidence,
-        args.build_evidence_a,
-        args.build_evidence_b,
-    )
-    if verified.authority_sha256() != digest:
-        raise SystemExit("kernel authority round-trip digest mismatch")
+    try:
+        digest = write_kernel_authority(authority, staged)
+        verified = load_and_verify_kernel_authority(
+            staged,
+            plan,
+            lock,
+            args.repro_evidence,
+            args.binding_evidence,
+            args.build_evidence_a,
+            args.build_evidence_b,
+        )
+        if verified.authority_sha256() != digest:
+            raise SystemExit("kernel authority round-trip digest mismatch")
+        if args.out.exists():
+            raise SystemExit(f"authority destination appeared during review: {args.out}")
+        staged.replace(args.out)
+    finally:
+        staged.unlink(missing_ok=True)
 
     print(json.dumps({
         "authority_name": verified.authority_name,
