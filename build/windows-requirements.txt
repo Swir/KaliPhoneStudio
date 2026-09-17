@@ -1,0 +1,4 @@
+# Pinned Windows host-build toolchain. This is build tooling only, not a Beta release authority.
+# PyInstaller 6.22.3 is newer than the 6.22.1 security fix for GHSA-9fxf-4qw3-ghmr.
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7
