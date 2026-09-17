@@ -1,40 +1,67 @@
-# KaliPhoneStudio
+<div align="center">
 
-**KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux / NetHunter Pro as the primary phone OS/userspace**, without Android as the user-facing layer.
+# ⚡ KaliPhoneStudio
 
-The repository is conservative by design: a device profile, green CI, reproducible artifact, successful Fastboot command, rescue marker, read-only diagnostic, early-userspace marker, storage-layout hint or storage-discovery record does **not** by itself mean a phone is supported. Public Beta requires every applicable host and physical gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+### Multi-device engineering studio for porting Kali Linux / NetHunter Pro as the primary phone OS/userspace
 
-## Project progress
+**Profile-driven bring-up • Reproducible ARM64 artifacts • Temporary-boot-first safety**
+
+![Python](https://img.shields.io/badge/Python-3.11--3.14-02050A?style=for-the-badge&logo=python&logoColor=62E5FF)
+![Architecture](https://img.shields.io/badge/Architecture-ARM64-02050A?style=for-the-badge&logo=arm&logoColor=62E5FF)
+![Status](https://img.shields.io/badge/Status-Development-02050A?style=for-the-badge&logo=githubactions&logoColor=62E5FF)
+![Beta](https://img.shields.io/badge/Beta-BLOCKED-02050A?style=for-the-badge&logo=securityscorecard&logoColor=62E5FF)
+
+[![Tests](https://github.com/Swir/KaliPhoneStudio/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Swir/KaliPhoneStudio/actions/workflows/tests.yml)
+
+</div>
+
+<img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
+
+## Project status
+
+**Current development line: `0.6.57-dev`**
 
 **58% complete**
 
 `███████████▋░░░░░░░░ 58%`
 
-Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host reproducibility and safety are foundations, not substitutes for exact-device evidence.
+**Public Beta is not released.** The first supported profile, `oneplus/avicii` for the OnePlus Nord AC2003, is still in physical bring-up. Reviewed host-side rootfs, kernel and DTB/DTBO authorities exist, but real-device identity, exact firmware/stock boot matching, temporary boot, storage strategy, Kali early-userspace, hardware safety and recovery gates are still pending.
 
-> **Current development line: `0.6.56-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.56 adds a typed, fail-closed physical-storage discovery evidence layer on top of the 0.6.55 source-pinned handoff contract. It can bind real topology/filesystem/encryption/free-space/recovery observations to the exact physical candidate, rescue transcript chain and reviewed rootfs authority **without carrying a `/dev/...` target, selecting userdata, authorizing a write or claiming storage support**. No real AC2003 discovery record has been reviewed yet. **Beta remains blocked.**
+KaliPhoneStudio is deliberately conservative: a profile, green CI, reproducible artifact, successful Fastboot return code, rescue marker, storage-discovery record or manual-review record does **not** by itself mean a phone is supported. The authoritative release rules live in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
-## Source of truth and architecture
+## Overview
 
-`Swir/KaliPhoneStudio` is the only project source of truth. Device-independent code belongs under `kaliphonestudio/`; device knowledge belongs under:
+KaliPhoneStudio is designed to turn phone-specific Kali Linux / NetHunter Pro porting into a repeatable, evidence-driven workflow instead of a collection of one-off flashing scripts. The common Python core stays device-independent while hardware knowledge is isolated in validated device profiles.
 
-```text
-devices/<vendor>/<codename>/profile.json
-```
+The project currently focuses on building and proving a safe first-boot path for the OnePlus Nord AC2003 without Android as the user-facing OS layer. Permanent flashing is not the default workflow; temporary Fastboot boot and exact recovery evidence come first.
 
-A profile is not a hardware-support claim. Before destructive actions become eligible it must define identity, confirmation token, boot/partition constraints, pinned sources, recovery notes and host/hardware test contracts. The common core must remain profile-driven.
+## Highlights
 
-### Active profile
+| Area | What KaliPhoneStudio provides |
+|---|---|
+| ⚡ Multi-device core | Device-independent runtime with profile-driven identity, boot, partition, source and recovery contracts. |
+| 🔐 Fail-closed safety | Exact serial/profile/firmware/candidate binding before sensitive operations become eligible. |
+| 🧬 Reproducible builds | Reviewed strict A/B authorities for Kali ARM64 rootfs, avicii kernel and DTB/DTBO artifacts. |
+| 🛟 Rescue path | Deterministic source-locked ARM64 rescue initramfs with exact probe identity and remote access disabled by default. |
+| 📦 Boot provenance | Exact OTA → payload → stock `boot.img` evidence plus deterministic boot-image assembly and round-trip checks. |
+| 🧪 Physical evidence | Read-only rescue diagnostics, bounded functional probes, Kali early-userspace markers and typed storage discovery. |
+| 💾 Storage safety | Discovery and manual-review layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
+| 🖥️ Offline UI/CLI | Safe profile inspection without automatically invoking ADB/Fastboot or exposing unguarded write controls. |
 
-| Device | Profile ID | State | Persistent install |
-|---|---|---|---|
-| OnePlus Nord AC2003 | `oneplus/avicii` | Bring-up; physical first boot pending | **Not released** |
+## Compatibility
 
-Reviewed source baselines are pinned to full upstream commits. For avicii the current device-tree baseline is LineageOS `android_device_oneplus_avicii@3f1270c2871e9893332073eb0f8f5f9499abbf13`; the kernel bring-up baseline is `android_kernel_oneplus_sm7250@fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`). These are engineering references, not proof that hardware works.
+| Target | Current state |
+|---|---|
+| OnePlus Nord AC2003 (`oneplus/avicii`) | Bring-up; physical first boot pending |
+| Other phones | Not supported until a validated profile and real hardware evidence are added |
+| Persistent installation | **Not released** |
+| Public Beta | **Blocked by the physical release gate** |
+
+The avicii engineering baseline is pinned to LineageOS `android_device_oneplus_avicii@3f1270c2871e9893332073eb0f8f5f9499abbf13` and `android_kernel_oneplus_sm7250@fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`). These are source baselines, not claims that hardware support is complete.
 
 ## Reviewed host-side authorities
 
-These records are strict, immutable host-side evidence only; all explicitly retain `hardware_verified=false` and `beta_gate_credit=false`.
+All records below are host-side evidence only and explicitly retain `hardware_verified=false` and `beta_gate_credit=false`.
 
 | Layer | Authority run | Reviewed artifact |
 |---|---:|---|
@@ -42,133 +69,126 @@ These records are strict, immutable host-side evidence only; all explicitly reta
 | avicii kernel | `35183670399` | ARM64 `Image` SHA-256 `be4440dc335d53c752270c484fe589a9bc1ef08f9100e885478b50df67cbe712`, 43,878,416 B |
 | avicii DTB/DTBO | `35196447576` | DTB `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce`; packed DTBO `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` |
 
-## Implemented safety/build foundations
+## Quick Start
 
-- Runtime multi-device profile registry and schema/identity/path contract.
-- Verified serial bound to `profile_id` and a profile-specific destructive confirmation token.
-- A/B-aware planning, dry-run defaults and inactive-slot-only policy for any future persistent test.
-- Temporary `fastboot boot` path is preferred before persistent writes.
-- Source-locked Fastboot/boot-tool/payload-extractor/kernel/toolchain/rootfs/DT sources and reproducible host workflows.
-- Read-only Fastboot/OxygenOS baseline capture with exact tool identity and raw transcript binding.
-- Exact OTA → payload → stock `boot.img` provenance and physical-baseline bundle.
-- Profile-driven boot-image assembly with deterministic double-build and round-trip checks.
-- Reviewed reproducible kernel, rootfs and DTB/DTBO authorities cross-bound to an exact first-boot candidate.
-- Deterministic rescue initramfs with source-locked static ARM64 BusyBox, exact probe id and no automatic persistent-storage access.
-- Manual-only bounded rescue functional probes: up to one 4096-byte read from up to eight non-removable whole block devices into `/dev/null`, plus paired battery telemetry. These signals do not automatically verify storage or charging.
-- Offline GUI/CLI profile inspection remains non-destructive and performs no Fastboot/ADB action.
+### Requirements
 
-## Kali early-userspace proof
+- Python **3.11–3.14**
+- Git
+- packages from [`requirements.txt`](requirements.txt): PySide6 and PyYAML
+- additional Linux build dependencies only for the specialized kernel/rootfs/DT workflows documented by their CI/build scripts
 
-`kaliphonestudio.kali_early_userspace` builds a deterministic USTAR proof overlay bound to the exact first-boot manifest, reviewed authority bundle, rootfs-authority binding, reviewed rootfs authority and strict rootfs artifact SHA-256/size.
-
-The overlay installs one systemd oneshot before `basic.target` and emits exact stage/probe/candidate/rootfs markers. `kaliphonestudio.physical_kali_early_userspace` binds an operator-captured transcript to the same exact physical candidate and successful non-persistent temporary-boot execution. A complete marker match is still an **observation requiring manual review**, not an automatic hardware/Beta pass. Details: [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
-
-## Rootfs handoff discovery contract
-
-`kaliphonestudio.rootfs_handoff` adds a separate safety boundary between “we have the correct reproducible rootfs” and “we know where it can safely be made available on this physical phone”. The contract:
-
-- resolves one exact profile-pinned storage-layout source and Git blob;
-- records only source-backed storage/filesystem/encryption expectations;
-- requires physical evidence for block topology, filesystem identity, encryption state, free space and recovery plan;
-- forbids all profile-declared A/B/system partitions plus the super container during discovery;
-- keeps metadata forbidden because it participates in encryption/recovery state;
-- rejects any profile attempt to select a target or authorize persistent writes;
-- binds one exact `PhysicalCandidateGateEvidence` to one exact reviewed `RootfsAuthorityRecord`;
-- always returns `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `hardware_verified=false` and `beta_gate_credit=false`.
-
-For avicii, the exact pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6e8d2483e313f561ad35ded7355`. It describes userdata as F2FS with `fileencryption=ice` and `wrappedkey` on UFS, with separate metadata-based encryption state. KaliPhoneStudio treats `userdata` only as a **discovery hint**, never as an approved rootfs target. The focused CI workflow also fetches the exact pinned device-source commit and verifies that exact blob in a clean tracked checkout.
-
-Full policy: [`docs/ROOTFS_HANDOFF_POLICY.md`](docs/ROOTFS_HANDOFF_POLICY.md).
-
-## Typed physical storage discovery (0.6.56)
-
-`kaliphonestudio.physical_storage_discovery` provides the evidence format needed for the next real-device step without turning discovery into an installation action.
-
-- The operator report uses kernel names/partition **roles**, never absolute block-device paths.
-- Whole-block topology entries must match the exact `KPS_DIAG_BLOCK` records from the already-bound rescue transcript by kernel name, sector count and removable bit.
-- The expected storage-bus signal is taken from the same exact rescue evidence chain; for avicii that currently means a reviewed UFS signal.
-- Filesystem, encryption and free-space observations are typed and checked against profile expectations for the `userdata` role, but that role is never converted to a target path.
-- The exact original discovery-report bytes are SHA-256 bound, as is a separate recovery-plan text file.
-- Evidence is also bound to the exact rootfs-handoff assessment, physical candidate, reviewed rootfs artifact, rescue diagnostics, manual functional probe, transcript and rescue probe id.
-- A complete/matching observation set may become `discovery_ready_for_manual_review=true`. That means only “there is enough evidence for a human review”; it **does not** mean a target is approved.
-- `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `storage_verified=false`, `recovery_verified=false`, `phone_storage_written=false`, `hardware_verified=false` and `beta_gate_credit=false` remain mandatory.
-
-Recorder CLI:
+### Run from source
 
 ```bash
-python scripts/record_physical_storage_discovery.py \
-  --profile-id oneplus/avicii \
-  --handoff-assessment evidence/rootfs-handoff-assessment.json \
-  --rescue-diagnostics evidence/physical-rescue-diagnostics.json \
-  --functional-probes evidence/physical-rescue-functional-probes.json \
-  --discovery-report evidence/operator-storage-discovery.json \
-  --recovery-plan evidence/recovery-plan.txt \
-  --out evidence/physical-storage-discovery.json
+git clone https://github.com/Swir/KaliPhoneStudio.git
+cd KaliPhoneStudio
+python -m venv .venv
 ```
 
-This command is offline evidence binding only. It does not connect to a phone, mount a filesystem, decrypt storage, run Fastboot, select a partition or perform a write.
+Activate the virtual environment, then install dependencies:
 
-## Rootfs handoff is still a physical blocker
+```bash
+python -m pip install -r requirements.txt
+```
 
-0.6.56 completes the **typed discovery evidence layer**, not the actual staging strategy. Before any physical Kali-rootfs handoff can be attempted, the exact AC2003 still must supply real, reviewed storage/encryption/free-space/recovery observations and a later milestone must explicitly select and review a reversible strategy. The common core still generates no raw block path, mount target or write authorization.
+Launch the offline studio:
 
-## Offline application
-
-```powershell
+```bash
 python main.py
+```
+
+Useful non-destructive commands:
+
+```bash
 python main.py --list-profiles
 python main.py --list-profiles --json
 python main.py --profile-id oneplus/avicii --json
 ```
 
-The profile UI/CLI never implies hardware support and exposes no unguarded write path.
+## Multi-device architecture
 
-## CI
+`Swir/KaliPhoneStudio` is the only source of truth for this project. Device-independent code belongs under `kaliphonestudio/`; device knowledge belongs under:
 
-Primary Python matrix:
+```text
+devices/<vendor>/<codename>/profile.json
+```
 
-- Python 3.11
-- Python 3.12
-- Python 3.13
-- Python 3.14
+A profile does not equal hardware support. Before destructive actions can become eligible it must define unique identity, confirmation token, boot/partition constraints, pinned sources, recovery notes and host/hardware test contracts. The common core must not hardcode AC2003-specific facts when the same decision can be profile-driven.
 
-Focused workflows cover kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof, rootfs-handoff source locking and typed physical-storage discovery contracts. A green workflow is host evidence only.
+## Rootfs handoff and physical storage evidence
 
-## Beta release policy
+The current storage pipeline intentionally stops before target selection.
 
-**Beta is currently blocked.** The first AC2003 Beta requires at minimum:
+1. `kaliphonestudio.rootfs_handoff` binds the exact physical candidate and reviewed rootfs authority to a source-pinned discovery contract.
+2. `kaliphonestudio.physical_storage_discovery` binds real topology/filesystem/encryption/free-space observations plus recovery-plan bytes to the exact rescue/rootfs chain.
+3. `kaliphonestudio.physical_storage_review` binds a human review record and review notes to that exact discovery evidence.
+4. Only a review-ready discovery with every required review check may become `accepted_for_strategy_design=true`.
+5. Even then, `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `storage_verified=false`, `recovery_verified=false`, `hardware_verified=false` and `beta_gate_credit=false` remain mandatory.
 
-- real physical Fastboot identity and exact OxygenOS build/fingerprint;
-- matching stock `boot.img` from the exact OTA;
-- one exact physical candidate bound to reviewed kernel/rootfs/DT authorities;
-- successful temporary boot on that same phone;
-- usable rescue/logging path and manually reviewed exact rescue markers;
-- real physical storage/encryption/free-space/recovery discovery, manual review, then a separately reviewed reversible rootfs staging/handoff method;
-- proof that the kernel reached the intended Kali early userspace/rootfs;
-- required storage/UFS validation;
-- safe charging/battery behavior for testing;
-- display/touch proof or an explicitly reviewed console-only Beta scope;
-- documented recovery/rollback exercised on the exact physical baseline;
-- final compatibility matrix, release manifest and SHA-256 checksums.
+For avicii, the exact pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6e8d2483e313f561ad35ded7355`. It describes userdata as F2FS with `fileencryption=ice` and `wrappedkey` on UFS with separate metadata encryption state. KaliPhoneStudio treats `userdata` only as a discovery role/hint, never as an approved rootfs target.
 
-Do not publish an empty/symbolic Beta. Stable has a higher threshold.
+Offline storage-review recorder:
 
-## Safety principles
+```bash
+python scripts/review_physical_storage_discovery.py \
+  --discovery-evidence evidence/physical-storage-discovery.json \
+  --review-record evidence/operator-storage-review.json \
+  --review-notes evidence/operator-storage-review-notes.txt \
+  --out evidence/physical-storage-review.json
+```
 
-1. Prefer temporary boot over persistent writes.
-2. Never flash a physical phone without explicit user interaction and a verified exact-device baseline.
-3. Fail closed on identity, firmware, provenance, checksum, partition-layout or evidence drift.
-4. Keep hardware claims separate from host CI.
-5. Do not weaken strict reproducibility rules to make a gate pass.
-6. Do not add credentials or enable remote access by default.
-7. Keep the common core multi-device; phone-specific facts belong in profiles and their reviewed evidence.
-8. A storage-layout hint, discovery role or review-ready observation set is not a target path and never implies permission to write it.
+This command performs evidence binding only. It does not connect to a phone, mount storage, choose a partition or authorize a write.
 
-## Development
+## Kali early-userspace proof
+
+`kaliphonestudio.kali_early_userspace` builds a deterministic USTAR proof overlay bound to the exact first-boot manifest, reviewed authority bundle, rootfs-authority binding and strict rootfs artifact identity.
+
+A systemd oneshot emits exact stage/probe/candidate/rootfs markers before `basic.target`. `kaliphonestudio.physical_kali_early_userspace` binds an operator-captured transcript to the same physical candidate and successful non-persistent temporary-boot execution. Marker matches remain observations requiring manual review; they do not automatically grant hardware/Beta credit.
+
+See [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
+
+## Safety and limitations
+
+- Prefer temporary `fastboot boot` over persistent writes.
+- Never flash a physical phone without explicit user interaction and a verified exact-device baseline.
+- Fail closed on identity, firmware, provenance, checksum, partition-layout or evidence drift.
+- Keep host CI and physical hardware claims separate.
+- Never weaken strict reproducibility to make a gate pass.
+- Do not embed credentials or enable remote access by default.
+- A storage role, layout hint, review-ready discovery or accepted manual review is **not** a block-device target.
+- No public Beta or Stable release exists until the complete physical gate is reviewed.
+
+## Development and verification
 
 ```bash
 python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
-Repository documentation and checked-in authority records are part of the safety contract and are CI-validated.
+Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof, source-locked rootfs handoff, typed physical-storage discovery and manual storage-review contracts. Repository documentation and checked-in authority records are part of the safety contract and are CI-validated.
+
+## Roadmap and releases
+
+- Authoritative roadmap: [`ROADMAP.md`](ROADMAP.md)
+- Beta release gate: [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md)
+- Active changes: [`CHANGELOG.md`](CHANGELOG.md)
+- Machine-readable status: [`BUILD_STATUS.json`](BUILD_STATUS.json)
+
+There is currently **no public Beta release**. The first Beta will only be published from an exact reviewed physical candidate with real assets, compatibility matrix, known issues, recovery instructions and SHA-256 checksums.
+
+## 🔎 Search Keywords
+
+`Kali Linux phone port` • `NetHunter Pro phone` • `Linux on smartphone` • `ARM64 Linux phone` • `OnePlus Nord AC2003 Linux` • `avicii Linux port` • `multi-device phone porting` • `Fastboot temporary boot` • `Android boot image tooling` • `DTB DTBO build` • `Kali ARM64 rootfs` • `phone rescue initramfs` • `reproducible kernel build` • `UFS storage discovery` • `safe phone flashing workflow`
+
+<img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
+
+<div align="center">
+
+### `BUILD • VERIFY • BOOT • RECOVER`
+
+⭐ **If KaliPhoneStudio is useful, consider leaving a star.**
+
+[**← SWIR profile**](https://github.com/Swir) · [**All projects →**](https://github.com/Swir?tab=repositories)
+
+</div>
