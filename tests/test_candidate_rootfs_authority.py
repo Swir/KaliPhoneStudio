@@ -226,10 +226,13 @@ def test_authority_binding_rejects_unreviewed_or_credit_claims():
 
 def test_authority_binding_rejects_candidate_artifact_drift():
     manifest, provenance, _ = evidence_set()
-    changed_manifest = replace(manifest, rootfs_artifact_size=ARTIFACT_SIZE + 1)
+    # Keep the manifest digest intact so this regression reaches the candidate-to-
+    # provenance identity layer rather than being correctly rejected earlier as a
+    # detached provenance record.
+    changed_provenance = replace(provenance, artifact_size=ARTIFACT_SIZE + 1)
     with pytest.raises(RootfsError, match="candidate/rootfs-provenance artifact size"):
         bind_first_boot_candidate_to_rootfs_authority(
-            changed_manifest, provenance, authority_for(provenance)
+            manifest, changed_provenance, authority_for(provenance)
         )
 
 
