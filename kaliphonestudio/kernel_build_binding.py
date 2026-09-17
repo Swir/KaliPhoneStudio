@@ -4,8 +4,10 @@ The existing reproducibility verifier proves that two output trees contain
 byte-identical, profile-valid ``.config`` and ARM64 ``Image`` files. This module
 closes the provenance gap between those output bytes and the executor: both
 per-build run records must point at the same kernel plan, source commit,
-toolchain lock, deterministic recipe/environment and final artifacts.
-Host-side evidence from this module can never grant hardware/Beta credit.
+toolchain lock, deterministic recipe/environment, final artifacts and the exact
+per-build config/Image verifier evidence digests recorded by the independent
+reproducibility check. Host-side evidence from this module can never grant
+hardware/Beta credit.
 """
 from __future__ import annotations
 
@@ -182,6 +184,18 @@ def bind_kernel_reproducibility_to_build_runs(
         raise KernelContractError("independent builds used different canonical build recipes")
     if build_a.reproducible_environment_sha256 != build_b.reproducible_environment_sha256:
         raise KernelContractError("independent builds used different reproducibility environments")
+
+    expected_verifier_digests = (
+        ("build A config", reproducibility.build_a_config_evidence_sha256, build_a.config_evidence_sha256),
+        ("build B config", reproducibility.build_b_config_evidence_sha256, build_b.config_evidence_sha256),
+        ("build A Image", reproducibility.build_a_image_evidence_sha256, build_a.image_evidence_sha256),
+        ("build B Image", reproducibility.build_b_image_evidence_sha256, build_b.image_evidence_sha256),
+    )
+    for label, repro_digest, run_digest in expected_verifier_digests:
+        if repro_digest != run_digest:
+            raise KernelContractError(
+                f"{label} verifier evidence does not match reproducibility evidence"
+            )
 
     for label, run in (("build A", build_a), ("build B", build_b)):
         if run.config_sha256 != reproducibility.config_sha256 or run.config_size != reproducibility.config_size:
