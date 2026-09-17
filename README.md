@@ -1,197 +1,254 @@
 <!-- SWIR-README-STANDARD:v2 -->
-
 <div align="center">
-
-<img width="100%" src="assets/readme/hero.svg" alt="KaliPhoneStudio — evidence-driven Kali Linux phone bring-up" />
-
-<br>
-
-![Python](https://img.shields.io/badge/Python-3.11--3.14-02050A?style=for-the-badge&logo=python&logoColor=62E5FF)
-![Architecture](https://img.shields.io/badge/Architecture-ARM64-02050A?style=for-the-badge&logo=arm&logoColor=62E5FF)
-![Status](https://img.shields.io/badge/Status-Development-02050A?style=for-the-badge&logo=githubactions&logoColor=62E5FF)
-![Beta](https://img.shields.io/badge/Beta-BLOCKED-02050A?style=for-the-badge&logo=securityscorecard&logoColor=62E5FF)
-
-[![Tests](https://github.com/Swir/KaliPhoneStudio/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Swir/KaliPhoneStudio/actions/workflows/tests.yml)
-
-**KaliPhoneStudio is a multi-device engineering studio for porting Kali Linux / NetHunter Pro as the primary phone OS/userspace, without Android as the user-facing layer.**
-
-[**Highlights**](#highlights) · [**Quick Start**](#quick-start) · [**Compatibility**](#compatibility) · [**Architecture**](#multi-device-architecture) · [**Roadmap**](#roadmap-and-releases) · [**Safety**](#safety-and-limitations)
-
+  <img src="assets/readme/hero.svg" alt="KaliPhoneStudio — safe multi-device Kali Linux phone porting toolkit" width="100%" />
 </div>
 
-<img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
+<div align="center">
+  <img src="https://img.shields.io/badge/version-0.6.64--dev-62E5FF?style=for-the-badge&labelColor=02050A" alt="Version 0.6.64-dev" />
+  <img src="https://img.shields.io/badge/project%20progress-58%25-0088FF?style=for-the-badge&labelColor=02050A" alt="Project progress 58 percent" />
+  <img src="https://img.shields.io/badge/beta-BLOCKED-ffb347?style=for-the-badge&labelColor=02050A" alt="Beta blocked" />
+  <img src="https://img.shields.io/badge/hardware-unverified-ff6b6b?style=for-the-badge&labelColor=02050A" alt="Hardware unverified" />
+  <img src="https://img.shields.io/badge/Python-3.11--3.14-62E5FF?style=for-the-badge&labelColor=02050A" alt="Python 3.11 through 3.14" />
+</div>
+
+<p align="center">
+  <strong>Profile-driven tooling for bringing Kali Linux / NetHunter Pro toward bare-metal phone targets without Android as the user-space layer.</strong><br>
+  Reproducible host builds, exact evidence chains, recovery-first safety and real-device gates before any support claim.
+</p>
+
+<p align="center">
+  <a href="#project-status">Status</a> •
+  <a href="#highlights">Highlights</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#compatibility">Compatibility</a> •
+  <a href="#multi-device-architecture">Architecture</a> •
+  <a href="#physical-bring-up-flow">Bring-up</a> •
+  <a href="#roadmap-and-releases">Roadmap</a> •
+  <a href="#safety-and-limitations">Safety</a>
+</p>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Swir/Swir/main/assets/readme/power-divider-v4.svg" alt="SWIR power divider" width="100%" />
+</div>
 
 ## Project status
 
-| Item | Status |
-|---|---|
-| Current development line | `0.6.63-dev` |
-| Completion | **58%** |
-| Current stage | Development / physical bring-up |
-| First device profile | OnePlus Nord AC2003 — `oneplus/avicii` |
-| Latest public release | **Not published yet** |
-| Beta gate | **BLOCKED** |
-
-**Current development line: `0.6.63-dev`**
+Current development line: `0.6.64-dev`
 
 **58% complete**
 
-`███████████▋░░░░░░░░ 58%`
+```text
+[█████████████████████████████---------------------] 58%
+```
 
-Host-side foundations are deliberately ahead of physical-device validation. Reviewed strict A/B authorities exist for the Kali ARM64 rootfs, avicii kernel and DTB/DTBO. The physical evidence chain now includes a bounded sysfs-only hardware-presence survey, fail-closed survey review, profile-driven pending functional-test plans, an independent exact-plan manual review gate, exact per-test observation evidence, independent result review and an aggregate exact-plan status summary. None of that is counted as real hardware support until the exact AC2003 passes the physical gate with real evidence.
+<div align="center">
+  <img src="assets/readme/progress-card.svg" alt="KaliPhoneStudio current roadmap progress dashboard" width="100%" />
+</div>
 
-The authoritative release rules are in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+**Roadmap progress:** **58.0%** — **BLOCKED** · **Host authorities: 3/3 reviewed** · Beta readiness: **BLOCKED**.
 
-## Overview
+The progress SVG is generated deterministically from [`BUILD_STATUS.json`](BUILD_STATUS.json). Its fill width is computed from the authoritative reviewed `project_progress_percent` value (`track_width × percentage / 100`). Raw roadmap checkboxes are **not** treated as equal-weight work. Beta readiness is displayed separately and remains blocked until the complete physical gate is reviewed.
 
-KaliPhoneStudio turns phone-specific Kali Linux / NetHunter Pro porting into a profile-driven, evidence-bound workflow instead of a set of one-off flashing scripts. The common Python core stays device-independent; device-specific identity, boot, partition, source and recovery knowledge lives under validated profiles.
+| Area | Current verified state |
+|---|---|
+| Multi-device host core | Implemented and covered by CI |
+| Kali ARM64 rootfs authority | `passed-reviewed` |
+| Kernel authority | `passed-reviewed` |
+| DTB/DTBO authority | `passed-reviewed` |
+| Deterministic rescue payload | Host-side reproducibility path implemented |
+| First device profile | `oneplus/avicii` / OnePlus Nord AC2003 |
+| Physical AC2003 verification | **Not completed** |
+| Public Beta | **BLOCKED** |
 
-Permanent flashing is not the default path. The project prefers exact provenance, temporary `fastboot boot`, read-only discovery, explicit human review and tested recovery before any persistent write is considered.
+`58%` is the project's reviewed roadmap ledger value, not an estimate of remaining calendar time and not a Beta-readiness percentage. See [`BUILD_STATUS.json`](BUILD_STATUS.json), [`ROADMAP.md`](ROADMAP.md) and [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md) for the authoritative detail.
 
 ## Highlights
 
-| Area | What KaliPhoneStudio provides |
-|---|---|
-| ⚡ Multi-device core | Device-independent runtime with profile-driven identity, boot, partition, source and recovery contracts. |
-| 🔐 Fail-closed safety | Exact serial/profile/firmware/candidate binding before sensitive operations become eligible. |
-| 🧬 Reproducible builds | Reviewed strict A/B authorities for Kali ARM64 rootfs, avicii kernel and DTB/DTBO artifacts. |
-| 📦 Boot provenance | Exact OTA → payload → stock `boot.img` evidence plus deterministic boot-image assembly and round-trip checks. |
-| 🛟 Rescue path | Deterministic source-locked ARM64 rescue initramfs with exact probe identity and remote access disabled by default. |
-| 🧪 Physical evidence | Rescue markers, read-only diagnostics, explicit bounded probes, hardware-presence survey and Kali early-userspace markers. |
-| 👁️ Manual hardware review | Exact survey + canonical review record + separate notes can be accepted only as context for later functional testing; no subsystem is auto-verified. |
-| 📋 Exact plan review | The original canonical functional-test plan bytes must pass an independent manual review before the plan is eligible as a physical test checklist. |
-| ✅ Functional-test evidence | Profile-driven pending tests can bind one real observation, independent manual review and exact-plan status without automatically promoting support/Beta claims. |
-| 💾 Storage safety | Discovery/review/session/dossier layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
-| 🖥️ Offline UI/CLI | Safe profile inspection without automatically invoking ADB/Fastboot or exposing unguarded write controls. |
-
-## Compatibility
-
-| Target | Current state |
-|---|---|
-| OnePlus Nord AC2003 (`oneplus/avicii`) | Bring-up; physical first boot pending |
-| Other phones | Not supported until a validated profile and real hardware evidence are added |
-| Persistent installation | **Not released** |
-| Public Beta | **Blocked by the physical release gate** |
-
-The avicii engineering baseline is pinned to `LineageOS/android_device_oneplus_avicii@3f1270c2871e9893332073eb0f8f5f9499abbf13` and `LineageOS/android_kernel_oneplus_sm7250@fb4b4374d3b9ad0f10ba38d159585129f092fb3d`. These are source baselines, not hardware-working claims.
-
-## Reviewed host-side authorities
-
-All records below remain host-side evidence only and carry no hardware/Beta credit.
-
-| Layer | Authority run | Reviewed artifact |
-|---|---:|---|
-| Kali ARM64 rootfs | `35158577624` | SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, 137,460,600 B, 269 packages |
-| avicii kernel | `35183670399` | ARM64 `Image` SHA-256 `be4440dc335d53c752270c484fe589a9bc1ef08f9100e885478b50df67cbe712`, 43,878,416 B |
-| avicii DTB/DTBO | `35196447576` | DTB `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce`; packed DTBO `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` |
+- **Profile-driven multi-device core** — phone-specific identity, boot constraints, sources, recovery notes and test contracts live under `devices/<vendor>/<codename>/profile.json` instead of global AC2003 hard-coding.
+- **Reviewed reproducibility authorities** — exact Kali ARM64 rootfs, kernel and DTB/DTBO build authorities are recorded separately from physical-device claims.
+- **Recovery-first temporary boot** — the host path prefers non-persistent `fastboot boot`, exact serial/profile/firmware/candidate binding and explicit confirmation rather than silent flashing.
+- **Deterministic rescue userspace** — reproducible rescue ramdisk, exact probe identity, bounded read-only diagnostics and evidence binding.
+- **Exact physical evidence chain** — rescue observations, storage discovery/review, bring-up sessions and dossiers fail closed when identities, transcripts or source files drift.
+- **Independent physical test-plan review** — the original canonical functional-test plan must be reviewed before any real per-test observation may be recorded.
+- **Schema-v2 functional observations** — every physical test observation now cryptographically carries the accepted exact plan-review identity and cannot promote hardware or Beta state by itself.
+- **Source locking** — host builds bind exact upstream commits, tool versions and relevant source/blob identities instead of floating branches.
+- **SWIR Progress SVG PRO** — deterministic card/mini assets derive geometry from the same authoritative status source while showing project progress and Beta readiness separately.
 
 ## Quick Start
 
 ### Requirements
 
-- Python **3.11–3.14**
-- Git
-- packages from [`requirements.txt`](requirements.txt): PySide6 and PyYAML
-- specialized Linux build dependencies only for kernel/rootfs/DT workflows documented by their scripts and CI
+- Python **3.11–3.14** for the host-side tooling and tests.
+- Git for source-lock and reproducibility workflows.
+- Android platform tools / Fastboot only for workflows that explicitly need physical-device interaction.
+- Linux is the primary environment for kernel/rootfs/device-tree build work; the application core remains Python-based and Windows-host workflows are a project target.
 
-### Run from source
+### Clone and run host tests
 
 ```bash
 git clone https://github.com/Swir/KaliPhoneStudio.git
 cd KaliPhoneStudio
-python -m venv .venv
 python -m pip install -r requirements.txt
+python -m pip install pytest
+python -m pytest -q
+python -m compileall -q kaliphonestudio scripts
+```
+
+### Verify the deterministic progress presentation
+
+```bash
+python scripts/generate_progress_svgs.py --check
+```
+
+The generator verifies the committed card, mini and reusable N/A template against `BUILD_STATUS.json`, checks XML/bounded geometry and confirms the README/ROADMAP textual fallback matches the same source.
+
+### Launch the current host application
+
+```bash
 python main.py
 ```
 
-Useful non-destructive commands:
+The host application is **not** a claim that Kali already boots as a daily-driver OS on AC2003. Hardware support remains gated by real-device evidence.
 
-```bash
-python main.py --list-profiles
-python main.py --list-profiles --json
-python main.py --profile-id oneplus/avicii --json
-```
+## Compatibility
+
+| Device / profile | Host tooling | Physical bare-metal Kali status | Beta status |
+|---|---|---|---|
+| OnePlus Nord AC2003 (`oneplus/avicii`) | First profile implemented | **Unverified on the required physical gate** | **BLOCKED** |
+| Other devices | Profile architecture prepared | Not supported until a complete profile + test contract + physical validation exists | Not available |
+
+Adding a profile JSON does **not** automatically create hardware support. A device becomes a supported target only after its exact firmware/boot/storage/recovery and required hardware behavior have been validated under the release gate.
 
 ## Multi-device architecture
 
-`Swir/KaliPhoneStudio` is the project source of truth. Device-independent code belongs under `kaliphonestudio/`; device knowledge belongs under:
+```text
+KaliPhoneStudio/
+├── kaliphonestudio/                 # device-independent host core where practical
+├── devices/
+│   └── oneplus/
+│       └── avicii/
+│           └── profile.json         # AC2003 identity + device-specific constraints/contracts
+├── rescue/                          # deterministic rescue userspace input
+├── evidence/                        # reviewed immutable authority records
+├── scripts/                         # reproducibility, evidence and operator CLIs
+├── tests/                           # fail-closed contracts and regression coverage
+└── .github/workflows/               # CI / reproducibility / focused safety workflows
+```
+
+Global device detection and destructive-action policy should remain profile-driven. Device-specific assumptions belong in the selected profile or its related device documentation/modules, not scattered through the core.
+
+## Physical bring-up flow
+
+The host-side chain is intentionally stricter than a normal flashing utility:
 
 ```text
-devices/<vendor>/<codename>/profile.json
+real phone identity + exact firmware baseline
+                ↓
+matching stock boot.img / OTA provenance
+                ↓
+reviewed physical candidate
+                ↓
+non-persistent temporary boot + rescue transcript
+                ↓
+bounded hardware/storage discovery
+                ↓
+manual contextual review
+                ↓
+exact profile-driven functional-test plan
+                ↓
+independent exact-plan review
+                ↓
+schema-v2 physical observations + independent result review
+                ↓
+reversible rootfs handoff strategy review
+                ↓
+Kali early-userspace proof + subsystem validation
+                ↓
+full Beta release-gate review
 ```
 
-A profile is not a support claim. Before destructive actions can even become eligible it must define unique identity, confirmation token, boot/partition constraints, pinned sources, recovery notes and host/hardware test contracts. The common core must not hardcode AC2003-specific facts when the same decision can be profile-driven.
-
-## Physical hardware survey and functional-test evidence
-
-The 0.6.60 rescue survey records only bounded sysfs-visible presence/state for USB, network/rfkill, sound, thermal, input, framebuffer/DRM and power supplies. It does not activate those subsystems.
-
-0.6.61 adds exact manual survey review plus a profile-driven functional-test plan. A survey accepted with `accepted_as_context=true` remains contextual only; every functional test starts as `pending` and keeps write/hardware/Beta claims false.
-
-0.6.62 adds the next evidence boundary for a real physical test attempt. An operator record must match one exact pending test and one exact candidate context; `pass_candidate` requires every exact required observation. A separate reviewer then accepts pass/fail/inconclusive only after all exact review checks are complete. The aggregate summary reports coverage but still cannot authorize project support or Beta release.
-
-0.6.63 adds an independent review of the **original canonical test-plan bytes** before that plan is eligible as a real-device testing checklist. Acceptance requires review of exact bytes, identity chain, functional contract, Beta-required scope, context readiness, no-write policy and limitations; it still executes nothing and grants no hardware/Beta credit.
+The exact plan review is now an enforced boundary. Preparing an observation template requires both the plan and its accepted review evidence:
 
 ```bash
-python scripts/prepare_physical_hardware_test_plan_review.py \
+python scripts/prepare_physical_hardware_test_observation.py \
   --test-plan evidence/physical-hardware-test-plan.json \
-  --reviewer reviewer-1 \
-  --out evidence/physical-hardware-test-plan-review-record.json
+  --test-plan-review-evidence evidence/physical-hardware-test-plan-review-evidence.json \
+  --test-id display \
+  --operator operator-1 \
+  --out evidence/display-observation-record.json
 ```
 
-The generated plan-review template is deliberately rejected by default. See [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md), [`docs/PHYSICAL_HARDWARE_TEST_PLAN.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN.md), [`docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md) and [`docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md`](docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md).
+The template still starts as not executed and inconclusive. It must be edited only after the exact test is physically performed. The resulting schema-v2 evidence remains manual-review-only and cannot authorize a persistent write, support claim or Beta release.
 
-## Rootfs handoff and storage evidence
+Detailed operator contracts live in:
 
-The storage pipeline intentionally stops before target selection. It binds a source-pinned layout contract, read-only physical discovery, exact manual review, cross-bound bring-up session and exact-file dossier. Even a review accepted for later strategy design cannot choose a block-device path or authorize a write.
+- [`docs/FASTBOOT_BASELINE.md`](docs/FASTBOOT_BASELINE.md)
+- [`docs/RESCUE_PHYSICAL_PROOF.md`](docs/RESCUE_PHYSICAL_PROOF.md)
+- [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md)
+- [`docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md)
+- [`docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md`](docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md)
+- [`docs/PHYSICAL_STORAGE_REVIEW.md`](docs/PHYSICAL_STORAGE_REVIEW.md)
+- [`docs/PHYSICAL_BRINGUP_SESSION.md`](docs/PHYSICAL_BRINGUP_SESSION.md)
+- [`docs/PHYSICAL_BRINGUP_DOSSIER.md`](docs/PHYSICAL_BRINGUP_DOSSIER.md)
+- [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md)
 
-For avicii, the pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6e8d2483e313f561ad35ded7355`. `userdata` is treated only as a discovery role/hint; it is not an approved Kali rootfs target.
+## Build and reproducibility model
 
-See [`docs/ROOTFS_HANDOFF_POLICY.md`](docs/ROOTFS_HANDOFF_POLICY.md), [`docs/PHYSICAL_STORAGE_REVIEW.md`](docs/PHYSICAL_STORAGE_REVIEW.md), [`docs/PHYSICAL_BRINGUP_SESSION.md`](docs/PHYSICAL_BRINGUP_SESSION.md) and [`docs/PHYSICAL_BRINGUP_DOSSIER.md`](docs/PHYSICAL_BRINGUP_DOSSIER.md).
+KaliPhoneStudio separates three different facts that must never be conflated:
 
-## Safety and limitations
+1. **Host build reproducibility** — two reviewed builds can be byte-identical under pinned sources/tools.
+2. **Candidate/evidence integrity** — exact hashes, identities and review records can be cross-bound and audited.
+3. **Physical hardware support** — the exact phone actually boots and the required subsystems behave safely.
 
-- Prefer temporary `fastboot boot` over persistent writes.
-- Never flash a physical phone without explicit user interaction and a verified exact-device baseline.
-- Fail closed on identity, firmware, provenance, checksum, partition-layout or evidence drift.
-- Keep host CI and physical hardware claims separate.
-- Treat sysfs hardware presence, accepted contextual review, generated/reviewed test plans and synthetic/mock functional records as non-credit evidence.
-- An accepted test-plan review only authorizes use of that exact plan as a manual checklist; it is not a flash, write, hardware or release authorization.
-- A reviewed functional-test pass is test-level evidence only; project support and release status require the complete physical gate.
-- Never weaken strict reproducibility to make a gate pass.
-- Do not embed credentials or enable remote access by default.
-- No public Beta or Stable release exists until the complete physical gate is reviewed.
+The first two can be established offline. The third requires a real device and is the reason the Beta gate remains blocked.
 
-## Development and verification
+Reviewed host authorities currently tracked in `BUILD_STATUS.json`:
 
-```bash
-python -m compileall -q kaliphonestudio scripts tests
-python -m pytest -q
-```
+- Kali ARM64 rootfs: `passed-reviewed`
+- kernel: `passed-reviewed`
+- device tree: `passed-reviewed`
 
-Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, hardware-presence survey/review, functional-test planning/exact-plan review/observation/result-review/summary, Kali early-userspace proof, rootfs handoff, physical-storage evidence, bring-up sessions and exact-file dossier verification.
+These authority records intentionally keep `hardware_verified=false` and `beta_gate_credit=false`.
 
 ## Roadmap and releases
 
-- [`ROADMAP.md`](ROADMAP.md) — authoritative milestone status
-- [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md) — release gate
-- [`CHANGELOG.md`](CHANGELOG.md) — active development changes
-- [`BUILD_STATUS.json`](BUILD_STATUS.json) — machine-readable state
+The detailed roadmap is in [`ROADMAP.md`](ROADMAP.md). The release checklist is [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
-There is currently **no public Beta release**. The first Beta will be published only from an exact reviewed physical candidate with real assets, compatibility matrix, known issues, recovery instructions and SHA-256 checksums.
+A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker or a synthetic evidence record is not enough.
+
+The first Beta must include real candidate binaries/images, exact commit identity, installation/test instructions, compatibility matrix, known issues and SHA-256 checksums. Stable will require a later, higher threshold.
+
+## Safety and limitations
+
+> **KaliPhoneStudio is development tooling for controlled bring-up, not a one-click production flasher.**
+
+- Never treat profile presence or CI success as proof that hardware works.
+- Do not permanently flash a physical phone without explicit, informed user interaction.
+- Prefer a non-persistent temporary boot and recovery-first validation.
+- Keep firmware, stock `boot.img`, candidate, serial and profile identities tied together.
+- Never guess a UFS/block-device path from a host-side layout hint.
+- Do not promote bounded sysfs presence, a 4 KiB read or battery telemetry into a functional-hardware claim.
+- Keep project progress distinct from release readiness; `58%` does not mean Beta is 58% ready.
+- Real recovery/rollback must be exercised before public Beta publication.
+
+## Contributing
+
+Contributions should preserve the fail-closed, profile-driven architecture:
+
+- keep generic behavior in `kaliphonestudio/` where practical;
+- put hardware-specific facts in the appropriate device profile/module/docs;
+- pin upstream source identities used by build or safety decisions;
+- add tests for every new safety/evidence contract;
+- do not mark a subsystem as working without real physical evidence;
+- update status/roadmap/changelog only for verified milestones.
 
 ## 🔎 Search Keywords
 
-`Kali Linux phone port` • `NetHunter Pro phone` • `Linux on smartphone` • `ARM64 Linux phone` • `OnePlus Nord AC2003 Linux` • `avicii Linux port` • `multi-device phone porting` • `Fastboot temporary boot` • `Android boot image tooling` • `DTB DTBO build` • `Kali ARM64 rootfs` • `phone rescue initramfs` • `phone hardware survey` • `physical hardware test evidence` • `reproducible kernel build` • `UFS storage discovery` • `safe phone flashing workflow`
+`KaliPhoneStudio` `Kali Linux phone` `Linux on phone` `bare metal Linux phone` `NetHunter Pro porting` `supported device porting` `OnePlus Nord AC2003` `avicii Linux` `ARM64 rootfs` `Android boot image` `fastboot boot` `phone recovery` `DTB DTBO` `initramfs rescue` `UFS storage` `reproducible builds` `device profile schema` `mobile Linux bring-up`
 
-<img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
+---
 
 <div align="center">
-
-### `BUILD • VERIFY • BOOT • RECOVER`
-
-⭐ **If KaliPhoneStudio is useful, consider leaving a star.**
-
-[**← SWIR profile**](https://github.com/Swir) · [**All projects →**](https://github.com/Swir?tab=repositories)
-
+  <sub><strong>KaliPhoneStudio</strong> • built under the SWIR project family • <a href="https://github.com/Swir">github.com/Swir</a></sub><br>
+  <sub>Safety-first evidence, reproducible builds, truthful hardware status.</sub>
 </div>

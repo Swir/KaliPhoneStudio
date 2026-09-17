@@ -1,6 +1,6 @@
 # Physical Functional Hardware Tests
 
-KaliPhoneStudio 0.6.62-dev adds the evidence path that follows the profile-driven pending test plan. This path is intentionally **record/review only**: the tools in this document do not connect to a phone, activate hardware, mount or decrypt storage, run Fastboot/ADB, or authorize a persistent write.
+KaliPhoneStudio 0.6.64-dev hardens the physical functional-test evidence path so a per-test observation cannot even be prepared or bound until the original canonical test plan has passed an independent exact-plan review. This path remains intentionally **record/review only**: the tools in this document do not connect to a phone, activate hardware, mount or decrypt storage, run Fastboot/ADB, or authorize a persistent write.
 
 A reviewed result is useful evidence for the later release gate. It is **not** an automatic project support claim and does not grant Beta credit.
 
@@ -15,13 +15,16 @@ accepted hardware-survey review
 physical hardware test plan
         |
         v
+independent exact-plan review (accepted_for_physical_execution=true)
+        |
+        v
 operator observation record + notes
         |
         v
-PhysicalHardwareTestObservationEvidence
+PhysicalHardwareTestObservationEvidence schema-v2
         |
         v
-manual review record + notes
+manual result-review record + notes
         |
         v
 PhysicalHardwareTestReviewEvidence
@@ -30,7 +33,7 @@ PhysicalHardwareTestReviewEvidence
 optional exact-plan summary
 ```
 
-The observation evidence carries the exact profile, serial, test-plan digest, survey/review/boot/rescue/transcript identities, rescue probe id and functional-hardware contract digest. The review layer refuses identity or outcome drift.
+The schema-v2 observation carries the exact profile, serial, test-plan digest, accepted plan-review evidence digest, canonical plan-file digest, plan-review record/notes digests, plan reviewer, survey/review/boot/rescue/transcript identities, rescue probe id and functional-hardware contract digest. The later result-review layer still independently checks the exact observation outcome before it may contribute to an aggregate status.
 
 ## 1. Start from the exact plan
 
@@ -45,15 +48,37 @@ python scripts/build_physical_hardware_test_plan.py \
 
 A test can be recorded only when that exact test is still `pending` and its declared context signals are satisfied. A globally incomplete plan does not silently waive a selected test's own prerequisites.
 
-## 2. Create a safe observation template
+## 2. Review the exact canonical plan before physical execution
+
+Create the rejected-by-default exact-plan review template and, after independent review, bind the accepted review evidence using the workflow documented in [`PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md`](PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md).
+
+A usable downstream review evidence file must have:
+
+```text
+decision=accepted
+accepted_for_physical_execution=true
+plan_ready_for_physical_execution=true
+manual_test_execution_required=true
+functional_tests_executed=false
+phone_storage_written=false
+hardware_verified=false
+beta_gate_credit=false
+```
+
+The schema-v2 observation binder revalidates that review against the exact plan. It rejects a detached review even if the review file itself is syntactically valid.
+
+## 3. Create a safe observation template
 
 ```bash
 python scripts/prepare_physical_hardware_test_observation.py \
   --test-plan evidence/physical-hardware-test-plan.json \
+  --test-plan-review-evidence evidence/physical-hardware-test-plan-review-evidence.json \
   --test-id display \
   --operator operator-1 \
   --out evidence/display-observation-record.json
 ```
+
+Template creation now fails closed unless the exact plan review is accepted and matches the plan's canonical bytes/size, semantic digest, profile/serial, survey-review/survey/boot/rescue/transcript/probe chain, functional-hardware contract and test counts.
 
 The generated record is deliberately **not executable evidence**:
 
@@ -67,13 +92,14 @@ It must be edited only after the exact physical test has actually been performed
 
 Create a separate UTF-8 notes file containing the real physical context, what was exercised, limitations, and relevant operator observations.
 
-## 3. Bind the physical observation
+## 4. Bind the physical observation
 
 After the real test attempt:
 
 ```bash
 python scripts/record_physical_hardware_test_observation.py \
   --test-plan evidence/physical-hardware-test-plan.json \
+  --test-plan-review-evidence evidence/physical-hardware-test-plan-review-evidence.json \
   --test-id display \
   --observation-record evidence/display-observation-record.json \
   --observation-notes evidence/display-observation-notes.txt \
@@ -82,6 +108,7 @@ python scripts/record_physical_hardware_test_observation.py \
 
 Binding requires:
 
+- the exact independently accepted plan review;
 - an actually executed physical test;
 - the exact candidate identity to have been confirmed;
 - the physical device to have been observed;
@@ -91,7 +118,9 @@ Binding requires:
 
 Possible observation outcomes are `pass_candidate`, `failed`, and `inconclusive`. None is a reviewed support result yet.
 
-## 4. Create the rejected-by-default review template
+The output is schema-v2 and includes the accepted review chain. Copying an observation record to a different plan/review cannot produce a valid bound evidence record.
+
+## 5. Create the rejected-by-default result-review template
 
 ```bash
 python scripts/prepare_physical_hardware_test_review.py \
@@ -112,7 +141,7 @@ For an accepted result, the decision must match the exact observation outcome:
 
 All exact-plan, exact-observation, physical-context, required-observation, notes/limitations and no-persistent-write checks must be true before an accepted review can bind.
 
-## 5. Bind manual review
+## 6. Bind manual result review
 
 ```bash
 python scripts/review_physical_hardware_test_observation.py \
@@ -135,7 +164,7 @@ manual_release_gate_review_required=true
 
 This separation prevents a unit test, synthetic evidence file or one subsystem result from silently becoming a public hardware-support or release claim.
 
-## 6. Build an exact-plan status summary
+## 7. Build an exact-plan status summary
 
 Any number of exact review evidence files can be summarized:
 
@@ -153,8 +182,9 @@ Even `beta_required_tests_all_reviewed_pass=true` does **not** set `beta_gate_cr
 
 ## Non-credit and safety rules
 
-- Synthetic/mock observation and review records are useful only for tests and never satisfy a physical gate.
-- A plan cannot execute hardware; observation/review tools cannot execute hardware either.
+- Synthetic/mock plan reviews, observation records and result reviews are useful only for tests and never satisfy a physical gate.
+- A plan/review cannot execute hardware; observation/review tools cannot execute hardware either.
+- The exact plan-review evidence is a prerequisite for schema-v2 observation creation, not proof that the phone was tested.
 - No functional-test record may claim or perform a persistent write.
 - A reviewed pass is test-level evidence, not automatic device-level support.
 - Public README compatibility, `BUILD_STATUS.json`, Beta/Stable state and release publication must change only after separate review of real physical evidence.
