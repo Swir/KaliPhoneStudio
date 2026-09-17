@@ -2,6 +2,17 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.66-dev — cross-campaign physical release-gate audit
+
+- Added `kaliphonestudio.physical_release_gate_audit` as a schema-v1 fail-closed audit packet joining one accepted exact physical bring-up dossier/review chain to one exact physical functional-result campaign.
+- The audit requires the canonical physical bring-up dossier, independent post-copy dossier verification, accepted dossier review, exact functional-result bundle, canonical functional-test plan and accepted independent test-plan review as exact non-symlink files with SHA-256/size and TOCTOU checks.
+- Cross-campaign validation now rejects profile/device drift and requires the exact physical boot observation, rescue diagnostics, raw rescue transcript and rescue probe identity to agree between the bring-up/storage dossier and the functional-test plan; the exact functional-hardware contract is also cross-checked.
+- The functional-result bundle must bind the exact supplied plan and exact supplied accepted plan-review file, while the dossier review must bind the exact supplied dossier and verification. This prevents unrelated real-device campaigns from being combined for release review.
+- Added immutable canonical audit evidence, `scripts/build_physical_release_gate_audit.py`, focused fail-closed regression tests, dedicated `physical-release-gate-audit` CI and `docs/PHYSICAL_RELEASE_GATE_AUDIT.md`.
+- Even when every Beta-required functional test is independently reviewed as passing, the audit forces `manual_release_gate_review_required=true`, `physical_gate_still_incomplete=true`, and keeps target/path/write/support/hardware/Beta authorization false.
+- Synchronized README, ROADMAP, BUILD_STATUS, Beta gate wording, version state and deterministic SWIR progress presentation with the new host-side milestone.
+- Project completion remains **58%** and Beta remains **BLOCKED** because no real AC2003 physical campaign has yet produced the required baseline, temporary boot, storage/hardware evidence, early-userspace proof and exercised recovery/rollback.
+
 ## 0.6.65-dev — exact-file physical functional result bundle
 
 - Added `kaliphonestudio.physical_hardware_result_bundle` as a schema-v1 fail-closed audit layer for one exact physical functional-test campaign.
