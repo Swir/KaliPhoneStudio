@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.62-dev**
+**Current development line — 0.6.63-dev**
 
 **58% complete**
 
@@ -44,6 +44,7 @@ Host-side preparation now complete:
 - [x] **0.6.62:** exact physical functional-test observation evidence binds one actually executed test to the exact plan/test/candidate identity, canonical operator record and separate notes; a `pass_candidate` requires every exact required observation but still grants no hardware/Beta credit.
 - [x] **0.6.62:** separate manual functional-test review binds accepted pass/fail/inconclusive outcomes only after exact-plan, exact-observation, physical-context, required-observation, notes/limitations and no-write checks are complete.
 - [x] **0.6.62:** deterministic exact-plan functional-test summary reports pending/reviewed-pass/fail/inconclusive/rejected coverage and Beta-required reviewed-pass counts while keeping project support/hardware/Beta promotion false.
+- [x] **0.6.63:** independent exact test-plan manual-review evidence binds the original canonical plan file bytes, upstream identity chain, review record and notes; a plan becomes eligible only as a manual physical-test checklist after all review checks pass and the plan itself is ready.
 - [x] Deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
 - [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
 - [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract bound to exact physical candidate and reviewed rootfs authority without target selection or write authorization.
@@ -60,7 +61,8 @@ Still physically blocked:
 - [ ] Instantiate one exact physical first-boot candidate.
 - [ ] Capture the real bounded hardware-presence survey and bind an accepted-as-context manual review; contextual acceptance still gives no functional credit.
 - [ ] Build the exact profile-driven functional-test plan from that real accepted survey review.
-- [ ] Execute and bind real subsystem-specific tests to that exact plan, then independently review each observation; no synthetic/host-only result counts.
+- [ ] Independently review the original canonical physical functional-test plan and bind an accepted exact-plan review before using it as the real-device test checklist.
+- [ ] Execute and bind real subsystem-specific tests to that exact reviewed plan, then independently review each observation; no synthetic/host-only result counts.
 - [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan under the typed discovery contract.
 - [ ] Complete and bind a manual review of that exact storage discovery; `accepted_for_strategy_design=true` is not target approval.
 - [ ] Cross-bind real candidate/rescue/storage records into one physical bring-up session.
@@ -76,7 +78,7 @@ Still physically blocked:
 
 ## Milestone D — hardware enablement
 
-No item here may be marked complete from host CI, sysfs presence, contextual review, a pending test plan or synthetic functional-test records alone.
+No item here may be marked complete from host CI, sysfs presence, contextual review, a generated/reviewed test plan or synthetic functional-test records alone.
 
 - [ ] Display/framebuffer/DRM.
 - [ ] Touch/input.
@@ -95,7 +97,7 @@ No item here may be marked complete from host CI, sysfs presence, contextual rev
 Required before release:
 
 - [ ] All mandatory physical gates in `BETA_RELEASE_GATE.md` reviewed and recorded.
-- [ ] Every Beta-required physical functional test has real exact-device evidence and an accepted manual review, or a documented explicitly reviewed scope exception where the gate permits one.
+- [ ] Every Beta-required physical functional test has real exact-device evidence and an accepted manual review, from an independently accepted exact test plan, or a documented explicitly reviewed scope exception where the gate permits one.
 - [ ] Exact compatibility matrix and known issues.
 - [ ] Release manifest with SHA-256 for every published binary/image.
 - [ ] Recovery instructions validated on the exact supported firmware.
@@ -108,7 +110,7 @@ Stable requires repeated device testing, stronger recovery confidence, broader h
 
 ## Immediate highest-impact work
 
-1. Keep rescue diagnostics, hardware survey/review, functional test plan/observation/review/summary, storage discovery/review, session and dossier layers fail-closed; none may turn host-only or synthetic evidence into support or authorize a storage write.
+1. Keep rescue diagnostics, hardware survey/review, functional test plan/exact-plan review/observation/result-review/summary, storage discovery/review, session and dossier layers fail-closed; none may turn host-only or synthetic evidence into support or authorize a storage write.
 2. Do **not** implement storage-target selection before a real AC2003 discovery record has passed exact manual review and dossier audit.
-3. When a physical AC2003 is available, capture the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect rescue marker/diagnostic/hardware-survey evidence and manual review before building the functional-test plan.
-4. Run each functional test manually against the exact real candidate, bind the exact observation and independent review, and treat the aggregate summary only as release-gate input — never automatic Beta credit.
+3. When a physical AC2003 is available, capture the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect rescue marker/diagnostic/hardware-survey evidence and manual review before building and independently reviewing the functional-test plan.
+4. Run each functional test manually against the exact real candidate using only the independently reviewed exact plan, bind the exact observation and independent result review, and treat the aggregate summary only as release-gate input — never automatic Beta credit.
