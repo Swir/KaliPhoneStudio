@@ -2,6 +2,17 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.56-dev — typed physical storage discovery evidence
+
+- Added `kaliphonestudio.physical_storage_discovery` with a strict schema-v1 report/evidence layer for read-only physical storage discovery; it never carries a `/dev/...` target path, never selects a staging target and can never authorize a write.
+- Bound every discovery record to one exact `RootfsHandoffAssessmentEvidence`, exact rescue diagnostics, exact manual functional-probe evidence, transcript/probe identity, firmware identity and reviewed rootfs authority chain.
+- Whole-block topology observations must match the exact `KPS_DIAG_BLOCK` sysfs inventory from the bound rescue transcript by kernel name, sector count and removable bit; the expected UFS bus signal must also be present for review readiness.
+- Added typed filesystem, encryption-feature and free-space observations for the profile-declared partition **role** only. The avicii `userdata` value remains a hint/role and is never converted into a block-device path.
+- Added exact-byte SHA-256 binding for the operator discovery report and a separate recovery-plan text file. Complete categories can become `discovery_ready_for_manual_review=true`, but `target_selected`, `storage_path_bound`, `write_authorized`, `handoff_ready`, `storage_verified`, `recovery_verified`, `hardware_verified` and `beta_gate_credit` remain false.
+- Added fail-closed parsing for unsafe names/paths, duplicate roles, inconsistent unknown observations, serial/profile drift, detached rescue evidence chains, changed files and promoted hardware/Beta claims.
+- Added `scripts/record_physical_storage_discovery.py`, immutable evidence writing/loading, eight focused tests and rootfs-handoff-policy CI coverage.
+- Project completion remains **58%** because this is an evidence contract only; no real AC2003 storage/encryption/free-space evidence or reversible handoff target has been reviewed yet.
+
 ## 0.6.55-dev — discovery-only rootfs handoff contract
 
 - Added `kaliphonestudio.rootfs_handoff` with a fail-closed schema-v1 contract that resolves one exact profile-pinned storage-layout source and explicitly forbids target selection or persistent-write authorization.
