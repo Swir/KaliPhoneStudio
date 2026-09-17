@@ -25,20 +25,20 @@
 
 | Item | Status |
 |---|---|
-| Current development line | `0.6.61-dev` |
+| Current development line | `0.6.62-dev` |
 | Completion | **58%** |
 | Current stage | Development / physical bring-up |
 | First device profile | OnePlus Nord AC2003 — `oneplus/avicii` |
 | Latest public release | **Not published yet** |
 | Beta gate | **BLOCKED** |
 
-**Current development line: `0.6.61-dev`**
+**Current development line: `0.6.62-dev`**
 
 **58% complete**
 
 `███████████▋░░░░░░░░ 58%`
 
-Host-side foundations are deliberately ahead of physical-device validation. Reviewed strict A/B authorities exist for the Kali ARM64 rootfs, avicii kernel and DTB/DTBO. The physical evidence chain now includes a bounded sysfs-only hardware-presence survey plus a fail-closed manual-review contract. None of that is counted as real hardware support until the exact AC2003 passes the physical gate.
+Host-side foundations are deliberately ahead of physical-device validation. Reviewed strict A/B authorities exist for the Kali ARM64 rootfs, avicii kernel and DTB/DTBO. The physical evidence chain now includes a bounded sysfs-only hardware-presence survey, fail-closed survey review, profile-driven pending functional-test plans, exact per-test observation evidence, independent review and an aggregate exact-plan status summary. None of that is counted as real hardware support until the exact AC2003 passes the physical gate with real evidence.
 
 The authoritative release rules are in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
@@ -57,8 +57,9 @@ Permanent flashing is not the default path. The project prefers exact provenance
 | 🧬 Reproducible builds | Reviewed strict A/B authorities for Kali ARM64 rootfs, avicii kernel and DTB/DTBO artifacts. |
 | 📦 Boot provenance | Exact OTA → payload → stock `boot.img` evidence plus deterministic boot-image assembly and round-trip checks. |
 | 🛟 Rescue path | Deterministic source-locked ARM64 rescue initramfs with exact probe identity and remote access disabled by default. |
-| 🧪 Physical evidence | Rescue markers, read-only diagnostics, explicit bounded functional probes, hardware-presence survey and Kali early-userspace markers. |
+| 🧪 Physical evidence | Rescue markers, read-only diagnostics, explicit bounded probes, hardware-presence survey and Kali early-userspace markers. |
 | 👁️ Manual hardware review | Exact survey + canonical review record + separate notes can be accepted only as context for later functional testing; no subsystem is auto-verified. |
+| ✅ Functional-test evidence | Profile-driven pending tests can bind one real observation, independent manual review and exact-plan status without automatically promoting support/Beta claims. |
 | 💾 Storage safety | Discovery/review/session/dossier layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
 | 🖥️ Offline UI/CLI | Safe profile inspection without automatically invoking ADB/Fastboot or exposing unguarded write controls. |
 
@@ -120,30 +121,23 @@ devices/<vendor>/<codename>/profile.json
 
 A profile is not a support claim. Before destructive actions can even become eligible it must define unique identity, confirmation token, boot/partition constraints, pinned sources, recovery notes and host/hardware test contracts. The common core must not hardcode AC2003-specific facts when the same decision can be profile-driven.
 
-## Physical hardware survey review
+## Physical hardware survey and functional-test evidence
 
 The 0.6.60 rescue survey records only bounded sysfs-visible presence/state for USB, network/rfkill, sound, thermal, input, framebuffer/DRM and power supplies. It does not activate those subsystems.
 
-0.6.61 adds an exact manual-review layer. A safe template is rejected by default:
+0.6.61 adds exact manual survey review plus a profile-driven functional-test plan. A survey accepted with `accepted_as_context=true` remains contextual only; every functional test starts as `pending` and keeps write/hardware/Beta claims false.
+
+0.6.62 adds the next evidence boundary for a real physical test attempt. An operator record must match one exact pending test and one exact candidate context; `pass_candidate` requires every exact required observation. A separate reviewer then accepts pass/fail/inconclusive only after all exact review checks are complete. The aggregate summary reports coverage but still cannot authorize project support or Beta release.
 
 ```bash
-python scripts/prepare_physical_hardware_review.py \
-  --survey-evidence evidence/physical-hardware-survey.json \
-  --reviewer operator-1 \
-  --out evidence/operator-hardware-review.json
+python scripts/prepare_physical_hardware_test_observation.py \
+  --test-plan evidence/physical-hardware-test-plan.json \
+  --test-id display \
+  --operator operator-1 \
+  --out evidence/display-observation-record.json
 ```
 
-After real human review, bind the exact canonical record and separate notes:
-
-```bash
-python scripts/review_physical_hardware_survey.py \
-  --survey-evidence evidence/physical-hardware-survey.json \
-  --review-record evidence/operator-hardware-review.json \
-  --review-notes evidence/operator-hardware-review-notes.txt \
-  --out evidence/physical-hardware-review.json
-```
-
-`accepted_as_context=true` means only that the exact survey may inform later subsystem-specific physical tests. Display, touch, USB, Wi-Fi, Bluetooth, audio, modem, charging/power, thermal, storage, recovery, hardware verification and Beta credit remain false. See [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md).
+The generated template is deliberately not-executed and inconclusive by default. It becomes bindable only after the physical test was actually performed and the required exact fields were reviewed and edited. See [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md), [`docs/PHYSICAL_HARDWARE_TEST_PLAN.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN.md) and [`docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md`](docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md).
 
 ## Rootfs handoff and storage evidence
 
@@ -159,7 +153,8 @@ See [`docs/ROOTFS_HANDOFF_POLICY.md`](docs/ROOTFS_HANDOFF_POLICY.md), [`docs/PHY
 - Never flash a physical phone without explicit user interaction and a verified exact-device baseline.
 - Fail closed on identity, firmware, provenance, checksum, partition-layout or evidence drift.
 - Keep host CI and physical hardware claims separate.
-- Treat sysfs hardware presence and accepted contextual review as observations only, never functional proof.
+- Treat sysfs hardware presence, accepted contextual review, generated test plans and synthetic/mock functional records as non-credit evidence.
+- A reviewed functional-test pass is test-level evidence only; project support and release status require the complete physical gate.
 - Never weaken strict reproducibility to make a gate pass.
 - Do not embed credentials or enable remote access by default.
 - No public Beta or Stable release exists until the complete physical gate is reviewed.
@@ -171,7 +166,7 @@ python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
-Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, hardware-presence survey and review policy, Kali early-userspace proof, rootfs handoff, physical-storage evidence, bring-up sessions and exact-file dossier verification.
+Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, hardware-presence survey/review, functional-test planning/observation/review/summary, Kali early-userspace proof, rootfs handoff, physical-storage evidence, bring-up sessions and exact-file dossier verification.
 
 ## Roadmap and releases
 
@@ -184,7 +179,7 @@ There is currently **no public Beta release**. The first Beta will be published 
 
 ## 🔎 Search Keywords
 
-`Kali Linux phone port` • `NetHunter Pro phone` • `Linux on smartphone` • `ARM64 Linux phone` • `OnePlus Nord AC2003 Linux` • `avicii Linux port` • `multi-device phone porting` • `Fastboot temporary boot` • `Android boot image tooling` • `DTB DTBO build` • `Kali ARM64 rootfs` • `phone rescue initramfs` • `phone hardware survey` • `reproducible kernel build` • `UFS storage discovery` • `safe phone flashing workflow`
+`Kali Linux phone port` • `NetHunter Pro phone` • `Linux on smartphone` • `ARM64 Linux phone` • `OnePlus Nord AC2003 Linux` • `avicii Linux port` • `multi-device phone porting` • `Fastboot temporary boot` • `Android boot image tooling` • `DTB DTBO build` • `Kali ARM64 rootfs` • `phone rescue initramfs` • `phone hardware survey` • `physical hardware test evidence` • `reproducible kernel build` • `UFS storage discovery` • `safe phone flashing workflow`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
