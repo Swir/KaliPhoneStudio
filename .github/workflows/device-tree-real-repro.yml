@@ -1,0 +1,277 @@
+name: device-tree-real-repro
+
+on:
+  workflow_run:
+    workflows: ["kernel-real-repro"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
+      - name: Compile device-tree build contracts
+        run: >-
+          python -m py_compile
+          kaliphonestudio/device_tree.py
+          kaliphonestudio/device_tree_build.py
+          scripts/run_locked_device_tree_build.py
+          scripts/verify_device_tree_repro_pair.py
+
+      - name: Run focused DTB/DTBO contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_device_tree.py
+          tests/test_device_tree_build.py
+
+  real-device-tree-repro:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      PROFILE_ID: oneplus/avicii
+      TOOLCHAIN_LOCK: tools/kernel-toolchain-lock.json
+      FORMAT_LOCK: tools/device-tree-format-locks.json
+      KERNEL_AUTHORITY: evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json
+      KERNEL_AUTHORITY_EVIDENCE: evidence/authorities/kernel/oneplus-avicii-4.19.300-2026-09-17
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out exact triggering main commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install exact-build host prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev dwarves rsync cpio xz-utils \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
+
+      - name: Download exact successful kernel outputs from triggering run
+        uses: actions/download-artifact@v5
+        with:
+          name: kernel-real-repro-nonrelease
+          path: kernel-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Resolve exact source and compiler locks
+        id: locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.kernel_contract import create_kernel_build_plan
+          from kaliphonestudio.kernel_toolchain import load_kernel_toolchain_lock
+          from kaliphonestudio.profiles import get_profile
+
+          profile = get_profile(Path("devices"), os.environ["PROFILE_ID"])
+          plan = create_kernel_build_plan(profile)
+          lock = load_kernel_toolchain_lock(Path(os.environ["TOOLCHAIN_LOCK"]))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"kernel_url={plan.source_url}", file=out)
+              print(f"kernel_commit={plan.source_commit}", file=out)
+              print(f"toolchain_url={lock.source_url}", file=out)
+              print(f"toolchain_commit={lock.source_commit}", file=out)
+              print(f"toolchain_subtree={lock.subtree}", file=out)
+              print(f"toolchain_tree={lock.tree_sha1}", file=out)
+          PY
+
+      - name: Materialize exact source-locked Android Clang subtree
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.locks.outputs.toolchain_url }}
+          SOURCE_COMMIT: ${{ steps.locks.outputs.toolchain_commit }}
+          SOURCE_SUBTREE: ${{ steps.locks.outputs.toolchain_subtree }}
+          SOURCE_TREE: ${{ steps.locks.outputs.toolchain_tree }}
+        run: |
+          set -euo pipefail
+          git init --quiet toolchain-repo
+          git -C toolchain-repo remote add origin "$SOURCE_URL"
+          git -C toolchain-repo config core.sparseCheckout true
+          printf '/%s/\n' "$SOURCE_SUBTREE" > toolchain-repo/.git/info/sparse-checkout
+          git -C toolchain-repo fetch --quiet --depth=1 --filter=blob:none origin "$SOURCE_COMMIT"
+          test "$(git -C toolchain-repo rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C toolchain-repo checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C toolchain-repo rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git -C toolchain-repo rev-parse "$SOURCE_COMMIT:$SOURCE_SUBTREE")" = "$SOURCE_TREE"
+          test -x "toolchain-repo/$SOURCE_SUBTREE/bin/clang"
+          python scripts/verify_kernel_toolchain_checkout.py \
+            --lock "$TOOLCHAIN_LOCK" \
+            --repository toolchain-repo \
+            --out kernel-artifact/evidence/device-tree-toolchain-source.json
+
+      - name: Prepare two independent exact-source kernel checkouts
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.locks.outputs.kernel_url }}
+          SOURCE_COMMIT: ${{ steps.locks.outputs.kernel_commit }}
+        run: |
+          set -euo pipefail
+          git init --quiet kernel-seed
+          git -C kernel-seed remote add origin "$SOURCE_URL"
+          git -C kernel-seed fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C kernel-seed rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C kernel-seed checkout --quiet --detach "$SOURCE_COMMIT"
+          git clone --quiet --no-hardlinks kernel-seed kernel-a
+          git clone --quiet --no-hardlinks kernel-seed kernel-b
+          git -C kernel-a checkout --quiet --detach "$SOURCE_COMMIT"
+          git -C kernel-b checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C kernel-a rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git -C kernel-b rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(realpath kernel-a)" != "$(realpath kernel-b)"
+
+      - name: Normalize tracked source mtimes identically
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ steps.locks.outputs.kernel_commit }}
+        run: |
+          set -euo pipefail
+          python scripts/normalize_kernel_source_mtimes.py \
+            --checkout kernel-a \
+            --expected-commit "$SOURCE_COMMIT" \
+            --out kernel-artifact/evidence/device-tree-source-mtime-a.json
+          python scripts/normalize_kernel_source_mtimes.py \
+            --checkout kernel-b \
+            --expected-commit "$SOURCE_COMMIT" \
+            --out kernel-artifact/evidence/device-tree-source-mtime-b.json
+          cmp kernel-artifact/evidence/device-tree-source-mtime-a.json \
+              kernel-artifact/evidence/device-tree-source-mtime-b.json
+
+      - name: Validate downloaded kernel artifact layout
+        run: |
+          set -euo pipefail
+          test -f kernel-artifact/build-a/.config
+          test -f kernel-artifact/build-b/.config
+          test -f kernel-artifact/build-a/arch/arm64/boot/Image
+          test -f kernel-artifact/build-b/arch/arm64/boot/Image
+          cmp kernel-artifact/build-a/.config kernel-artifact/build-b/.config
+          cmp kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
+          sha256sum \
+            kernel-artifact/build-a/.config kernel-artifact/build-b/.config \
+            kernel-artifact/build-a/arch/arm64/boot/Image kernel-artifact/build-b/arch/arm64/boot/Image
+
+      - name: Build profile-selected DTB/DTBO artifacts independently
+        id: dt_pair
+        shell: bash
+        env:
+          TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
+        run: |
+          set +e
+          mkdir -p device-tree-work-a device-tree-work-b dt-logs
+          python scripts/run_locked_device_tree_build.py \
+            --profile-id "$PROFILE_ID" \
+            --toolchain-lock "$TOOLCHAIN_LOCK" \
+            --format-lock "$FORMAT_LOCK" \
+            --kernel-authority "$KERNEL_AUTHORITY" \
+            --kernel-authority-evidence-dir "$KERNEL_AUTHORITY_EVIDENCE" \
+            --checkout kernel-a \
+            --toolchain-root "$TOOLCHAIN_ROOT" \
+            --build-root kernel-artifact/build-a \
+            --dtbo-image device-tree-work-a/dtbo.img \
+            --artifact-dir device-tree-a \
+            --jobs 1 \
+            --plan-out kernel-artifact/evidence/device-tree-plan-a.json \
+            --out kernel-artifact/evidence/device-tree-build-a.json \
+            >dt-logs/device-tree-a.log 2>&1 &
+          pid_a=$!
+          python scripts/run_locked_device_tree_build.py \
+            --profile-id "$PROFILE_ID" \
+            --toolchain-lock "$TOOLCHAIN_LOCK" \
+            --format-lock "$FORMAT_LOCK" \
+            --kernel-authority "$KERNEL_AUTHORITY" \
+            --kernel-authority-evidence-dir "$KERNEL_AUTHORITY_EVIDENCE" \
+            --checkout kernel-b \
+            --toolchain-root "$TOOLCHAIN_ROOT" \
+            --build-root kernel-artifact/build-b \
+            --dtbo-image device-tree-work-b/dtbo.img \
+            --artifact-dir device-tree-b \
+            --jobs 1 \
+            --plan-out kernel-artifact/evidence/device-tree-plan-b.json \
+            --out kernel-artifact/evidence/device-tree-build-b.json \
+            >dt-logs/device-tree-b.log 2>&1 &
+          pid_b=$!
+          wait "$pid_a"; rc_a=$?
+          wait "$pid_b"; rc_b=$?
+          set -e
+          echo "===== DT A tail ====="; tail -n 120 dt-logs/device-tree-a.log || true
+          echo "===== DT B tail ====="; tail -n 120 dt-logs/device-tree-b.log || true
+          if [ "$rc_a" -ne 0 ] || [ "$rc_b" -ne 0 ]; then
+            echo "Independent DT build failed: A=$rc_a B=$rc_b" >&2
+            exit 1
+          fi
+          cmp kernel-artifact/evidence/device-tree-plan-a.json \
+              kernel-artifact/evidence/device-tree-plan-b.json
+
+      - name: Verify strict DTB/DTBO byte identity
+        run: |
+          set -euo pipefail
+          python scripts/verify_device_tree_repro_pair.py \
+            --plan kernel-artifact/evidence/device-tree-plan-a.json \
+            --build-evidence-a kernel-artifact/evidence/device-tree-build-a.json \
+            --build-evidence-b kernel-artifact/evidence/device-tree-build-b.json \
+            --build-root-a kernel-artifact/build-a \
+            --build-root-b kernel-artifact/build-b \
+            --out kernel-artifact/evidence/device-tree-reproducibility.json
+          cmp device-tree-a/dtb.bin device-tree-b/dtb.bin
+          cmp device-tree-a/dtbo.img device-tree-b/dtbo.img
+          cmp device-tree-a/raw-dtbo/000.dtbo device-tree-b/raw-dtbo/000.dtbo
+          sha256sum \
+            device-tree-a/dtb.bin device-tree-b/dtb.bin \
+            device-tree-a/raw-dtbo/000.dtbo device-tree-b/raw-dtbo/000.dtbo \
+            device-tree-a/dtbo.img device-tree-b/dtbo.img
+
+      - name: Upload DT diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-tree-real-repro-failure
+          path: |
+            dt-logs/
+            kernel-artifact/evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload verified non-release DTB/DTBO evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-tree-real-repro-nonrelease
+          path: |
+            kernel-artifact/evidence/device-tree-*.json
+            device-tree-a/
+            device-tree-b/
+          if-no-files-found: error
+          retention-days: 14
