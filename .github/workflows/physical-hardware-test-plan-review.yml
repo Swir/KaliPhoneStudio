@@ -1,0 +1,47 @@
+name: physical-hardware-test-plan-review
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/physical_hardware_test_plan.py"
+      - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "scripts/prepare_physical_hardware_test_plan_review.py"
+      - "scripts/review_physical_hardware_test_plan.py"
+      - "tests/test_physical_hardware_test_plan_review.py"
+      - ".github/workflows/physical-hardware-test-plan-review.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/physical_hardware_test_plan.py"
+      - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "scripts/prepare_physical_hardware_test_plan_review.py"
+      - "scripts/review_physical_hardware_test_plan.py"
+      - "tests/test_physical_hardware_test_plan_review.py"
+      - ".github/workflows/physical-hardware-test-plan-review.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      - name: Compile focused review path
+        run: >-
+          python -m py_compile
+          kaliphonestudio/physical_hardware_test_plan.py
+          kaliphonestudio/physical_hardware_test_plan_review.py
+          scripts/prepare_physical_hardware_test_plan_review.py
+          scripts/review_physical_hardware_test_plan.py
+          tests/test_physical_hardware_test_plan_review.py
+      - name: Run fail-closed plan-review tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest -q tests/test_physical_hardware_test_plan_review.py
