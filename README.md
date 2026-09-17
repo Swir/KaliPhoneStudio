@@ -2,7 +2,7 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux / NetHunter Pro as the primary phone OS/userspace**, without Android as the user-facing layer.
 
-The project is deliberately conservative about hardware claims. A device profile, successful host build, reproducible artifact, or green CI does **not** mean a phone is supported. Public Beta releases require the complete host and physical-device gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+The project is deliberately conservative about hardware claims. A device profile, successful host build, reproducible artifact, green CI, prepared boot offer, or a Fastboot return code does **not** mean a phone is supported. Public Beta releases require the complete host and physical-device gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Project progress
 
@@ -12,7 +12,7 @@ The project is deliberately conservative about hardware claims. A device profile
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host-side reproducibility, provenance and safety are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> **Current development line: `0.6.49-dev`.** The reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel, and avicii DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.48 added the exact physical-candidate preflight gate. 0.6.49 adds the next host-only boundary: a path-independent temporary-boot offer that rehashes the exact reviewed Fastboot executable and exact candidate `boot.img`, binds them back to the read-only capture and physical-candidate gate, and produces only one serial-bound `fastboot -s SERIAL boot IMAGE` argv. It never invokes Fastboot. A separate explicit profile confirmation can authorize the offer in memory, but that authorization still records `temporary_boot_executed=false` and grants no hardware/Beta credit.
+> **Current development line: `0.6.50-dev`.** The reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel, and avicii DTB/DTBO authorities remain strict-byte-identical host-side. The physical-candidate gate and exact temporary-boot offer now extend to a guarded execution boundary: before one temporary `fastboot boot` can run, KaliPhoneStudio re-verifies the exact Fastboot executable and candidate image, requires explicit profile confirmation, performs a fresh read-only serial-bound Fastboot probe, and fail-closes on device/state drift. Even a successful Fastboot return code records `kali_userspace_verified=false`, `hardware_verified=false`, and `beta_gate_credit=false` until separate physical evidence proves the actual boot path.
 
 ## Source of truth and architecture
 
@@ -40,7 +40,7 @@ The first profile pins `LineageOS/android_device_oneplus_avicii@3f1270c2871e9893
 | ARM64 kernel | `35183670399` | `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3`; `Image` SHA-256 `be4440dc335d53c752270c484fe589a9bc1ef08f9100e885478b50df67cbe712`, 43,878,416 bytes | **No** |
 | DTB / DTBO | `35196447576` | `lito.dtb` SHA-256 `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce`; packed `dtbo.img` SHA-256 `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` | **No** |
 
-The reviewed authority records are checked into `evidence/authorities/` and are independently reconstructed by CI. `BUILD_STATUS.json` retains the exact authority run/commit/artifact identities and CI now verifies them against the immutable records.
+The reviewed authority records are checked into `evidence/authorities/` and independently reconstructed by CI. `BUILD_STATUS.json` retains the exact authority run/commit/artifact identities and CI verifies them against the immutable records.
 
 ## Implemented safety and provenance chain
 
@@ -115,7 +115,23 @@ The only generated command plan is an argv tuple equivalent to:
 <verified-fastboot> -s <verified-serial> boot <verified-candidate-boot.img>
 ```
 
-No shell string is generated and no subprocess is invoked. The CLI only writes immutable offer evidence and prints an argv preview marked **NOT EXECUTED**. `authorize_temporary_boot_offer()` requires the exact profile confirmation token but still only emits authorization evidence with `temporary_boot_executed=false`, `persistent_write=false`, `phone_storage_written=false`, `hardware_verified=false` and `beta_gate_credit=false`.
+No shell string is generated and no subprocess is invoked. `authorize_temporary_boot_offer()` requires the exact profile confirmation token but still only emits authorization evidence with `temporary_boot_executed=false`, `persistent_write=false`, `phone_storage_written=false`, `hardware_verified=false` and `beta_gate_credit=false`.
+
+### Temporary-boot execution gate — 0.6.50
+
+The first executable physical path is intentionally restricted to one temporary boot and adds another fail-closed boundary immediately before invocation:
+
+- exact offer inputs are regenerated/reverified so Fastboot/image TOCTOU drift aborts before device access,
+- exact authorization must bind the same offer/profile/serial and the exact profile confirmation policy,
+- the reviewed baseline must report an unlocked bootloader,
+- the exact reviewed Fastboot binary performs a fresh read-only `devices` + serial-bound `getvar all`,
+- product, serial, active slot, slot count, unlock/security state and bootloader/baseband values are compared to the reviewed baseline,
+- device swap or critical state drift aborts before the boot command,
+- the executor exposes only the exact argv `fastboot -s SERIAL boot IMAGE`; no persistent-write verb is implemented.
+
+`TemporaryBootRuntimeProbeEvidence` preserves the fresh read-only probe identity. `TemporaryBootExecutionEvidence` preserves argv/output hashes and return code. A normal Fastboot failure is recorded rather than promoted to a hardware claim; return code 0 still means only that the Fastboot command was accepted. It does **not** prove kernel start, rescue, Kali early userspace, storage, display/touch, charging safety or recovery.
+
+The standalone CLI `scripts/execute_temporary_boot_once.py` refuses to invoke the boot unless both the exact profile confirmation and explicit `--execute-temporary-boot` opt-in are supplied. It has no flash/erase/set-active/reboot path.
 
 ## Offline application
 
@@ -130,9 +146,9 @@ Profile inspection is offline and always distinguishes profile availability from
 
 ## Beta release gate
 
-**Beta is BLOCKED.** The first AC2003 Beta still requires a real physical Fastboot/OxygenOS baseline, matching stock `boot.img`, exact physical-firmware candidate + reviewed bindings + physical candidate gate + local temporary-boot offer, explicitly confirmed physical temporary boot, rescue/log proof, Kali early userspace/rootfs, UFS/storage, display/touch or declared console-only scope, safe charging/battery, exercised recovery/rollback, and a compatibility/release manifest with SHA-256 files.
+**Beta is BLOCKED.** The first AC2003 Beta still requires a real physical Fastboot/OxygenOS baseline, matching stock `boot.img`, exact physical-firmware candidate + reviewed bindings + physical candidate gate + local temporary-boot offer, an explicitly confirmed temporary-boot attempt with separate proof that the device actually reached the intended boot path, rescue/log proof, Kali early userspace/rootfs, UFS/storage, display/touch or declared console-only scope, safe charging/battery, exercised recovery/rollback, and a compatibility/release manifest with SHA-256 files.
 
-No empty, symbolic, or host-CI-only Beta release is acceptable.
+No empty, symbolic, host-CI-only, or Fastboot-return-code-only Beta release is acceptable.
 
 ## Testing
 
@@ -149,4 +165,4 @@ A new device starts as **profile-only / unsupported hardware**. Add `devices/<ve
 
 ## Safety model
 
-KaliPhoneStudio is built around fail-closed evidence rather than optimistic automation. Green CI, matching model strings, upstream device trees and reproducible host artifacts are necessary engineering evidence, not proof that a physical device is safe to flash. The first public Beta will be a tested device build, not a development snapshot.
+KaliPhoneStudio is built around fail-closed evidence rather than optimistic automation. Green CI, matching model strings, upstream device trees, reproducible host artifacts, and a successful host-side Fastboot command are necessary engineering evidence, not proof that a physical device safely booted Kali. The first public Beta will be a tested device build, not a development snapshot.
