@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.54-dev**
+**Current development line — 0.6.55-dev**
 
 **58% complete**
 
@@ -37,18 +37,21 @@ Host-side preparation now complete:
 - [x] Offline transcript binding to one successful non-persistent temporary boot.
 - [x] Read-only rescue sysfs diagnostics.
 - [x] Explicit manual-only bounded block-read and paired battery probes.
-- [x] **0.6.54:** deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
-- [x] **0.6.54:** physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
+- [x] Deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
+- [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
+- [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract that binds one exact physical-candidate gate to one exact reviewed rootfs authority without selecting a device path or authorizing writes.
+- [x] **0.6.55:** exact pinned avicii `fstab.qcom` blob verification in CI plus policy checks that keep A/B/system/super/metadata partitions forbidden during discovery.
 
 Still physically blocked:
 
 - [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
-- [ ] Select and review a safe, reversible, profile-driven rootfs staging/handoff strategy; do not hard-code a guessed UFS/userdata path.
+- [ ] Capture exact physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan under the new discovery contract.
+- [ ] Select and review a safe, reversible rootfs staging/handoff target **after** that physical evidence exists; no guessed UFS/userdata path.
 - [ ] Execute explicitly confirmed temporary boot on the exact AC2003.
 - [ ] Capture usable console/log evidence and manually review rescue markers.
-- [ ] Reach the exact reviewed Kali rootfs and manually review the new early-systemd marker chain.
+- [ ] Reach the exact reviewed Kali rootfs and manually review the early-systemd marker chain.
 - [ ] Verify required UFS/storage behavior beyond bounded diagnostic reads.
 - [ ] Verify charging/battery safety for bring-up sessions.
 - [ ] Verify display/touch or explicitly constrain Beta to reviewed console-only scope.
@@ -87,7 +90,7 @@ Stable requires a later, higher threshold: repeated device testing, stronger rec
 
 ## Immediate highest-impact work
 
-1. Design a safe rootfs **handoff/staging contract** that does not assume an unverified AC2003 partition/encryption layout.
-2. Keep the proof overlay tied to exact reviewed authorities and integrate it only through a candidate path that preserves those identities.
-3. When a physical AC2003 is available, collect the real read-only baseline before any boot/write action, then execute only the explicitly confirmed temporary-boot path.
+1. Extend the new discovery-only rootfs handoff layer with a typed **physical storage discovery evidence** format that records topology/filesystem/encryption/free-space observations without selecting or modifying a target.
+2. Keep every observation bound to the exact physical candidate/rootfs authority and require explicit review before a later target-selection milestone can exist.
+3. When a physical AC2003 is available, collect the real read-only Fastboot baseline first, then collect rootfs-handoff discovery evidence before any storage write.
 4. Review physical rescue and Kali-rootfs markers separately; rescue success must never be treated as Kali-rootfs success.

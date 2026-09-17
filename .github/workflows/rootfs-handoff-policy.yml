@@ -1,0 +1,100 @@
+name: rootfs-handoff-policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "devices/**/profile.json"
+      - "kaliphonestudio/rootfs_handoff.py"
+      - "scripts/verify_rootfs_handoff_layout.py"
+      - "tests/test_rootfs_handoff.py"
+      - ".github/workflows/rootfs-handoff-policy.yml"
+  pull_request:
+    paths:
+      - "devices/**/profile.json"
+      - "kaliphonestudio/rootfs_handoff.py"
+      - "scripts/verify_rootfs_handoff_layout.py"
+      - "tests/test_rootfs_handoff.py"
+      - ".github/workflows/rootfs-handoff-policy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      - name: Compile rootfs handoff sources
+        run: >-
+          python -m py_compile
+          kaliphonestudio/rootfs_handoff.py
+          scripts/verify_rootfs_handoff_layout.py
+          tests/test_rootfs_handoff.py
+      - name: Run focused fail-closed contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_rootfs_handoff.py tests/test_profile_schema.py tests/test_repository_contract.py
+
+  pinned-layout-source:
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROFILE_ID: oneplus/avicii
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Resolve exact profile-pinned layout source
+        id: source
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.profiles import get_profile
+          from kaliphonestudio.rootfs_handoff import rootfs_handoff_contract
+
+          profile = get_profile(Path("devices"), os.environ["PROFILE_ID"])
+          contract = rootfs_handoff_contract(profile)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"url={contract.layout_source_url}", file=out)
+              print(f"commit={contract.layout_source_commit}", file=out)
+              print(f"path={contract.layout_source_path}", file=out)
+              print(f"blob={contract.layout_source_blob_sha1}", file=out)
+          PY
+      - name: Fetch exact pinned device source commit
+        env:
+          SOURCE_URL: ${{ steps.source.outputs.url }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git init --quiet layout-source
+          git -C layout-source remote add origin "$SOURCE_URL"
+          git -C layout-source fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C layout-source rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C layout-source checkout --quiet --detach "$SOURCE_COMMIT"
+      - name: Verify exact layout blob and clean checkout
+        run: |
+          mkdir -p evidence
+          python scripts/verify_rootfs_handoff_layout.py \
+            --profile-id "$PROFILE_ID" \
+            --checkout layout-source \
+            --out evidence/rootfs-handoff-layout-source.json
+          test "$(git -C layout-source rev-parse HEAD:${{ steps.source.outputs.path }})" = "${{ steps.source.outputs.blob }}"
+      - name: Upload non-release source-lock evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootfs-handoff-source-lock-nonrelease
+          path: evidence/rootfs-handoff-layout-source.json
+          if-no-files-found: error
+          retention-days: 14

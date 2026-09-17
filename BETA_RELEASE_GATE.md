@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker or early-userspace marker does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker or source-pinned storage-layout hint does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -21,7 +21,8 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Rescue initramfs/payload is deterministic, network/SSH disabled by default, and has an exact probe identity.
 - [x] Kali early-userspace proof overlay is deterministic and bound to exact candidate/rootfs authority identities.
 - [x] Early-userspace transcript parser requires exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers and never auto-promotes them to hardware/Beta credit.
-- [ ] Select and review the actual rootfs staging/handoff strategy for the physical device. The common core must not guess or hard-code an unverified storage/encryption path.
+- [x] Rootfs handoff **discovery contract** is profile-driven, exact-source/blob pinned, bound to the physical-candidate/rootfs authority chain and cannot select a storage path or authorize writes.
+- [ ] Capture the real storage/encryption/free-space/recovery evidence required by that contract and select/review the actual reversible rootfs staging/handoff strategy for the physical device.
 - [ ] Final release manifest/compatibility matrix/known issues and SHA-256 set are generated from the exact reviewed physical candidate.
 
 ## Physical AC2003 mandatory gate
@@ -33,6 +34,8 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] Matching stock `boot.img` extracted from the exact OTA and validated against that physical baseline.
 - [ ] Recovery path is documented before risky testing begins.
 - [ ] Exact reviewed physical candidate is instantiated from that baseline and reviewed authorities.
+- [ ] Rootfs-handoff discovery evidence confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan.
+- [ ] A reversible rootfs handoff target is explicitly reviewed after discovery; no guessed UFS/userdata path is accepted.
 - [ ] `fastboot boot` succeeds on the exact phone after explicit user confirmation.
 - [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
 - [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
@@ -56,6 +59,8 @@ The following remain useful diagnostics but **cannot** satisfy a physical checkb
 - a Kali early-userspace marker set without manual review of the exact candidate/physical context;
 - one bounded 4096-byte block read;
 - two battery telemetry samples;
+- the pinned LineageOS fstab/BoardConfig storage expectations;
+- a discovery-only rootfs handoff assessment;
 - synthetic/mock transcripts.
 
 ## Release publication rule
