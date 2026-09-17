@@ -1,12 +1,12 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.60-dev**
+**Current development line — 0.6.61-dev**
 
 **58% complete**
 
 `███████████▋░░░░░░░░ 58%`
 
-Progress intentionally does not rise for host-only plumbing when the physical-device risk gates remain unchanged.
+Progress intentionally does not rise for host-only plumbing while the physical-device risk gates remain unchanged.
 
 ## Milestone A — multi-device core and provenance — COMPLETE host-side
 
@@ -37,33 +37,29 @@ Host-side preparation now complete:
 - [x] Offline transcript binding to one successful non-persistent temporary boot.
 - [x] Read-only rescue sysfs diagnostics.
 - [x] Explicit manual-only bounded block-read and paired battery probes.
-- [x] **0.6.60:** separate bounded automatic sysfs-only hardware-presence survey covering USB UDC/device identity, network interfaces, rfkill, sound, thermal, input, framebuffer/DRM and power-supply state without activating those subsystems.
-- [x] **0.6.60:** hardware-presence evidence is bound to the exact boot observation, rescue diagnostics, transcript and probe id; every functional hardware verification flag and Beta credit remain false and manual review is required.
+- [x] **0.6.60:** bounded automatic sysfs-only hardware-presence survey covering USB UDC/device identity, network interfaces, rfkill, sound, thermal, input, framebuffer/DRM and power-supply state without activating those subsystems.
+- [x] **0.6.61:** fail-closed manual hardware-survey review contract binds the exact survey to canonical review-record bytes and separate notes.
+- [x] **0.6.61:** contextual acceptance requires a non-empty survey plus explicit physical-context, integrity, USB, network/radio, audio, input/display, thermal/power and limitations review; all functional/hardware/Beta flags remain false.
 - [x] Deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
 - [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
-- [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract that binds one exact physical-candidate gate to one exact reviewed rootfs authority without selecting a device path or authorizing writes.
-- [x] **0.6.55:** exact pinned avicii `fstab.qcom` blob verification in CI plus policy checks that keep A/B/system/super/metadata partitions forbidden during discovery.
-- [x] **0.6.56:** typed physical-storage discovery report/evidence contract bound to the exact handoff assessment, rescue diagnostics/functional probe, transcript/probe identity and reviewed rootfs chain.
-- [x] **0.6.56:** whole-block topology must cross-match exact rescue `KPS_DIAG_BLOCK` name/sector/removable observations; filesystem/encryption/free-space remain typed partition-role observations, never a target path.
-- [x] **0.6.56:** exact discovery-report bytes and a separate recovery-plan file are SHA-256 bound; a complete set can become review-ready but all target/write/storage/recovery/hardware/Beta claims remain false.
-- [x] **0.6.57:** fail-closed manual-review record binds exact review-record and review-notes bytes to one exact physical-storage discovery evidence chain.
-- [x] **0.6.57:** acceptance for later strategy design requires a review-ready source plus explicit checks of physical context, topology, filesystem, encryption, free space, recovery plan and evidence chain; acceptance still cannot select a target or authorize writes.
-- [x] **0.6.58:** one immutable physical bring-up session can cross-bind the exact candidate gate, rescue observation, diagnostics, functional probes, storage discovery and manual storage review so evidence from different phones/firmware/candidates/transcripts cannot be silently mixed.
-- [x] **0.6.58:** optional Kali early-userspace evidence can join the session only when manifest, authority bundle, rootfs authority and strict rootfs artifact identities match; the session still forces all target/write/hardware/Beta claims false.
-- [x] **0.6.59:** exact-file physical bring-up dossier verifies the canonical session plus every bound evidence/raw transcript/report/recovery/review file by SHA-256 and size before manual audit/archive use.
-- [x] **0.6.59:** optional full rootfs artifact verification is streaming and exact; the dossier remains path-independent and cannot select a device path, authorize a write or grant hardware/Beta credit.
+- [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract bound to exact physical candidate and reviewed rootfs authority without target selection or write authorization.
+- [x] **0.6.56:** typed physical-storage discovery report/evidence bound to exact rescue/rootfs chain, report bytes and recovery-plan digest.
+- [x] **0.6.57:** fail-closed manual storage-review record bound to exact discovery evidence, review record and notes.
+- [x] **0.6.58:** immutable physical bring-up session cross-binds candidate, rescue, storage discovery/review and optional Kali early-userspace evidence.
+- [x] **0.6.59:** exact-file physical bring-up dossier verifies the canonical session and all bound original evidence/raw files by SHA-256 and size.
+- [x] **0.6.59:** post-transfer dossier reverification and a separate manual dossier-review gate keep target/write/hardware/Beta claims false.
 
 Still physically blocked:
 
 - [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
-- [ ] Capture and manually review the bounded hardware-presence survey from the exact rescue transcript; observed sysfs presence alone does not satisfy any functional hardware gate.
-- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan and bind them through the typed discovery evidence layer.
-- [ ] Complete and bind a manual review of that exact discovery evidence; `accepted_for_strategy_design=true` is not itself a target approval.
-- [ ] Produce one cross-bound physical bring-up session from those real records so the exact candidate/rescue/storage chain can be audited as a unit.
-- [ ] Produce the exact-file dossier from that real session and original source bytes before later storage-strategy approval.
-- [ ] Select and review a safe, reversible rootfs staging/handoff target **after** accepted physical discovery review exists; no guessed UFS/userdata path.
+- [ ] Capture the real bounded hardware-presence survey and bind an accepted-as-context manual review; contextual acceptance still gives no functional credit.
+- [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan under the typed discovery contract.
+- [ ] Complete and bind a manual review of that exact storage discovery; `accepted_for_strategy_design=true` is not target approval.
+- [ ] Cross-bind real candidate/rescue/storage records into one physical bring-up session.
+- [ ] Build, independently reverify and manually review the exact-file dossier from that real session.
+- [ ] Select and separately review a safe, reversible rootfs staging/handoff target only after accepted physical discovery/dossier review; no guessed UFS/userdata path.
 - [ ] Execute explicitly confirmed temporary boot on the exact AC2003.
 - [ ] Capture usable console/log evidence and manually review rescue markers.
 - [ ] Reach the exact reviewed Kali rootfs and manually review the early-systemd marker chain.
@@ -74,7 +70,7 @@ Still physically blocked:
 
 ## Milestone D — hardware enablement
 
-No item in this section may be marked complete from host CI alone.
+No item here may be marked complete from host CI, sysfs presence or contextual review alone.
 
 - [ ] Display/framebuffer/DRM.
 - [ ] Touch/input.
@@ -83,7 +79,7 @@ No item in this section may be marked complete from host CI alone.
 - [ ] Bluetooth.
 - [ ] Modem/telephony policy and safety scope.
 - [ ] Audio.
-- [ ] Sensors as required by supported scope.
+- [ ] Sensors required by supported scope.
 - [ ] Power/charging/thermal behavior.
 - [ ] Suspend/resume.
 - [ ] UFS/storage integrity under the selected rootfs strategy.
@@ -96,16 +92,16 @@ Required before release:
 - [ ] Exact compatibility matrix and known issues.
 - [ ] Release manifest with SHA-256 for every published binary/image.
 - [ ] Recovery instructions validated on the exact supported firmware.
-- [ ] Windows GUI/CLI path can reproduce/verify the supported flow without hidden manual substitutions.
+- [ ] Windows GUI/CLI path can reproduce/verify the supported flow without hidden substitutions.
 - [ ] No empty/symbolic release; published assets must be the exact reviewed candidate.
 
 ## Milestone F — Stable
 
-Stable requires a later, higher threshold: repeated device testing, stronger recovery confidence, broader hardware coverage, upgrade/rollback behavior and a materially lower known-risk surface than Beta.
+Stable requires repeated device testing, stronger recovery confidence, broader hardware coverage, upgrade/rollback behavior and a materially lower known-risk surface than Beta.
 
 ## Immediate highest-impact work
 
-1. Keep rescue diagnostics, the 0.6.60 hardware-presence survey, discovery, manual-review, physical-session and exact-file dossier layers fail-closed; none may convert observed presence into functional support or produce a device path, target selection or write authorization.
-2. Do **not** implement a storage-target selection algorithm before a real AC2003 discovery record has been accepted by the exact manual-review contract. A later target-selection milestone must consume that reviewed evidence rather than profile hints.
-3. When a physical AC2003 is available, collect the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect the rescue marker/diagnostic/hardware-survey transcript and manually review storage discovery/recovery evidence before any storage write.
-4. Cross-bind the resulting real candidate/rescue/storage records into the 0.6.58 session bundle, freeze the original source bytes into the 0.6.59 dossier, then perform any later reversible target/strategy review as a separate decision.
+1. Keep rescue diagnostics, hardware survey/review, storage discovery/review, session and dossier layers fail-closed; none may convert observed presence into functional support or authorize a storage write.
+2. Do **not** implement storage-target selection before a real AC2003 discovery record has passed exact manual review and dossier audit.
+3. When a physical AC2003 is available, capture the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect rescue marker/diagnostic/hardware-survey evidence and manual reviews before any persistent write.
+4. Treat accepted hardware-survey context only as an input to later subsystem-specific functional tests; it must never mark display/touch/USB/Wi-Fi/Bluetooth/audio/modem/power/thermal as verified.
