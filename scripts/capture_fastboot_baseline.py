@@ -73,6 +73,8 @@ def main() -> int:
     if staged_evidence.exists() or staged_evidence.is_symlink():
         raise SystemExit(f"refusing stale evidence staging path: {staged_evidence}")
 
+    published_transcript = False
+    published_evidence = False
     try:
         write_capture_once(payload, staged_transcript)
         evidence = capture_fastboot_baseline(
@@ -93,7 +95,18 @@ def main() -> int:
             raise SystemExit("capture destination appeared during validation")
 
         staged_transcript.replace(args.transcript_out)
+        published_transcript = True
         staged_evidence.replace(args.evidence_out)
+        published_evidence = True
+    except BaseException:
+        # Two separate files cannot be committed atomically together. If the second
+        # rename fails, remove any final path created by this invocation so callers
+        # never observe a half-published baseline pair.
+        if published_evidence:
+            args.evidence_out.unlink(missing_ok=True)
+        if published_transcript:
+            args.transcript_out.unlink(missing_ok=True)
+        raise
     finally:
         staged_transcript.unlink(missing_ok=True)
         staged_evidence.unlink(missing_ok=True)
