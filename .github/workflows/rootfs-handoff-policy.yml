@@ -10,6 +10,7 @@ on:
       - "kaliphonestudio/physical_storage_review.py"
       - "scripts/verify_rootfs_handoff_layout.py"
       - "scripts/record_physical_storage_discovery.py"
+      - "scripts/prepare_physical_storage_review.py"
       - "scripts/review_physical_storage_discovery.py"
       - "tests/test_rootfs_handoff.py"
       - "tests/test_physical_storage_discovery.py"
@@ -23,6 +24,7 @@ on:
       - "kaliphonestudio/physical_storage_review.py"
       - "scripts/verify_rootfs_handoff_layout.py"
       - "scripts/record_physical_storage_discovery.py"
+      - "scripts/prepare_physical_storage_review.py"
       - "scripts/review_physical_storage_discovery.py"
       - "tests/test_rootfs_handoff.py"
       - "tests/test_physical_storage_discovery.py"
@@ -51,6 +53,7 @@ jobs:
           kaliphonestudio/physical_storage_review.py
           scripts/verify_rootfs_handoff_layout.py
           scripts/record_physical_storage_discovery.py
+          scripts/prepare_physical_storage_review.py
           scripts/review_physical_storage_discovery.py
           tests/test_rootfs_handoff.py
           tests/test_physical_storage_discovery.py
