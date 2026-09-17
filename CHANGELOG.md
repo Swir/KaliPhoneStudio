@@ -2,15 +2,18 @@
 
 This file tracks the current development line. Historical entries through **0.6.27-dev** remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). The detailed pre-sync `0.6.28-dev`–`0.6.42-dev` active-line changelog remains permanently recoverable from repository commit `43e9836bfdca651ad31727a303714e44c44929db` and earlier Git history.
 
-## 0.6.46-dev — reviewed kernel authority contract and candidate binding
+## 0.6.46-dev — reviewed strict kernel authority and candidate binding
 
+- Reviewed real kernel authority run `35183670399` as the first **strict SUCCESS** for `oneplus/avicii`: two independent exact-source, source-mtime-normalized `jobs=1` builds produced byte-identical final `.config` and byte-identical 43,878,416-byte ARM64 `Image` outputs.
+- Accepted final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` (166,055 bytes) and Image SHA-256 `be4440dc335d53c752270c484fe589a9bc1ef08f9100e885478b50df67cbe712` (43,878,416 bytes).
+- Preserved strict reproducibility evidence SHA-256 `a2156ba6cc493cf7f7575a60107938f5c5455d4388ecb883cd8f01754f13f0f0` and executed-build binding SHA-256 `dffad42df1d189170b23a95d980211e57c1f54d8f399e939b048597e79425a39` from workflow artifact `10482645697` on main commit `e600a5de13fa91085464c7ce2d4a6327f39b96e8`.
 - Closed a provenance gap between strict A/B reproducibility and the executed builds: `kernel_build_binding` now requires the reproducibility record's build-A/build-B config and Image verifier-evidence digests to match the exact per-build run records, not only the final artifact bytes.
-- Added fail-closed `KernelAuthorityRecord` for a future successful real authority run. A record binds exact run/commit/artifact IDs, profile/source/kernel-plan/toolchain/recipe/environment, both executed-build evidence digests, strict reproducibility evidence, reproducibility-binding evidence and accepted config/Image hashes/sizes.
-- Kernel authority creation requires explicit `reviewed=True`, strict byte identity and distinct-build-root proof, while permanently keeping `hardware_verified=false` and `beta_gate_credit=false`.
+- Added fail-closed `KernelAuthorityRecord`. The reviewed record binds exact run/commit/artifact IDs, profile/source/kernel-plan/toolchain/recipe/environment, both executed-build evidence digests, strict reproducibility evidence, reproducibility-binding evidence and accepted config/Image hashes/sizes.
 - Authority verification reconstructs the typed build/reproducibility binding from the plan, toolchain, A/B run records and strict reproducibility evidence before accepting the reviewed record, preventing detached/substituted chains.
+- Added checked evidence under `evidence/authorities/kernel/oneplus-avicii-4.19.300-2026-09-17/` plus immutable authority record `evidence/authorities/oneplus-avicii-kernel-4.19.300-2026-09-17.json`.
 - Added candidate-level `FirstBootKernelAuthorityEvidence`: a schema-v8 first-boot candidate must match the exact reviewed authority's source, plan, toolchain lock, recipe/environment, A/B run records, strict reproducibility/binding evidence and final config/Image identity.
 - Added strict JSON/schema/digest validation, immutable writers, symlink-safe authority loading and negative tests for injected fields, detached evidence, artifact substitution and host-side hardware/Beta claims.
-- Project completion remains **54%**. The authority contract does not create an authority from a failed or still-running kernel build.
+- Project completion advances to **56%** for the real strict kernel reproducibility milestone. This remains a host-side authority: `hardware_verified=false`, `beta_gate_credit=false`, and every physical AC2003 Beta gate remains blocked.
 
 ## 0.6.45-dev — compat-vDSO path normalization after 16-byte strict failure
 
@@ -22,7 +25,7 @@ This file tracks the current development line. Historical entries through **0.6.
 - Extended ELF diagnostics to support target ARM ELF32 compat-vDSO objects while excluding unrelated `scripts/*` host objects. The earlier ARM64-only classifier's fail-closed rejection is therefore fixed without weakening target validation.
 - Extended build-tree diagnostics to compare generated `kernel/kheaders_data.tar.xz` directly.
 - Full Python 3.11/3.12/3.13/3.14 CI and focused kernel contracts passed before PR #47 was merged as `e600a5de13fa91085464c7ce2d4a6327f39b96e8`.
-- Real A/B run `35183670399` is testing the exact compat-vDSO recursive prefix-map experiment. No result is claimed before strict completion/review.
+- Real A/B run `35183670399` subsequently proved the recursive compat-vDSO prefix-map policy removed the final observed nondeterminism and passed strict equality; that acceptance is recorded in 0.6.46.
 
 ## 0.6.44-dev — ELF divergence classification and deterministic IKHEADERS archive policy
 
