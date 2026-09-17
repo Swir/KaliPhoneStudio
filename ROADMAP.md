@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.59-dev**
+**Current development line — 0.6.60-dev**
 
 **58% complete**
 
@@ -37,6 +37,8 @@ Host-side preparation now complete:
 - [x] Offline transcript binding to one successful non-persistent temporary boot.
 - [x] Read-only rescue sysfs diagnostics.
 - [x] Explicit manual-only bounded block-read and paired battery probes.
+- [x] **0.6.60:** separate bounded automatic sysfs-only hardware-presence survey covering USB UDC/device identity, network interfaces, rfkill, sound, thermal, input, framebuffer/DRM and power-supply state without activating those subsystems.
+- [x] **0.6.60:** hardware-presence evidence is bound to the exact boot observation, rescue diagnostics, transcript and probe id; every functional hardware verification flag and Beta credit remain false and manual review is required.
 - [x] Deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
 - [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
 - [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract that binds one exact physical-candidate gate to one exact reviewed rootfs authority without selecting a device path or authorizing writes.
@@ -56,6 +58,7 @@ Still physically blocked:
 - [ ] Capture real AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
+- [ ] Capture and manually review the bounded hardware-presence survey from the exact rescue transcript; observed sysfs presence alone does not satisfy any functional hardware gate.
 - [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan and bind them through the typed discovery evidence layer.
 - [ ] Complete and bind a manual review of that exact discovery evidence; `accepted_for_strategy_design=true` is not itself a target approval.
 - [ ] Produce one cross-bound physical bring-up session from those real records so the exact candidate/rescue/storage chain can be audited as a unit.
@@ -102,7 +105,7 @@ Stable requires a later, higher threshold: repeated device testing, stronger rec
 
 ## Immediate highest-impact work
 
-1. Keep discovery, manual-review, physical-session and exact-file dossier layers fail-closed; none may produce a device path, target selection or write authorization.
+1. Keep rescue diagnostics, the 0.6.60 hardware-presence survey, discovery, manual-review, physical-session and exact-file dossier layers fail-closed; none may convert observed presence into functional support or produce a device path, target selection or write authorization.
 2. Do **not** implement a storage-target selection algorithm before a real AC2003 discovery record has been accepted by the exact manual-review contract. A later target-selection milestone must consume that reviewed evidence rather than profile hints.
-3. When a physical AC2003 is available, collect the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect and manually review storage discovery/recovery evidence before any storage write.
+3. When a physical AC2003 is available, collect the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect the rescue marker/diagnostic/hardware-survey transcript and manually review storage discovery/recovery evidence before any storage write.
 4. Cross-bind the resulting real candidate/rescue/storage records into the 0.6.58 session bundle, freeze the original source bytes into the 0.6.59 dossier, then perform any later reversible target/strategy review as a separate decision.

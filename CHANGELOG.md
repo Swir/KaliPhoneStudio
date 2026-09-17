@@ -2,6 +2,18 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.60-dev — bounded physical hardware-presence survey
+
+- Added a separate `readonly-hardware-presence-v1` block to rescue userspace after the existing locked rescue diagnostic block.
+- The automatic survey reads only bounded sysfs attributes for USB UDC/device identity, network-interface presence/state, rfkill presence/state, sound cards, thermal zones, input event names, framebuffer/DRM presence and power-supply state.
+- The survey never activates radios/network/audio/display hardware, never reads input event streams, never mounts/decrypts/formats storage and never invokes Fastboot or persistent writes.
+- Added `kaliphonestudio.physical_hardware_survey` schema-v1 evidence bound to one exact physical boot observation, exact rescue diagnostics digest, exact console transcript and exact rescue probe id.
+- Presence flags (`usb_signal_observed`, `wifi_signal_observed`, etc.) are explicitly observational only. Display/touch/USB/Wi-Fi/Bluetooth/audio/modem/power/thermal/storage/recovery/hardware verification and Beta credit remain false and manual review is mandatory.
+- Added immutable canonical evidence loading/writing plus `scripts/record_physical_hardware_survey.py` for offline recording; the CLI performs no phone I/O.
+- Added focused fail-closed tests for exact transcript/cross-evidence binding, duplicate/out-of-block markers, malformed records, detached diagnostics, profile drift, forbidden verification promotion, empty-but-well-formed surveys and immutable round trips.
+- Extended rescue init policy tests to prove the survey is bounded and contains no network/radio/audio activation commands.
+- Project completion remains **58%** because no real AC2003 hardware survey has been captured or manually reviewed and no functional hardware/Beta gate is credited from host-side code.
+
 ## 0.6.59-dev — exact-file physical bring-up dossier
 
 - Added `kaliphonestudio.physical_bringup_dossier` as a schema-v1 offline audit-packaging layer for one already-created `PhysicalBringupSessionEvidence`.
