@@ -141,11 +141,15 @@ def _functional(diag: PhysicalRescueDiagnosticsEvidence) -> PhysicalRescueFuncti
     )
 
 
-def test_template_prefills_only_bound_topology_and_keeps_sensitive_observations_unknown():
+def _template():
     profile = _profile()
     assessment = _assessment(profile)
     diag = _diagnostics()
-    report = create_physical_storage_discovery_template(profile, assessment, diag, _functional(diag))
+    return create_physical_storage_discovery_template(profile, assessment, diag, _functional(diag))
+
+
+def test_template_prefills_only_bound_topology_and_keeps_sensitive_observations_unknown():
+    report = _template()
     assert [(x.kernel_name, x.size_sectors, x.removable) for x in report.block_devices] == [("sda", 1000000, False)]
     assert report.filesystems[0].partition_role == "userdata"
     assert report.filesystems[0].kernel_name == "unknown"
@@ -186,13 +190,22 @@ def test_template_requires_usable_whole_block_topology():
 
 
 def test_template_writer_is_immutable_and_digest_is_canonical(tmp_path: Path):
-    profile = _profile()
-    assessment = _assessment(profile)
-    diag = _diagnostics()
-    report = create_physical_storage_discovery_template(profile, assessment, diag, _functional(diag))
+    report = _template()
     destination = tmp_path / "storage-discovery-template.json"
     digest = write_physical_storage_discovery_template(report, destination)
     assert digest == report.report_sha256()
     assert destination.read_text(encoding="utf-8") == report.canonical_json()
     with pytest.raises(PhysicalStorageTemplateError, match="overwrite"):
         write_physical_storage_discovery_template(report, destination)
+
+
+def test_template_writer_revalidates_and_rejects_promoted_claims(tmp_path: Path):
+    report = _template()
+    for promoted in (
+        replace(report, target_selected=True),
+        replace(report, storage_path_bound=True),
+        replace(report, phone_storage_written=True),
+    ):
+        with pytest.raises(PhysicalStorageTemplateError, match="strict validation"):
+            write_physical_storage_discovery_template(promoted, tmp_path / "should-not-exist.json")
+    assert not (tmp_path / "should-not-exist.json").exists()
