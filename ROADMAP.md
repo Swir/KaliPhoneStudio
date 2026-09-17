@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-KaliPhoneStudio separates **device-independent studio work** from **per-device bring-up**. A host-side implementation checkbox never implies hardware support; hardware milestones require evidence from the exact physical phone/firmware baseline.
+KaliPhoneStudio separates **device-independent studio engineering** from **per-device physical bring-up**. A host-side checkbox never implies hardware support.
 
 ## Overall project progress
 
@@ -8,205 +8,176 @@ KaliPhoneStudio separates **device-independent studio work** from **per-device b
 
 `██████████▊░░░░░░░░░ 54%`
 
-The percentage is intentionally weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but they do not count the same as a verified device milestone.
+The percentage is weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory, but do not receive the same weight as verified device milestones.
 
-## Current development line — 0.6.42-dev
+## Current development line — 0.6.44-dev
 
-- [x] Restore the `kaliphonestudio.app` entrypoint used by `main.py`.
-- [x] Add a safe offline PySide6 multi-device profile selector driven by validated `devices/<vendor>/<codename>/profile.json` records.
-- [x] Add offline CLI/JSON profile inspection (`--list-profiles`, `--profile-id`, `--json`) with explicit `hardware_verified=false` and `beta_gate_credit=false` semantics.
-- [x] Add generic fail-closed profile hooks for explicitly registered host `build`/`verify`/`recovery` stages; no profile-driven shell/module auto-execution and recovery requires extra authorization.
-- [x] Bind rootfs A/B canonicalization audit records and raw-input hashes to the strict accepted artifact, exact signed repository snapshot and source lock.
-- [x] Bind that rootfs transformation provenance to the exact schema-v8 first-boot manifest digest so release preparation cannot detach raw A/B build history from the candidate.
-- [x] Review real rootfs authority run `35158577624`, accept the strict byte-identical ARM64 artifact evidence and pin a fail-closed authority record without hardware/Beta credit.
-- [x] Add a fail-closed candidate-level link from the exact first-boot manifest/rootfs-provenance evidence to the reviewed rootfs authority record, including authority run/commit/artifact identity and all artifact/package/source/snapshot/canonicalization/raw-A/B invariants.
-- [x] Add deterministic device-independent first-boot provisioning bound to strict ARM64 rootfs evidence, with no embedded credentials and remote access disabled by default.
-- [x] Add an offline provisioning CLI and independent bundle-byte/metadata verifier.
-- [x] First-boot schema v8 binds exact executed A/B kernel build provenance.
-- [x] Exact-source kernel runner applies profile-required `CONFIG_*` policy, fixed build identity/time values and canonical path remapping before strict comparison.
-- [x] Add bounded streaming kernel Image divergence diagnostics that report exact differing-byte/range counts and offsets without relaxing strict equality.
-- [x] Review serial-internal-make authority run `35166301228`: final `.config` remains byte-identical and Image size remains equal, but Image bytes still fail strict equality (`11293315` differing bytes across `897561` ranges).
-- [x] Prove the two `jobs=1` build logs become command-for-command identical after replacing only A/B absolute source/output roots; the unexplained difference therefore occurs below the visible make command graph.
-- [x] Add fail-closed Git-tracked kernel source mtime normalization: exact HEAD + clean-tree verification, canonical mode/blob/path manifest, `.git`/untracked exclusion, atomic evidence and no hardware/Beta credit.
-- [x] Wire A/B source-mtime normalization into the real kernel workflow while keeping outer concurrency and `jobs=1`, so the next authority experiment changes one variable only.
-- [x] Review run `35170273612` correctly as a **preflight infrastructure failure**, not a kernel result: the exact locked compiler subtree fetched and matched its tree, then a redundant second Gitiles metadata request returned HTTP 503 before either kernel checkout/build.
-- [x] Add fail-closed local verification for an already-fetched compiler checkout: SHA-1 object format, exact HEAD, credential-free HTTPS origin, clean tracked state, locked subtree/bin/version/manifest object identities and exact `AndroidVersion.txt` bytes must all match the lock.
-- [x] Wire that local immutable-object proof into the expensive real kernel authority workflow while keeping independent Gitiles source-lock CI as a separate trust check; strict compiler-byte/banner and final kernel equality checks are unchanged.
-- [ ] Review the next source-mtime-normalized real A/B kernel authority retry; accept only strict byte-identical final `.config` and `Image`, otherwise continue evidence-driven nondeterminism isolation.
+### Completed in the current kernel/rootfs milestone
 
-## Phase A — Multi-device Studio Core
+- [x] Migrate the project to the device-independent `kaliphonestudio/` package and profile registry.
+- [x] Make `Swir/KaliPhoneStudio` the only project source of truth.
+- [x] Keep device hardware knowledge under `devices/<vendor>/<codename>/profile.json`.
+- [x] Add profile/path identity binding, confirmation tokens, A/B constraints, recovery notes and host/hardware test contracts.
+- [x] Add offline GUI/CLI profile inspection with no ADB/Fastboot writes.
+- [x] Add read-only Fastboot baseline evidence and exact OTA/stock-boot provenance contracts.
+- [x] Add deterministic boot-plan, boot-image double-build and round-trip host verification.
+- [x] Pin the avicii kernel source baseline and Android Clang `clang-r416183b` by immutable source/object identity.
+- [x] Add strict two-root kernel reproducibility with executed-build provenance.
+- [x] Add canonical main-kernel compiler path remapping and fixed build identity/time environment.
+- [x] Add fail-closed Git-tracked source-mtime normalization.
+- [x] Review kernel run `35174347350` as a strict failure after mtime normalization; no partial reproducibility credit.
+- [x] Add bounded intermediate build-tree diagnostics.
+- [x] Review kernel run `35177350001`: identical `.config`, equal 43,878,416-byte Images, but 4,388,978 differing Image bytes across 229,151 ranges; only 20 of 4,597 selected intermediate artifacts differ.
+- [x] Identify `kernel/kheaders.o` as a concrete differing kernel-linked artifact while keeping `CONFIG_IKHEADERS` enabled.
+- [x] Bind deterministic GNU tar order/mtime/uid/gid and single-threaded xz policy to the avicii kernel build plan for embedded headers.
+- [x] Add bounded ARM64 ELF-section diagnostics classifying executable/debug/metadata/relocation/data divergence after strict failure.
+- [x] Review and accept the first strict byte-identical Kali ARM64 rootfs authority from run `35158577624`.
+- [x] Bind rootfs authority, raw A/B provenance and canonicalization evidence to first-boot candidate contracts.
+- [x] Add deterministic credential-free first-boot provisioning and reproducible rescue-initramfs foundations.
+
+### Immediate next gates
+
+- [ ] Review real kernel authority run `35181516724`, the first retry with deterministic `CONFIG_IKHEADERS` archive policy and ELF-section diagnostics.
+- [ ] If strict kernel equality still fails, confirm whether `kernel/kheaders.o` became byte-identical and use the ELF evidence to isolate the next smallest divergence source.
+- [ ] Produce reviewed byte-identical final kernel `.config` + ARM64 `Image` evidence from two independent exact-source builds.
+- [ ] Bind the accepted kernel authority to the exact DTB/DTBO and first-boot candidate.
+- [ ] Capture the exact physical AC2003 Fastboot/OxygenOS baseline.
+- [ ] Validate matching stock `boot.img` provenance from that exact OTA.
+- [ ] Attempt only an authorized physical **temporary boot** first.
+
+## Phase A — Multi-device studio core
 
 ### Device/profile architecture
 
-- [x] KaliPhoneStudio package/application migration.
-- [x] Runtime device-profile registry.
-- [x] Profile/path binding and profile-based device identity.
+- [x] Runtime profile registry.
+- [x] Versioned fail-closed profile schema.
+- [x] Profile/path binding and profile-driven device identity.
 - [x] Verified serial bound to `profile_id`.
 - [x] Profile-specific destructive confirmation token.
-- [x] Versioned fail-closed profile schema and CI contract.
-- [x] Typed boot/kernel contracts, safe A/B identifiers and full-commit HTTPS source requirements.
-- [x] Recovery notes and host/hardware test contract required by supported-profile schema.
-- [x] Generic plugin hooks for profile-specific host build/verify/recovery stages, with explicit in-process registration and fail-closed recovery authorization.
-- [x] GUI profile selector for offline builds without a connected phone.
-- [x] Machine-readable offline profile catalog/inspection for scripts and diagnostics.
+- [x] Typed boot/kernel contracts and A/B identifiers.
+- [x] Immutable HTTPS full-commit source requirements.
+- [x] Recovery notes and host/hardware test contracts.
+- [x] Explicit trusted in-process profile hooks with extra recovery authorization.
+- [x] Offline GUI and machine-readable CLI profile inspection.
+- [ ] Add a second real device profile only when its identity/partition/source/recovery/test contracts are complete.
 
-### Device identification / firmware baseline
+### Firmware baseline / stock recovery
 
-- [x] Generic read-only Fastboot baseline profile contract.
-- [x] Offline `fastboot getvar all` transcript parser/importer with exact-byte SHA-256 evidence.
-- [x] Fail-closed identity, A/B slot/count, lock/security and bootloader/baseband checks.
-- [x] Exact firmware build/fingerprint bound to exact OTA `post-build` / `post-build-incremental` provenance.
-- [x] Baseline digest carried into temporary-boot authorization and first-boot candidate evidence.
+- [x] Generic read-only Fastboot baseline contract.
+- [x] Exact-transcript SHA-256 importer/parser.
+- [x] Identity, serial, A/B, lock/security, bootloader and baseband validation.
+- [x] Firmware build/fingerprint binding to OTA `post-build` / `post-build-incremental` provenance.
+- [ ] Capture exact physical AC2003 baseline evidence.
+- [ ] Capture stock recovery/restore information before persistent device experiments.
 
-### OTA / stock boot / boot image
+## Phase B — Boot chain, kernel and device tree
+
+### OTA / stock boot / boot assembly
 
 - [x] OTA ZIP inspection and `payload.bin` discovery.
-- [x] Fail-closed payload envelope and SHA-256 evidence.
-- [x] Checksum/source-locked boot-only payload extraction adapter.
-- [x] Reproducible authorized Linux amd64 and Windows amd64 extractor binaries.
-- [x] Exact OTA → payload → stock `boot.img` immutable provenance record.
-- [x] Profile-driven deterministic `BootBuildPlan` with kernel/ramdisk/DTB/DTBO hashes.
-- [x] Pre-assembly TOCTOU revalidation.
+- [x] Fail-closed payload envelope and checksum evidence.
+- [x] Source-locked boot-only extractor.
+- [x] Exact OTA → payload → stock `boot.img` provenance.
+- [x] Deterministic profile-driven `BootBuildPlan`.
 - [x] Source-locked `mkbootimg`/`unpack_bootimg` backend.
-- [x] Deterministic independent double assembly and locked round-trip verification.
-- [x] Fail-closed temporary-boot authorization.
+- [x] Independent double assembly and locked round-trip verification.
+- [x] Temporary-boot authorization contract.
+- [ ] Instantiate against exact physical AC2003 firmware/stock boot evidence.
 
-### Kernel / toolchain / DTB / DTBO
+### Kernel/toolchain reproducibility
 
-- [x] Profile-driven exact kernel source/version/config/build contract.
-- [x] Exact checkout evidence for source HEAD, Makefile version and selected config material.
-- [x] Final `.config` evidence and ARM64 `Image` structural/hash evidence.
-- [x] Strict two-root kernel reproducibility contract.
-- [x] Android Clang `clang-r416183b` source/object lock and materialized compiler verification.
-- [x] Independent Gitiles verification of exact compiler source objects.
-- [x] Fail-closed local reconstruction of the same compiler source evidence from an already-fetched exact Git checkout, avoiding a redundant network metadata dependency in expensive authority runs.
-- [x] Compiler selection/build-config binding to the exact kernel plan.
-- [x] Exact-source kernel runner with canonical recipe/environment/run evidence.
-- [x] A/B executed-build provenance binding to strict kernel reproducibility evidence.
-- [x] Deterministic profile-required config fragment application before build.
-- [x] `CONFIG_RD_LZ4=y` compatibility for the avicii LZ4 ramdisk policy.
-- [x] Deterministic engineering module-signing policy.
-- [x] Canonical compiler source/output path remapping with `KBUILD_ABS_SRCTREE=0`, `-fdebug-prefix-map` and `-fmacro-prefix-map`.
-- [x] Fixed `KBUILD_BUILD_USER`, `KBUILD_BUILD_HOST`, `KBUILD_BUILD_TIMESTAMP`, `KBUILD_BUILD_VERSION`, `SOURCE_DATE_EPOCH`, locale and timezone in the evidence-bearing build environment.
-- [x] Non-release bounded Image divergence diagnostics integrated after strict mismatch.
-- [x] Review run `35161227840`: identical final `.config`, equal Image size, but `11695369` differing Image bytes across `960780` ranges; strict reproducibility remains false.
-- [x] Review run `35166301228`: serial internal `jobs=1` reduced but did not eliminate divergence; identical final `.config`, equal Image size, `11293315` differing bytes across `897561` ranges from offset `71` through `43876937`.
-- [x] Normalize only verified clean Git-tracked source mtimes to `SOURCE_DATE_EPOCH=0`, hash canonical Git mode/blob/path identity, and require path-independent A/B normalization evidence equality before the next build pair.
-- [x] Review run `35170273612` as no kernel result because it stopped on HTTP 503 in redundant post-fetch Gitiles metadata verification; no reproducibility credit or failure is assigned to the mtime experiment.
-- [x] Source-locked FDT and Android DT table format references.
-- [x] Structural DTB and DTBO verification bound to the exact boot plan.
-- [ ] Review and accept first real byte-identical kernel A/B evidence.
-- [ ] Pin the final hardware-verified first-boot kernel commit after physical bring-up.
+- [x] Exact kernel source/version/config contract.
+- [x] Exact source checkout evidence.
+- [x] Final `.config` and ARM64 `Image` evidence.
+- [x] Android Clang r416183b source/object/materialized-byte lock.
+- [x] Independent Gitiles verification plus local fetched-object verification.
+- [x] Deterministic required-config application.
+- [x] LZ4 initramfs decompressor policy for avicii.
+- [x] Deterministic engineering module-signing behavior.
+- [x] Fixed build identity/time/locale and main compiler path remapping.
+- [x] Git-tracked source-mtime normalization.
+- [x] Final Image byte-range diagnostics.
+- [x] Intermediate build-tree diagnostics.
+- [x] ARM64 ELF section diagnostics.
+- [x] Deterministic `CONFIG_IKHEADERS` archive/compressor policy.
+- [ ] Accept first real byte-identical kernel A/B authority.
+- [ ] Promote an exact kernel commit/patchset only after physical temporary boot evidence.
 
-### First-boot evidence
+### DTB / DTBO
 
-- [x] First-boot candidate manifest binds firmware baseline, temporary-boot authorization, boot plan, kernel source/config/Image, compiler evidence, DTB/DTBO and rootfs evidence.
-- [x] Schema v8 additionally binds exact executed A/B kernel build records, canonical recipe/environment and execution-binding digest.
-- [x] Rootfs canonicalization provenance is bound to the strict reproducible rootfs artifact, source lock and signed repository snapshot.
-- [x] Schema-v1 first-boot rootfs provenance evidence binds the exact first-boot manifest digest to the canonicalization policy/binding, both A/B audit evidence digests and both raw rootfs input hashes/sizes.
-- [x] Schema-v1 reviewed-authority binding contract joins that exact manifest/provenance chain to one `RootfsAuthorityRecord` and rejects artifact/package/source/snapshot/canonicalization/raw-A/B substitution or any host hardware/Beta claim.
-- [x] Schema-v1 first-boot provisioning plan/bundle is bound to strict reproducible ARM64 rootfs evidence, contains only deterministic non-secret defaults and requires interactive local user creation.
-- [ ] Instantiate the reviewed-authority binding against the exact physical-firmware first-boot candidate after the AC2003 baseline and matching stock boot provenance exist.
-- [ ] Promote host candidate evidence to a release-candidate manifest only after required physical gates exist.
+- [x] FDT and Android DT table format source locks.
+- [x] Structural FDT/DTBO verification.
+- [x] Partition-limit and exact boot-plan binding.
+- [ ] Bind final kernel + DTB + DTBO into one reviewed first-boot candidate.
+- [ ] Verify device-tree functionality on physical AC2003.
 
-## Phase B — Common Kali Phone Userspace
+## Phase C — Kali userspace and rescue
 
 ### Kali ARM64 rootfs
 
-- [x] Official NetHunter ARM64 builder pinned to exact tag/commit.
-- [x] HTTPS mirror and Kali archive signing fingerprint locked.
-- [x] `gpgv`-verified `InRelease` snapshot with exact ARM64 package-index hashes.
-- [x] Normalized installed package/version/architecture manifest extracted from rootfs.
-- [x] Strict independent double-build contract.
-- [x] Real main CI executes two exact-source ARM64 builds concurrently from one verified repository start state.
-- [x] Fail-closed rootfs divergence diagnostics for failed strict comparisons.
-- [x] Diagnostic v2 prioritizes content/type/add/remove/order before metadata, counts mtime-only/field drift and compares package manifests.
-- [x] Reviewed pre-fix A/B divergence reduced to five volatile payloads plus 4817 mtime-only differences while package manifests remained identical.
-- [x] Device-independent canonicalization normalizes tar mtimes, machine identity/fake-clock state, generated password hash state and the regenerable ldconfig auxiliary cache before strict comparison.
-- [x] Canonicalization emits per-build non-release audit evidence and never substitutes for strict byte equality.
-- [x] Canonicalization binding ties both A/B audit records/raw hashes to exact source/snapshot and the strict accepted canonical artifact.
-- [x] Candidate-level provenance link prevents accepted canonicalization evidence from being substituted or detached from the first-boot manifest.
-- [x] Produce and review the first byte-identical ARM64 rootfs artifact: authority run `35158577624`, artifact SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, 269-package manifest.
-- [x] Check in a fail-closed authority record binding exact run/commit/artifact IDs, source lock, signed repository snapshot/InRelease, raw A/B inputs, both canonicalization records/policy and strict evidence; `hardware_verified=false`, `beta_gate_credit=false`.
-- [x] Add candidate-level reviewed-authority binding so an accepted authority cannot be detached from the first-boot rootfs provenance chain.
-- [x] Generic first-boot provisioning independent of device name (host-side bundle/verification foundation; physical first boot still required).
-- [ ] Phosh stage on the verified common rootfs.
-- [ ] Common mobile defaults: scaling, keyboard and lock/power integration.
-- [ ] Update/rollback metadata format.
+- [x] Pin official NetHunter rootfs builder to exact `2026.2` commit.
+- [x] GPG-verify Kali `InRelease` and exact ARM64 package indexes.
+- [x] Build two independent rootfs outputs.
+- [x] Diagnose volatile builder state without relaxing strict equality.
+- [x] Canonicalize only reviewed volatile state with auditable provenance.
+- [x] Pass strict byte equality and normalized installed-package equality.
+- [x] Review authority run `35158577624`.
+- [x] Pin authority record and exact artifact/package hashes.
+- [ ] Prove the accepted rootfs reaches Kali early userspace on the physical device.
 
-### Rescue initramfs
+### First boot / provisioning
 
-- [x] Device-independent deterministic `newc` builder.
-- [x] gzip and Linux-compatible LZ4 legacy output.
-- [x] Independent post-compression structural verification.
+- [x] Schema-v8 first-boot candidate manifest.
+- [x] Candidate-level rootfs raw-A/B/canonicalization provenance binding.
+- [x] Candidate-level reviewed-rootfs-authority binding.
+- [x] Deterministic provisioning overlay with no credentials and remote access disabled.
+- [ ] Instantiate the exact candidate against physical firmware + stock boot + accepted kernel/DT evidence.
+
+### Rescue / recovery
+
+- [x] Deterministic `newc` rescue initramfs.
+- [x] gzip and Linux-compatible LZ4 support.
 - [x] Source-locked static ARM64 BusyBox payload.
-- [x] Required rescue applet inventory; network/SSH disabled by default.
-- [x] Profile-driven rescue ramdisk → boot-plan binding.
-- [ ] Prove rescue/logging path on physical hardware.
+- [x] Network/SSH disabled by default.
+- [x] Host-side reproducibility/structure verification.
+- [ ] Prove a usable physical rescue/log path.
+- [ ] Exercise rollback/recovery on the exact physical baseline.
 
-## Device #1 — OnePlus Nord AC2003 (`oneplus/avicii`)
+## Phase D — Physical AC2003 bring-up
 
-### Boot chain / baseline
+Nothing in this phase may be checked from host-only CI.
 
-- [x] Public avicii board-layout baseline pinned.
-- [x] Android boot header v2 / 4096-byte page policy recorded.
-- [x] `lito` / `sm7250` baseline recorded.
-- [x] DTB-in-boot + separate DTBO recorded.
-- [x] A/B partition layout and partition limits recorded.
-- [x] Profile firmware hints, recovery notes and physical Beta test contract recorded.
-- [x] LineageOS device and kernel bring-up source baselines pinned to full commits.
-- [x] Host-side LZ4 rescue ramdisk format matches profile boot policy.
-- [x] AC2003 Fastboot baseline contract prepared.
-- [ ] Capture exact physical phone OxygenOS build/fingerprint.
-- [ ] Capture physical phone `fastboot getvar all` transcript.
-- [ ] Obtain matching stock `boot.img` from the exact OTA.
-- [ ] Validate parser/repacker against that exact stock image.
-- [ ] Review a real reproducible kernel + DTB/DTBO first-boot candidate.
-- [ ] Temporary `fastboot boot` on the physical AC2003.
-- [ ] Capture early kernel/rescue logs.
-- [ ] Confirm kernel reaches Kali early userspace/rootfs.
+- [ ] Exact model/profile and serial recognized on the physical phone.
+- [ ] Exact OxygenOS build/fingerprint captured.
+- [ ] Matching stock `boot.img` verified.
+- [ ] Temporary boot succeeds.
+- [ ] Rescue/log channel works after candidate boot.
+- [ ] Kernel reaches Kali early userspace/rootfs.
+- [ ] UFS/storage path required for release is verified.
+- [ ] Display and touchscreen are usable for setup, or release is explicitly console-only.
+- [ ] USB rescue behavior verified.
+- [ ] Wi-Fi verified.
+- [ ] Bluetooth verified.
+- [ ] Modem/cellular behavior documented and verified to the intended Beta scope.
+- [ ] Audio verified to the intended Beta scope.
+- [ ] Charging/battery behavior is safe enough for testing.
+- [ ] Suspend/resume/power behavior documented.
+- [ ] Recovery and A/B rollback exercised.
 
-### Essential hardware
+## Phase E — Beta release
 
-- [ ] UFS/internal storage verified.
-- [ ] Display verified.
-- [ ] Touchscreen verified.
-- [ ] Hardware buttons verified.
-- [ ] USB data/rescue verified.
-- [ ] Charging/battery safety verified.
-- [ ] Thermal behavior verified.
-- [ ] Suspend/resume verified.
+A first GitHub Beta is allowed only when [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md) is fully satisfied for its declared compatibility scope.
 
-### Connectivity / phone hardware
+- [ ] CI green for exact release commit.
+- [ ] Exact device/firmware compatibility matrix.
+- [ ] Reviewed strict kernel/rootfs/DT evidence bound to the candidate.
+- [ ] Required physical-device evidence complete.
+- [ ] Installation instructions.
+- [ ] Recovery/restore instructions.
+- [ ] Known-issues and hardware matrix.
+- [ ] Release manifest and SHA-256 files.
+- [ ] Real binaries/images attached; no empty or symbolic release.
 
-- [ ] Wi-Fi.
-- [ ] Bluetooth.
-- [ ] Modem / SIM / mobile data.
-- [ ] SMS / calls.
-- [ ] GNSS/GPS.
-- [ ] Audio.
-- [ ] Cameras.
-- [ ] Fingerprint.
-- [ ] NFC.
-- [ ] Sensors.
+## Stable release
 
-### Recovery / release
-
-- [ ] Validate exact OxygenOS recovery path.
-- [ ] Exercise boot-failure rollback.
-- [ ] Produce compatibility matrix.
-- [ ] Produce release manifest + SHA-256 checksums.
-- [ ] Pass every item in `BETA_RELEASE_GATE.md`.
-- [ ] **Publish first KaliPhoneStudio AC2003 Beta Release.**
-- [ ] Stable AC2003 release after the higher stable threshold.
-
-## Device #2 and beyond
-
-- [ ] Define next-device selection criteria.
-- [ ] Add a second independent profile to prove the architecture is genuinely multi-device.
-- [ ] Require full schema/source-lock/recovery/test contract before any destructive action.
-- [ ] Add boot-image backend support for other header/layout families as needed.
-
-## Release rule
-
-A green host CI run is **never sufficient** to publish a device Beta. A Beta requires reproducible release artifacts, exact physical target/firmware evidence, successful temporary boot, recovery proof, required hardware safety checks and release manifests/checksums. Stable requires a later, higher verification threshold.
+Stable is intentionally outside the first Beta gate. It requires a later, higher hardware-completeness threshold, repeated regression testing, recovery confidence and a reviewed long-term update/signing strategy.
