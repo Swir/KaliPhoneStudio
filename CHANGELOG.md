@@ -2,6 +2,17 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.65-dev — exact-file physical functional result bundle
+
+- Added `kaliphonestudio.physical_hardware_result_bundle` as a schema-v1 fail-closed audit layer for one exact physical functional-test campaign.
+- The bundle verifies canonical SHA-256/size identities for the exact test plan, accepted exact-plan review, every supplied schema-v2 observation, every supplied independent result review and the aggregate summary.
+- Every schema-v2 observation is rechecked against the accepted plan-review evidence/file/review-record/review-notes identities and reviewer; every result review must bind the exact bundled observation for the same unique test id.
+- The supplied summary is freshly recomputed from the exact bundled reviews and must match byte-for-byte semantic state; detached, duplicate or drifted result files fail closed.
+- Added immutable bundle load/write validation, symlink/TOCTOU/file-size hardening, `scripts/build_physical_hardware_result_bundle.py`, operator documentation and focused regression coverage.
+- Even complete Beta-required reviewed-pass coverage remains release-gate input only: project support, persistent writes, phone-storage writes, hardware verification and Beta credit remain forced false.
+- Extended `physical-hardware-functional-results` CI to compile and test the exact-file bundle chain.
+- Project completion remains **58%** and Beta remains **BLOCKED** because no real AC2003 physical functional campaign has passed the mandatory gate.
+
 ## 0.6.64-dev — accepted-plan-review-bound physical observations and deterministic progress SVGs
 
 - Upgraded `kaliphonestudio.physical_hardware_test_observation` to schema-v2 so no physical per-test observation can be prepared or bound unless the original canonical test plan has a separate `accepted_for_physical_execution=true` exact-plan review.

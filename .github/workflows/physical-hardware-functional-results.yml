@@ -9,12 +9,16 @@ on:
       - "kaliphonestudio/physical_hardware_test_observation.py"
       - "kaliphonestudio/physical_hardware_test_review.py"
       - "kaliphonestudio/physical_hardware_test_summary.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
       - "scripts/prepare_physical_hardware_test_observation.py"
       - "scripts/record_physical_hardware_test_observation.py"
       - "scripts/prepare_physical_hardware_test_review.py"
       - "scripts/review_physical_hardware_test_observation.py"
       - "scripts/summarize_physical_hardware_tests.py"
+      - "scripts/build_physical_hardware_result_bundle.py"
       - "tests/test_physical_hardware_functional_results.py"
+      - "tests/test_physical_hardware_result_bundle.py"
+      - "docs/PHYSICAL_HARDWARE_RESULT_BUNDLE.md"
       - ".github/workflows/physical-hardware-functional-results.yml"
   pull_request:
     paths:
@@ -23,12 +27,16 @@ on:
       - "kaliphonestudio/physical_hardware_test_observation.py"
       - "kaliphonestudio/physical_hardware_test_review.py"
       - "kaliphonestudio/physical_hardware_test_summary.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
       - "scripts/prepare_physical_hardware_test_observation.py"
       - "scripts/record_physical_hardware_test_observation.py"
       - "scripts/prepare_physical_hardware_test_review.py"
       - "scripts/review_physical_hardware_test_observation.py"
       - "scripts/summarize_physical_hardware_tests.py"
+      - "scripts/build_physical_hardware_result_bundle.py"
       - "tests/test_physical_hardware_functional_results.py"
+      - "tests/test_physical_hardware_result_bundle.py"
+      - "docs/PHYSICAL_HARDWARE_RESULT_BUNDLE.md"
       - ".github/workflows/physical-hardware-functional-results.yml"
   workflow_dispatch:
 
@@ -52,13 +60,19 @@ jobs:
           kaliphonestudio/physical_hardware_test_observation.py
           kaliphonestudio/physical_hardware_test_review.py
           kaliphonestudio/physical_hardware_test_summary.py
+          kaliphonestudio/physical_hardware_result_bundle.py
           scripts/prepare_physical_hardware_test_observation.py
           scripts/record_physical_hardware_test_observation.py
           scripts/prepare_physical_hardware_test_review.py
           scripts/review_physical_hardware_test_observation.py
           scripts/summarize_physical_hardware_tests.py
+          scripts/build_physical_hardware_result_bundle.py
           tests/test_physical_hardware_functional_results.py
+          tests/test_physical_hardware_result_bundle.py
       - name: Run fail-closed physical functional-test evidence tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: pytest -q tests/test_physical_hardware_functional_results.py
+        run: >-
+          pytest -q
+          tests/test_physical_hardware_functional_results.py
+          tests/test_physical_hardware_result_bundle.py

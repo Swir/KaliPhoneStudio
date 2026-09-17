@@ -4,7 +4,7 @@
 </div>
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.6.64--dev-62E5FF?style=for-the-badge&labelColor=02050A" alt="Version 0.6.64-dev" />
+  <img src="https://img.shields.io/badge/version-0.6.65--dev-62E5FF?style=for-the-badge&labelColor=02050A" alt="Version 0.6.65-dev" />
   <img src="https://img.shields.io/badge/project%20progress-58%25-0088FF?style=for-the-badge&labelColor=02050A" alt="Project progress 58 percent" />
   <img src="https://img.shields.io/badge/beta-BLOCKED-ffb347?style=for-the-badge&labelColor=02050A" alt="Beta blocked" />
   <img src="https://img.shields.io/badge/hardware-unverified-ff6b6b?style=for-the-badge&labelColor=02050A" alt="Hardware unverified" />
@@ -33,7 +33,7 @@
 
 ## Project status
 
-Current development line: `0.6.64-dev`
+Current development line: `0.6.65-dev`
 
 **58% complete**
 
@@ -70,7 +70,8 @@ The progress SVG is generated deterministically from [`BUILD_STATUS.json`](BUILD
 - **Deterministic rescue userspace** — reproducible rescue ramdisk, exact probe identity, bounded read-only diagnostics and evidence binding.
 - **Exact physical evidence chain** — rescue observations, storage discovery/review, bring-up sessions and dossiers fail closed when identities, transcripts or source files drift.
 - **Independent physical test-plan review** — the original canonical functional-test plan must be reviewed before any real per-test observation may be recorded.
-- **Schema-v2 functional observations** — every physical test observation now cryptographically carries the accepted exact plan-review identity and cannot promote hardware or Beta state by itself.
+- **Schema-v2 functional observations** — every physical test observation cryptographically carries the accepted exact plan-review identity and cannot promote hardware or Beta state by itself.
+- **Exact functional-result bundle** — the exact plan, accepted plan review, schema-v2 observations, independent result reviews and freshly recomputed summary are frozen into one canonical audit artifact before release-gate review.
 - **Source locking** — host builds bind exact upstream commits, tool versions and relevant source/blob identities instead of floating branches.
 - **SWIR Progress SVG PRO** — deterministic card/mini assets derive geometry from the same authoritative status source while showing project progress and Beta readiness separately.
 
@@ -160,6 +161,8 @@ independent exact-plan review
                 ↓
 schema-v2 physical observations + independent result review
                 ↓
+exact-file functional result bundle + manual release-gate review
+                ↓
 reversible rootfs handoff strategy review
                 ↓
 Kali early-userspace proof + subsystem validation
@@ -167,7 +170,7 @@ Kali early-userspace proof + subsystem validation
 full Beta release-gate review
 ```
 
-The exact plan review is now an enforced boundary. Preparing an observation template requires both the plan and its accepted review evidence:
+The exact plan review is an enforced boundary. Preparing an observation template requires both the plan and its accepted review evidence:
 
 ```bash
 python scripts/prepare_physical_hardware_test_observation.py \
@@ -180,6 +183,20 @@ python scripts/prepare_physical_hardware_test_observation.py \
 
 The template still starts as not executed and inconclusive. It must be edited only after the exact test is physically performed. The resulting schema-v2 evidence remains manual-review-only and cannot authorize a persistent write, support claim or Beta release.
 
+After independent per-test reviews, the exact files can be cross-bound into the non-promoting result bundle:
+
+```bash
+python scripts/build_physical_hardware_result_bundle.py \
+  --test-plan evidence/physical-hardware-test-plan.json \
+  --test-plan-review-evidence evidence/physical-hardware-test-plan-review-evidence.json \
+  --observation-evidence evidence/display-observation-evidence.json \
+  --review-evidence evidence/display-review-evidence.json \
+  --summary-evidence evidence/physical-hardware-test-summary.json \
+  --out evidence/physical-hardware-result-bundle.json
+```
+
+Even a bundle in which every Beta-required functional test is a reviewed pass remains only release-gate input; `hardware_verified` and `beta_gate_credit` remain false until the complete physical gate is reviewed.
+
 Detailed operator contracts live in:
 
 - [`docs/FASTBOOT_BASELINE.md`](docs/FASTBOOT_BASELINE.md)
@@ -187,6 +204,7 @@ Detailed operator contracts live in:
 - [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md)
 - [`docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md`](docs/PHYSICAL_HARDWARE_TEST_PLAN_REVIEW.md)
 - [`docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md`](docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md)
+- [`docs/PHYSICAL_HARDWARE_RESULT_BUNDLE.md`](docs/PHYSICAL_HARDWARE_RESULT_BUNDLE.md)
 - [`docs/PHYSICAL_STORAGE_REVIEW.md`](docs/PHYSICAL_STORAGE_REVIEW.md)
 - [`docs/PHYSICAL_BRINGUP_SESSION.md`](docs/PHYSICAL_BRINGUP_SESSION.md)
 - [`docs/PHYSICAL_BRINGUP_DOSSIER.md`](docs/PHYSICAL_BRINGUP_DOSSIER.md)
@@ -214,7 +232,7 @@ These authority records intentionally keep `hardware_verified=false` and `beta_g
 
 The detailed roadmap is in [`ROADMAP.md`](ROADMAP.md). The release checklist is [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
-A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker or a synthetic evidence record is not enough.
+A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker, a synthetic evidence record or a complete host-side functional result bundle is not enough.
 
 The first Beta must include real candidate binaries/images, exact commit identity, installation/test instructions, compatibility matrix, known issues and SHA-256 checksums. Stable will require a later, higher threshold.
 
@@ -227,7 +245,7 @@ The first Beta must include real candidate binaries/images, exact commit identit
 - Prefer a non-persistent temporary boot and recovery-first validation.
 - Keep firmware, stock `boot.img`, candidate, serial and profile identities tied together.
 - Never guess a UFS/block-device path from a host-side layout hint.
-- Do not promote bounded sysfs presence, a 4 KiB read or battery telemetry into a functional-hardware claim.
+- Do not promote bounded sysfs presence, a 4 KiB read, battery telemetry or a host-side result bundle into a functional-hardware claim.
 - Keep project progress distinct from release readiness; `58%` does not mean Beta is 58% ready.
 - Real recovery/rollback must be exercised before public Beta publication.
 

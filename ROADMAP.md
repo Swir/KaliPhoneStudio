@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-Current development line — 0.6.64-dev
+Current development line — 0.6.65-dev
 
 **58% complete**
 
@@ -50,8 +50,9 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [x] Exact manual contextual review of the hardware survey.
 - [x] Profile-driven pending-only functional-hardware test plan.
 - [x] 0.6.63 independent exact plan-file manual review before physical execution.
-- [x] 0.6.64 schema-v2 per-test observation contract now requires that accepted exact plan review and carries its plan-file/review-record/review-notes identities into every later physical observation.
+- [x] 0.6.64 schema-v2 per-test observation contract requires that accepted exact plan review and carries its plan-file/review-record/review-notes identities into every later physical observation.
 - [x] Independent per-test result review and exact-plan status summary remain separate from project support/Beta promotion.
+- [x] 0.6.65 exact-file functional result bundle cross-binds the canonical plan, accepted plan review, schema-v2 observations, result reviews and freshly recomputed summary without granting support/hardware/Beta credit.
 - [x] Discovery-only rootfs-handoff policy and exact pinned storage-layout source validation.
 - [x] Typed physical storage discovery evidence contract.
 - [x] Manual physical-storage review contract.
@@ -64,6 +65,7 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [ ] Capture and accept a real hardware survey review from the exact candidate.
 - [ ] Generate and accept the exact functional-test plan review for that physical context.
 - [ ] Execute and independently review every applicable Beta-required schema-v2 functional test observation.
+- [ ] Freeze the exact real plan/plan-review/observations/result-reviews/summary into one functional result bundle for manual release-gate review.
 - [ ] Capture and accept storage/encryption/free-space/recovery evidence from the real phone.
 - [ ] Review the exact physical bring-up session and source-file dossier.
 - [ ] Select/review an actual reversible rootfs staging/handoff strategy only after accepted physical storage evidence and dossier review.
@@ -137,4 +139,4 @@ KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual
 
 ## Immediate next work
 
-The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, run the established baseline → stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → storage review/dossier chain. Only then design and review the reversible rootfs handoff target for that exact device state.
+The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, run the established baseline → stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → exact functional result bundle → storage review/dossier chain. Only then design and review the reversible rootfs handoff target for that exact device state.
