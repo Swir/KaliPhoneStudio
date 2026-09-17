@@ -2,6 +2,16 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.39-dev — reviewed ARM64 rootfs authority and serial kernel reproducibility retry
+
+- Reviewed real `rootfs-repro` authority run `35158577624` after completion: both independently built/canonicalized Kali ARM64 rootfs outputs passed strict byte equality, normalized package-manifest equality and canonicalization-provenance binding.
+- Accepted the first concrete host-side reproducible rootfs artifact: SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, size `137460600`, package-manifest SHA-256 `11a3609a23c263c43794414b7b2f2e587133fb247c2a146321c0bdef55db3fbd`, 269 packages.
+- Added `RootfsAuthorityRecord` plus `evidence/authorities/kali-arm64-rootfs-2026.2-minimal.json`, binding exact authority run/commit/artifact IDs, source lock, GPG-verified repository snapshot and `InRelease`, strict rootfs evidence, both raw A/B inputs, canonicalization policy and both canonicalization records.
+- Added fail-closed authority loading/verification, an offline `scripts/verify_rootfs_authority.py` CLI and tamper regression tests. Authority evidence explicitly requires `reviewed=true`, `strict_byte_identical=true`, `hardware_verified=false` and `beta_gate_credit=false`.
+- Reviewed real kernel authority run `35161227840` as another strict failure: final `.config` SHA-256 was identical and Image size matched at `43878416`, but Image SHA-256 differed. Diagnostics counted `11695369` differing bytes across `960780` ranges, from offset `73` through `43876937`; no kernel reproducibility credit was granted.
+- Changed the next real kernel authority experiment to keep independent A/B builds concurrent while forcing each internal vendor-kernel make graph to `jobs=1`, isolating parallel build-order nondeterminism without weakening provenance. The jobs value is already part of the canonical build recipe.
+- Synchronized package version, README, ROADMAP and BUILD_STATUS. Project completion moves conservatively from 52% to **54%** for the reviewed reproducible rootfs milestone; no physical AC2003/Beta gate is credited.
+
 ## 0.6.38-dev — deterministic generic first-boot provisioning
 
 - Added a device-independent `FirstBootProvisioningPlan` bound to typed, reproducible ARM64 rootfs evidence; malformed hashes/counts/sizes, unsafe hostname/locale/timezone values and non-reproducible/non-ARM64 evidence fail closed.
@@ -39,7 +49,7 @@ Historical development entries through **0.6.27-dev** are preserved verbatim in 
 - Added CLI/JSON profile inspection with `--list-profiles`, `--profile-id` and `--json`; machine-readable profile inspection explicitly reports `hardware_verified=false` and `beta_gate_credit=false`.
 - Kept PySide6 lazy-loaded so CLI/imports and the minimal Python CI matrix remain usable when Qt is not installed.
 - Added regression coverage for profile discovery, deterministic JSON output, fail-closed unknown profiles and Qt-free application import.
-- The first PR run correctly exposed a repository-contract mismatch between `__version__` and `BUILD_STATUS.json` (275 tests passed, one failed); the mismatch was fixed in the same iteration and the final PR #34 Python 3.11/3.12/3.13/3.14 matrix passed before merge.
+- The first PR run correctly exposed a repository-contract mismatch between `__version__` and `BUILD_STATUS.json` (275 tests passed, one failed); the mismatch was fixed in the same development iteration and the final PR #34 Python 3.11/3.12/3.13/3.14 matrix passed before merge.
 - PR #34 was merged as `17b3d6ef64c3efcf9e90f49caa54cc8de839b237`; post-merge main test run `35159240894` also passed.
 - Project completion remains 52%; this host-side usability milestone grants no physical AC2003/Beta credit.
 
