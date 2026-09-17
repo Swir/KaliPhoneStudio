@@ -30,6 +30,7 @@ def test_identical_selected_build_trees_are_path_independent(tmp_path: Path):
         "arch/arm64/boot/Image": b"image\x00bytes",
         "drivers/test/example.o": b"object-bytes",
         "built-in.a": b"archive-bytes",
+        "kernel/kheaders_data.tar.xz": b"deterministic-kheaders",
         "ignored.log": b"different host path noise",
     }
     for relative, payload in files.items():
@@ -38,8 +39,8 @@ def test_identical_selected_build_trees_are_path_independent(tmp_path: Path):
 
     evidence = diagnose_kernel_build_tree(build_a, build_b)
 
-    assert evidence.selected_path_count == 6
-    assert evidence.identical_path_count == 6
+    assert evidence.selected_path_count == 7
+    assert evidence.identical_path_count == 7
     assert evidence.differing_path_count == 0
     assert evidence.reported_differences == ()
     assert evidence.first_differing_path is None
@@ -80,6 +81,26 @@ def test_reports_content_size_and_missing_differences_with_categories(tmp_path: 
     assert by_path["drivers/b.o"].kind == "size_mismatch"
     assert by_path["lib/only-a.a"].kind == "missing_from_b"
     assert by_path["lib/only-b.a"].kind == "missing_from_a"
+
+
+def test_kheaders_archive_is_selected_and_classified_directly(tmp_path: Path):
+    build_a = tmp_path / "a"
+    build_b = tmp_path / "b"
+    build_a.mkdir()
+    build_b.mkdir()
+    _write(build_a, "kernel/kheaders_data.tar.xz", b"archive-a")
+    _write(build_b, "kernel/kheaders_data.tar.xz", b"archive-b")
+
+    evidence = diagnose_kernel_build_tree(build_a, build_b)
+
+    assert evidence.selected_path_count == 1
+    assert evidence.differing_path_count == 1
+    assert evidence.category_difference_counts == {"kheaders_archive": 1}
+    difference = evidence.reported_differences[0]
+    assert difference.path == "kernel/kheaders_data.tar.xz"
+    assert difference.category == "kheaders_archive"
+    assert difference.kind == "content_mismatch"
+    assert difference.sha256_a != difference.sha256_b
 
 
 def test_difference_output_is_bounded_but_totals_remain_exact(tmp_path: Path):

@@ -61,6 +61,7 @@
       "LLVM_IAS": "1",
       "CROSS_COMPILE": "aarch64-linux-gnu-",
       "CROSS_COMPILE_COMPAT": "arm-linux-gnueabi-",
+      "CC": "clang -fdebug-prefix-map=$(KBUILD_SRC)=/usr/src/kaliphonestudio-kernel -fmacro-prefix-map=$(KBUILD_SRC)=/usr/src/kaliphonestudio-kernel -fdebug-prefix-map=$(CURDIR)=/usr/src/kaliphonestudio-kernel-build -fmacro-prefix-map=$(CURDIR)=/usr/src/kaliphonestudio-kernel-build",
       "HOSTCC": "clang",
       "HOSTCXX": "clang++",
       "BRAND_SHOW_FLAG": "oneplus",
@@ -121,6 +122,7 @@
     "The engineering first-boot kernel disables automatic module signing so builds do not embed an ephemeral random certificate; Stable must define a reviewed signing policy before release.",
     "The engineering first-boot kernel requires CONFIG_RD_LZ4=y because the profile boot policy uses an LZ4 ramdisk.",
     "The host reproducibility profile exports deterministic GNU tar metadata/order and single-threaded xz settings for CONFIG_IKHEADERS generation; this is build-only evidence and does not grant hardware support.",
+    "The compat-vDSO reproducibility experiment passes canonical debug/macro prefix maps through the locked clang CC command using recursive KBUILD_SRC/CURDIR make variables because the pinned vdso32 Makefile intentionally does not inherit global KBUILD CFLAGS; this is host-only evidence and does not grant hardware support.",
     "Do not mark recovery verified until restore has been exercised on the exact physical AC2003 baseline."
   ],
   "test_contract": {
@@ -133,6 +135,7 @@
       "exact kernel source/config/image evidence validation",
       "kernel config policy enforces ramdisk decompressor compatibility and deterministic module-signing behavior",
       "deterministic CONFIG_IKHEADERS tar/xz archive environment is profile-bound",
+      "compat-vDSO clang command carries canonical source/output path maps through recursive make variables",
       "source-locked compiler kernel build and two-build reproducibility verification"
     ],
     "hardware_beta": [
