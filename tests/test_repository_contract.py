@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import re
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,11 +40,14 @@ def test_progress_is_consistent_across_active_status_docs():
     assert f"**{progress}% complete**" in roadmap
 
 
-def test_readme_keeps_swirl_readme_pro_essentials():
+def test_readme_keeps_swir_readme_pro_v2_essentials():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert readme.startswith("<!-- SWIR-README-STANDARD:v2 -->\n")
     assert '<div align="center">' in readme
+    assert 'src="assets/readme/hero.svg"' in readme
     assert "power-divider-v4.svg" in readme
     assert "## Project status" in readme
+    assert "## Highlights" in readme
     assert "## Quick Start" in readme
     assert "## Compatibility" in readme
     assert "## Safety and limitations" in readme
@@ -52,6 +56,22 @@ def test_readme_keeps_swirl_readme_pro_essentials():
     keyword_section = readme.split("## 🔎 Search Keywords", 1)[1]
     keyword_line = next(line for line in keyword_section.splitlines() if "`" in line)
     assert 8 <= keyword_line.count("`") // 2 <= 20
+
+
+def test_swir_readme_v2_local_brand_assets_are_valid_svg():
+    hero = ROOT / "assets" / "readme" / "hero.svg"
+    icon = ROOT / "assets" / "app_icon.svg"
+    assert hero.is_file()
+    assert icon.is_file()
+
+    hero_root = ET.parse(hero).getroot()
+    icon_root = ET.parse(icon).getroot()
+    assert hero_root.tag.endswith("svg")
+    assert hero_root.attrib.get("width") == "1200"
+    assert hero_root.attrib.get("height") == "320"
+    assert hero_root.attrib.get("viewBox") == "0 0 1200 320"
+    assert icon_root.tag.endswith("svg")
+    assert icon_root.attrib.get("viewBox") == "0 0 512 512"
 
 
 def test_first_device_profile_contract():
