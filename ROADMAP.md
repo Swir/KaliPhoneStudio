@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio engineering** from **per-d
 
 The percentage is weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but do not receive the same weight as verified device milestones.
 
-## Current development line — 0.6.51-dev
+## Current development line — 0.6.52-dev
 
 ### Completed host-side foundations
 
@@ -30,8 +30,9 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Fresh read-only runtime device/state revalidation immediately before one serial-bound temporary `fastboot boot`.
 - [x] Temporary-boot execution evidence records command result without granting Kali userspace/hardware/Beta credit.
 - [x] Deterministic source-locked rescue initramfs with a per-candidate provenance probe ID.
-- [x] Offline physical rescue observation evidence binds exact successful temporary-boot execution + exact rescue candidate + raw console transcript and requires exact `init-reached`/probe markers.
-- [x] Rescue observation evidence remains manual-review-only and cannot promote storage/display/charging/recovery/hardware/Beta state.
+- [x] Offline physical rescue observation evidence binds exact successful temporary-boot execution + exact rescue candidate + raw console transcript.
+- [x] Bounded read-only rescue sysfs inventory for block/SCSI/power/input/framebuffer/DRM signals.
+- [x] Offline diagnostics evidence binds the exact already-observed transcript and keeps every hardware verification flag false pending manual review.
 
 ### Immediate next gates
 
@@ -41,8 +42,9 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [ ] Instantiate schema-v8 candidate + reviewed authority bindings + physical-candidate preflight for that exact phone/firmware.
 - [ ] Prepare the exact local temporary-boot offer and pass fresh runtime device/state revalidation.
 - [ ] Attempt only a physical **temporary boot** first; no persistent write.
-- [ ] Capture the raw physical console/log stream and bind the exact schema-v2 rescue probe markers to the exact temporary-boot execution.
-- [ ] Manually review that evidence and separately prove Kali early userspace/rootfs, storage and remaining physical gates.
+- [ ] Capture the raw physical console/log stream and bind exact rescue probe + diagnostics blocks to the exact execution.
+- [ ] Manually review UFS/storage, power/charging, input/display signals and separately prove their required behavior; raw sysfs presence alone is insufficient.
+- [ ] Prove Kali early userspace/rootfs and a usable rescue/log path.
 
 ## Phase A — Multi-device studio core
 
@@ -85,14 +87,15 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Reproducible source-locked rescue initramfs foundation.
 - [x] Deterministic rescue probe ID embedded in the exact candidate ramdisk.
 - [x] Exact machine-readable `/init` stage/probe markers and offline raw-transcript binding contract.
-- [ ] Observe and manually review the exact rescue proof markers on the physical AC2003.
+- [x] Read-only machine-readable sysfs inventory with strict transcript binding and no persistent mounts/writes.
+- [ ] Observe and manually review exact rescue proof/diagnostic markers on the physical AC2003.
 - [ ] Prove Kali early userspace/rootfs on physical hardware.
-- [ ] Prove a usable physical rescue/log path beyond the marker observation.
+- [ ] Prove a usable physical rescue/log path beyond marker observation.
 - [ ] Exercise rollback/recovery on the exact physical baseline.
 
 ## Phase D — Physical AC2003 bring-up
 
-Nothing in this phase may be checked from host-only CI, a prepared offer, Fastboot return code, or unreviewed transcript.
+Nothing in this phase may be checked from host-only CI, a prepared offer, Fastboot return code, unreviewed transcript, or raw sysfs presence alone.
 
 - [ ] Exact model/profile/serial recognized on physical phone.
 - [ ] Exact OxygenOS build/fingerprint captured.
@@ -100,14 +103,14 @@ Nothing in this phase may be checked from host-only CI, a prepared offer, Fastbo
 - [ ] Explicitly confirmed temporary boot succeeds **and independent reviewed physical evidence confirms actual boot progress**.
 - [ ] Rescue/log channel works.
 - [ ] Kernel reaches Kali early userspace/rootfs.
-- [ ] Required UFS/storage path verified.
-- [ ] Display/touch usable or release explicitly console-only.
+- [ ] Required UFS/storage path is functionally verified, not merely enumerated.
+- [ ] Display/touch is usable or release is explicitly console-only; inventory alone is insufficient.
 - [ ] USB rescue behavior verified.
 - [ ] Wi-Fi verified.
 - [ ] Bluetooth verified.
 - [ ] Modem/cellular documented for Beta scope.
 - [ ] Audio documented for Beta scope.
-- [ ] Charging/battery behavior safe enough for testing.
+- [ ] Charging/battery behavior is safe enough for testing, beyond read-only telemetry presence.
 - [ ] Suspend/resume/power behavior documented.
 - [ ] Recovery and A/B rollback exercised.
 
@@ -118,10 +121,10 @@ A GitHub Beta is allowed only when [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md
 - [ ] Exact release commit CI green.
 - [ ] Exact device/firmware compatibility matrix.
 - [ ] Reviewed authorities instantiated against exact physical candidate.
-- [ ] Physical-candidate gate, local temporary-boot offer and fresh execution gate match the exact candidate/device state.
+- [ ] Physical-candidate gate, local temporary-boot offer and fresh execution gate match exact candidate/device state.
 - [ ] Required physical-device evidence manually reviewed and complete.
 - [ ] Installation + recovery/restore instructions.
-- [ ] Known issues/hardware matrix.
+- [ ] Known issues and hardware matrix.
 - [ ] Release manifest + SHA-256 files.
 - [ ] Real images/binaries attached; no empty or symbolic release.
 

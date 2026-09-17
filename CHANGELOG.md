@@ -2,6 +2,17 @@
 
 This file tracks the current development line. Historical detailed entries remain available in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md) and Git history.
 
+## 0.6.52-dev — bind read-only rescue hardware signals to exact physical observations
+
+- Extended the locked rescue `/init` with a single bounded `readonly-sysfs-inventory-v1` diagnostic block emitted only after the exact schema-v2 rescue stage/probe markers.
+- Added read-only machine-readable records for block-device size/removable state, SCSI host driver identity, power-supply status/capacity/online/voltage/current/temperature, input event names, framebuffer names and DRM connector status.
+- The rescue diagnostic path does not mount persistent storage, fsck/decrypt data, change charging policy, initialize display, open input event nodes, execute Fastboot or enable network/SSH. Each category is capped at 64 records and values are sanitized to bounded ASCII tokens.
+- Added `PhysicalRescueDiagnosticsEvidence`, bound to one exact `PhysicalBootObservationEvidence` and the exact same raw transcript SHA-256/size.
+- Added fail-closed rejection for transcript substitution, duplicate diagnostic blocks, out-of-block diagnostic markers, unknown kinds, field-count drift, unsafe field data, profile mismatch and unsupported hardware/Beta claim tampering.
+- Added raw `ufs_signal_observed`, `battery_signal_observed`, `input_signal_observed` and `graphics_signal_observed` flags. These indicate signal presence only; storage, display/touch, charging/battery, recovery, hardware and Beta verification remain false and manual review remains mandatory.
+- Added immutable loader/writer, offline `scripts/record_physical_rescue_diagnostics.py`, focused tests and a dedicated `rescue-readonly-diagnostics` workflow.
+- Kept project completion at **58%** because no physical AC2003 gate has actually passed. Beta remains blocked.
+
 ## 0.6.51-dev — bind physical rescue observations to exact candidates
 
 - Upgraded `RescueCandidateEvidence` to schema v2 and added a deterministic per-candidate `rescue_probe_id` bound to exact profile, reproducible rescue payload evidence, staged payload evidence and locked `/init` bytes.
@@ -9,11 +20,7 @@ This file tracks the current development line. Historical detailed entries remai
 - Updated the locked rescue `/init` to emit exact `KPS_RESCUE_STAGE=init-reached-v1` and `KPS_RESCUE_PROBE_ID=<id>` markers to the physical console and `/dev/kmsg` when available. Network/SSH remain disabled and persistent storage is not mounted automatically.
 - Added strict schema-v2 rescue-candidate loading/validation, deterministic probe-file digest verification and write-once evidence behavior.
 - Added `PhysicalBootObservationEvidence`: an offline binding from one successful schema-v1 temporary-boot execution, exact schema-v2 rescue candidate and raw operator-captured console/log transcript.
-- The recorder requires both exact proof markers, rejects conflicting/replayed marker values, hashes raw transcript bytes, performs bounded non-symlink/TOCTOU checks and keeps `manual_review_required=true`.
 - A matching observation explicitly keeps Kali early-userspace, storage, display/touch, charging, recovery, hardware and Beta claims false. It is proof-acquisition infrastructure, not an automatic hardware pass.
-- Added `scripts/record_physical_boot_observation.py` and expanded the rescue-builder CLI to expose the deterministic probe identity.
-- Added focused tests for exact CRLF/LF marker handling, wrong/missing/conflicting probe data, failed Fastboot execution, profile mismatch, rescue-evidence tampering and immutable outputs.
-- Added `docs/RESCUE_PHYSICAL_PROOF.md` with the fail-closed capture/review model.
 - Kept project completion at **58%** because no physical AC2003 gate has actually passed. Beta remains blocked.
 
 ## 0.6.50-dev — fresh runtime revalidation before one temporary boot

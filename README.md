@@ -2,7 +2,7 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux / NetHunter Pro as the primary phone OS/userspace**, without Android as the user-facing layer.
 
-The project is deliberately conservative about hardware claims. A device profile, successful host build, reproducible artifact, green CI, prepared boot offer, Fastboot return code, or unreviewed console observation does **not** mean a phone is supported. Public Beta releases require the complete host and physical-device gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+The project is deliberately conservative about hardware claims. A device profile, successful host build, reproducible artifact, green CI, prepared boot offer, Fastboot return code, rescue marker, or raw sysfs signal does **not** mean a phone is supported. Public Beta releases require the complete host and physical-device gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Project progress
 
@@ -12,7 +12,7 @@ The project is deliberately conservative about hardware claims. A device profile
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host-side reproducibility, provenance and safety are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> **Current development line: `0.6.51-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. The guarded temporary-boot path still permits only one explicitly confirmed serial-bound `fastboot boot`. 0.6.51 adds a deterministic per-rescue-candidate probe ID plus an offline transcript-binding layer so a future physical test can prove that the exact rescue `/init` appeared in a captured console/log stream. That record requires manual review and still sets `kali_early_userspace_verified=false`, `hardware_verified=false` and `beta_gate_credit=false`.
+> **Current development line: `0.6.52-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. The guarded path still permits only one explicitly confirmed serial-bound `fastboot boot`. 0.6.52 extends the exact rescue `/init` with a bounded read-only sysfs inventory and adds an offline evidence binder for UFS/power/input/graphics **signals** from the already-bound physical transcript. These signals always require manual review and never set storage/display/charging/hardware/Beta verification true.
 
 ## Source of truth and architecture
 
@@ -53,21 +53,14 @@ Reviewed authority records live under `evidence/authorities/`; CI checks their r
 - Exact OTA → `payload.bin` → stock `boot.img` provenance and immutable physical-baseline bundle.
 - Profile JSON cannot inject shell commands or Python module paths; optional hooks require explicit trusted registration.
 
-### Boot chain
+### Boot chain and reviewed artifacts
 
 - Deterministic profile-driven `BootBuildPlan` bound to exact stock provenance plus kernel/ramdisk/DTB/DTBO SHA-256 identities.
 - Source-locked `mkbootimg`/`unpack_bootimg`, independent double assembly and locked round-trip verification.
-- Schema-v8 first-boot manifest plus reviewed kernel/rootfs/device-tree candidate bindings and a unified authority bundle.
+- Schema-v8 first-boot manifest plus reviewed kernel/rootfs/device-tree candidate bindings and unified authority bundle.
 - `PhysicalCandidateGateEvidence` cross-binds exact physical baseline, reviewed authorities, boot plan, authorization and candidate image before a temporary-boot offer can exist.
-
-### Kernel, DTB/DTBO and Kali rootfs
-
-- Exact source/version/config/toolchain contracts with immutable source commits and Android Clang `clang-r416183b` verification.
-- Deterministic kernel build identity/time/locale, source mtime normalization, path remapping, IKHEADERS and compat-vDSO reproducibility policy.
-- Strict two-root kernel reproducibility and reviewed authority.
-- Device-tree plan bound to reviewed kernel authority with independent byte-identical DTB/raw-DTBO/packed-DTBO outputs.
-- Kali NetHunter ARM64 rootfs builder pinned to exact `2026.2` commit and GPG-verified Kali repository snapshot.
-- Strict independent rootfs builds with reviewed canonicalization provenance and 269-package manifest.
+- Exact source/version/config/toolchain contracts with strict two-root reproducibility for kernel and device tree.
+- Kali NetHunter ARM64 rootfs builder pinned to exact `2026.2` source and GPG-verified repository snapshot.
 
 ### Temporary-boot offer and execution gate
 
@@ -77,38 +70,56 @@ A local offer rehashes the exact reviewed Fastboot executable and candidate `boo
 <verified-fastboot> -s <verified-serial> boot <verified-candidate-boot.img>
 ```
 
-Execution requires the exact offer-bound profile confirmation, re-verifies local files again, and performs a fresh read-only serial-bound `devices` + `getvar all` probe. Product, serial, active slot, slot count, unlock/security state and bootloader/baseband values must still match the reviewed baseline. Device/state drift aborts before boot.
+Execution requires exact offer-bound profile confirmation, re-verifies local files, and performs a fresh read-only serial-bound `devices` + `getvar all` probe. Product, serial, active slot, slot count, unlock/security state and bootloader/baseband values must still match the reviewed baseline. Device/state drift aborts before boot.
 
 The executor exposes no `flash`, `erase`, `set_active`, `reboot` or persistent-write verb. Even return code 0 proves only Fastboot command acceptance and leaves all hardware/Beta claims false.
 
-### Rescue physical proof acquisition — 0.6.51
+### Rescue physical proof and read-only diagnostics — 0.6.52
 
-The reproducible rescue candidate is now schema-v2 and embeds one deterministic 64-hex `rescue_probe_id` in:
-
-```text
-/etc/kaliphonestudio/rescue-probe-id
-```
-
-The locked rescue `/init` emits exact machine-readable markers to its local console and, when available, `/dev/kmsg`:
+The reproducible rescue candidate is schema-v2 and embeds one deterministic 64-hex `rescue_probe_id` in `/etc/kaliphonestudio/rescue-probe-id`. The locked rescue `/init` first emits:
 
 ```text
 KPS_RESCUE_STAGE=init-reached-v1
 KPS_RESCUE_PROBE_ID=<exact-candidate-probe-id>
 ```
 
-`PhysicalBootObservationEvidence` binds an already-successful `TemporaryBootExecutionEvidence`, the exact schema-v2 rescue candidate and the raw operator-captured transcript. It requires both exact markers, rejects conflicting values, hashes raw transcript bytes and is write-once. It deliberately records:
+It then emits exactly one bounded diagnostics block:
 
 ```text
-rescue_init_observed=true
+KPS_DIAG_BEGIN=readonly-sysfs-inventory-v1
+KPS_DIAG_BLOCK=<name>|<size-sectors>|<removable>
+KPS_DIAG_SCSI_HOST=<host>|<proc-name>
+KPS_DIAG_POWER=<name>|<type>|<status>|<capacity>|<online>|<voltage>|<current>|<temp>
+KPS_DIAG_INPUT=<event>|<name>
+KPS_DIAG_GRAPHICS=<fb>|<name>
+KPS_DIAG_DRM=<connector>|<status>
+KPS_DIAG_END=readonly-sysfs-inventory-v1
+```
+
+The rescue path only reads procfs/sysfs for this inventory. It does **not** mount persistent storage, run fsck, decrypt data, change charging policy, initialize display, open input event nodes, execute Fastboot, or enable network/SSH. Each category is capped at 64 records and each field is reduced to a bounded ASCII token.
+
+`PhysicalBootObservationEvidence` still proves only that the exact rescue probe markers appeared in the exact captured transcript after one recorded temporary-boot execution. `PhysicalRescueDiagnosticsEvidence` adds a second offline layer that requires the **same transcript SHA-256 and size**, one exact diagnostic block, exact profile binding and bounded typed records. It may report raw signal booleans such as:
+
+```text
+ufs_signal_observed=true|false
+battery_signal_observed=true|false
+input_signal_observed=true|false
+graphics_signal_observed=true|false
+```
+
+Those flags mean only that matching read-only sysfs evidence appeared in the transcript. They do not promote the device. The evidence always keeps:
+
+```text
 manual_review_required=true
-kali_early_userspace_verified=false
 storage_verified=false
+display_touch_verified=false
 charging_battery_verified=false
+recovery_verified=false
 hardware_verified=false
 beta_gate_credit=false
 ```
 
-The recorder is offline and cannot invoke Fastboot/ADB, open serial devices, or modify phone storage. See [`docs/RESCUE_PHYSICAL_PROOF.md`](docs/RESCUE_PHYSICAL_PROOF.md).
+See [`docs/RESCUE_PHYSICAL_PROOF.md`](docs/RESCUE_PHYSICAL_PROOF.md).
 
 ## Offline application
 
@@ -123,9 +134,9 @@ Profile inspection always distinguishes profile availability from hardware suppo
 
 ## Beta release gate
 
-**Beta is BLOCKED.** The first AC2003 Beta still requires a real physical Fastboot/OxygenOS baseline, matching stock `boot.img`, exact physical-firmware candidate and reviewed bindings, an explicitly confirmed temporary boot, reviewed proof of the actual boot path, usable rescue/logging, Kali early userspace/rootfs, UFS/storage, display/touch or an explicit console-only scope, safe charging/battery, exercised recovery/rollback, and a compatibility/release manifest with SHA-256 files.
+**Beta is BLOCKED.** The first AC2003 Beta still requires a real physical Fastboot/OxygenOS baseline, matching stock `boot.img`, exact physical-firmware candidate and reviewed bindings, an explicitly confirmed temporary boot, manually reviewed proof of the actual boot path, usable rescue/logging, Kali early userspace/rootfs, real UFS/storage verification, display/touch or an explicit console-only scope, safe charging/battery, exercised recovery/rollback, and a compatibility/release manifest with SHA-256 files.
 
-No empty, symbolic, host-CI-only, Fastboot-return-code-only, or unreviewed-transcript-only Beta release is acceptable.
+Raw rescue sysfs presence is useful diagnostic evidence, but is explicitly insufficient by itself for the storage, display/touch or charging/battery Beta gates.
 
 ## Testing
 
@@ -136,10 +147,12 @@ python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
+The dedicated `rescue-readonly-diagnostics` workflow additionally compiles the diagnostic parser/CLI, validates `rescue/init` shell syntax and runs focused physical-observation/read-only-policy contracts.
+
 ## Adding another device
 
 A new device starts as **profile-only / unsupported hardware**. Add `devices/<vendor>/<codename>/profile.json`, pin immutable upstream sources, define identity/confirmation/boot/partition/recovery/test contracts, pass schema/CI validation, build and verify artifacts offline, capture exact physical baseline, and prefer temporary boot before any persistent write.
 
 ## Safety model
 
-KaliPhoneStudio is built around fail-closed evidence rather than optimistic automation. Green CI, matching model strings, reproducible host artifacts, successful host-side Fastboot commands and machine-readable console markers are engineering evidence—not automatic proof that a physical device safely boots Kali. The first public Beta will be a tested device build, not a development snapshot.
+KaliPhoneStudio is built around fail-closed evidence rather than optimistic automation. Green CI, matching model strings, reproducible host artifacts, successful host-side Fastboot commands, machine-readable rescue markers and sysfs inventory signals are engineering evidence—not automatic proof that a physical device safely boots Kali. The first public Beta will be a tested device build, not a development snapshot.

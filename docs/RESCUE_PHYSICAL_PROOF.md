@@ -1,16 +1,16 @@
 # Physical rescue proof acquisition
 
-KaliPhoneStudio does **not** treat a successful `fastboot boot` return code as proof that the candidate kernel or rescue userspace actually ran on the phone. The physical proof path is intentionally split into separate immutable evidence layers.
+KaliPhoneStudio does **not** treat a successful `fastboot boot` return code as proof that the candidate kernel or rescue userspace actually ran on the phone. The physical proof path is intentionally split into immutable evidence layers, and read-only hardware inventory is kept separate from functional verification.
 
-## What 0.6.51 adds
+## Exact rescue identity
 
-Every schema-v2 `RescueCandidateEvidence` contains a deterministic `rescue_probe_id`. The ID is SHA-256-bound to the exact device profile, reproducible rescue payload evidence, staged payload evidence and locked `/init` bytes. The exact ID is embedded as a read-only file inside the deterministic rescue initramfs:
+Every schema-v2 `RescueCandidateEvidence` contains a deterministic `rescue_probe_id`, SHA-256-bound to the exact device profile, reproducible rescue payload evidence, staged payload evidence and locked `/init` bytes. The ID is embedded inside the deterministic rescue initramfs at:
 
 ```text
 /etc/kaliphonestudio/rescue-probe-id
 ```
 
-When that exact rescue `/init` executes, it emits two machine-readable lines to the local console and, when available, `/dev/kmsg`:
+When that exact rescue `/init` executes, it emits:
 
 ```text
 KPS_RESCUE_STAGE=init-reached-v1
@@ -19,18 +19,16 @@ KPS_RESCUE_PROBE_ID=<64-lowercase-hex-id>
 
 Network and SSH remain disabled. Persistent storage is not mounted automatically.
 
-## Evidence chain
+## Layer 1 — physical boot observation
 
 The offline observation recorder accepts only:
 
-1. a successful schema-v1 `TemporaryBootExecutionEvidence` from the one-command guarded temporary-boot path;
+1. a successful schema-v1 `TemporaryBootExecutionEvidence` from the guarded one-command temporary-boot path;
 2. the exact schema-v2 `RescueCandidateEvidence` containing the expected probe ID;
 3. the selected device profile;
 4. a raw operator-captured console/log transcript.
 
-It requires the transcript to contain the **exact** stage marker and exact candidate probe ID, rejects conflicting marker values, hashes the raw transcript byte-for-byte and emits `PhysicalBootObservationEvidence` bound to the prior execution and rescue candidate.
-
-Example offline recording step after the operator has separately captured a console log:
+It requires the exact stage marker and exact candidate probe ID, rejects conflicting marker values, hashes raw transcript bytes and emits `PhysicalBootObservationEvidence` bound to the prior execution and rescue candidate.
 
 ```bash
 python scripts/record_physical_boot_observation.py \
@@ -43,9 +41,49 @@ python scripts/record_physical_boot_observation.py \
 
 This command does **not** invoke Fastboot, ADB, serial tools or any phone operation.
 
-## What the record proves — and what it does not
+## Layer 2 — read-only rescue hardware signals (0.6.52)
 
-A matching record is useful evidence that the exact probe-bearing rescue `/init` appeared in the captured physical log after the exact recorded temporary-boot command. It remains deliberately marked:
+After the exact rescue markers, `/init` emits one bounded diagnostic block:
+
+```text
+KPS_DIAG_BEGIN=readonly-sysfs-inventory-v1
+KPS_DIAG_BLOCK=<name>|<size-sectors>|<removable>
+KPS_DIAG_SCSI_HOST=<host>|<proc-name>
+KPS_DIAG_POWER=<name>|<type>|<status>|<capacity>|<online>|<voltage>|<current>|<temp>
+KPS_DIAG_INPUT=<event>|<name>
+KPS_DIAG_GRAPHICS=<fb>|<name>
+KPS_DIAG_DRM=<connector>|<status>
+KPS_DIAG_END=readonly-sysfs-inventory-v1
+```
+
+The inventory reads only sysfs/procfs. It does not mount or fsck persistent storage, decrypt data, write block devices, modify charging controls, initialize display, open input event devices, execute Fastboot, or enable network/SSH. Each category is capped at 64 records. Machine-readable values are reduced to bounded ASCII tokens before output.
+
+The second offline recorder requires the already-created physical boot observation plus the **same raw transcript**:
+
+```bash
+python scripts/record_physical_rescue_diagnostics.py \
+  --profile-id oneplus/avicii \
+  --observation-evidence evidence/physical-boot-observation.json \
+  --console-transcript evidence/physical-console.log \
+  --out evidence/physical-rescue-diagnostics.json
+```
+
+It rehashes the transcript and requires exact SHA-256/size equality with `PhysicalBootObservationEvidence`, exactly one diagnostic BEGIN/END block after the exact rescue markers, bounded known record types and safe field syntax. Duplicate blocks, diagnostic lines outside the block, unknown record kinds, malformed fields, profile mismatch or claim tampering fail closed.
+
+The result may contain raw signal flags:
+
+```text
+ufs_signal_observed=true|false
+battery_signal_observed=true|false
+input_signal_observed=true|false
+graphics_signal_observed=true|false
+```
+
+These mean **only** that the corresponding read-only sysfs signal appeared in the exact transcript. For example, an `ufshcd` SCSI host suggests that the kernel exposed a UFS-related host, but it does not prove safe block I/O, filesystem integrity, mountability or persistence. Likewise power telemetry does not prove safe charging, and framebuffer/DRM/input enumeration does not prove a usable display/touch setup.
+
+## What the evidence still does not prove
+
+Both layers deliberately keep the physical release claims false until separate physical review and functional tests exist:
 
 ```text
 manual_review_required=true
@@ -58,17 +96,17 @@ hardware_verified=false
 beta_gate_credit=false
 ```
 
-The record therefore does not by itself satisfy the Beta rescue/log checkbox, and it does not prove the Kali rootfs, UFS, display/touch, charging, suspend, modem, audio or recovery path. Those require separate physical-device evidence and review.
+A matching rescue observation plus read-only diagnostics therefore does not by itself satisfy the Beta rescue/log, Kali rootfs, UFS/storage, display/touch, charging, suspend, modem, audio or recovery gates.
 
 ## Capture integrity rules
 
 - Keep the original raw transcript; do not edit or normalize it before recording.
-- The recorder hashes raw bytes before any newline normalization used for marker matching.
+- Raw bytes are SHA-256-bound before newline normalization used for marker parsing.
 - The transcript must be a bounded regular non-symlink file and is re-statted after reading to detect TOCTOU changes.
-- Conflicting `KPS_RESCUE_STAGE=` or `KPS_RESCUE_PROBE_ID=` lines cause fail-closed rejection.
-- Repeated markers are bounded to prevent implausible/replayed transcript input from being silently accepted.
+- Conflicting rescue markers, duplicate diagnostics blocks or diagnostics outside the exact block cause fail-closed rejection.
+- Unrelated non-ASCII console noise is ignored; every machine-readable `KPS_DIAG_*` record itself must be strict bounded ASCII.
 - Evidence files are write-once by default; existing output paths are not overwritten.
 
 ## Safety boundary
 
-The physical proof recorder is intentionally separate from the executor. It cannot flash, erase, set an A/B slot, reboot, mount phone storage or promote an observation to Beta readiness. Persistent-write support remains outside this path.
+The observation and diagnostics recorders are intentionally separate from the executor. They cannot flash, erase, set an A/B slot, reboot, mount phone storage or promote an observation to Beta readiness. Persistent-write support remains outside this path.
