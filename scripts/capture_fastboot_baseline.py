@@ -3,8 +3,9 @@
 
 The helper first hashes and verifies the exact Fastboot executable against the
 reviewed Platform-Tools policy, then executes only ``fastboot devices`` and
-``fastboot -s SERIAL getvar all`` using that exact resolved binary. It never
-boots, reboots, flashes, erases, changes slots or writes phone storage.
+``fastboot -s SERIAL getvar all`` using that exact resolved binary. It emits a
+capture bundle binding tool + raw transcript + parsed baseline and never boots,
+reboots, flashes, erases, changes slots or writes phone storage.
 """
 from __future__ import annotations
 
@@ -26,6 +27,11 @@ from kaliphonestudio.fastboot_capture import (
     capture_fastboot_getvar_all,
     validate_capture_with_offline_parser,
     write_capture_once,
+)
+from kaliphonestudio.fastboot_capture_bundle import (
+    FastbootCaptureBundleError,
+    bind_fastboot_capture,
+    write_fastboot_capture_bundle,
 )
 from kaliphonestudio.fastboot_tool import (
     FastbootToolError,
@@ -54,6 +60,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--transcript-out", type=Path, required=True)
     p.add_argument("--evidence-out", type=Path, required=True)
     p.add_argument("--tool-evidence-out", type=Path, required=True)
+    p.add_argument("--capture-evidence-out", type=Path, required=True)
     return p
 
 
@@ -63,10 +70,11 @@ def main() -> int:
         (args.transcript_out, "transcript"),
         (args.evidence_out, "baseline evidence"),
         (args.tool_evidence_out, "Fastboot tool evidence"),
+        (args.capture_evidence_out, "Fastboot capture bundle"),
     )
     normalized = [str(path.resolve(strict=False)) for path, _label in destinations]
     if len(set(normalized)) != len(normalized):
-        raise SystemExit("transcript, baseline evidence and tool evidence destinations must be different")
+        raise SystemExit("all transcript/evidence destinations must be different")
     for path, label in destinations:
         if path.exists() or path.is_symlink():
             raise SystemExit(f"refusing to overwrite existing {label}: {path}")
@@ -90,10 +98,12 @@ def main() -> int:
     staged_transcript = args.transcript_out.with_name(args.transcript_out.name + ".capturing")
     staged_evidence = args.evidence_out.with_name(args.evidence_out.name + ".capturing")
     staged_tool = args.tool_evidence_out.with_name(args.tool_evidence_out.name + ".capturing")
+    staged_capture = args.capture_evidence_out.with_name(args.capture_evidence_out.name + ".capturing")
     staged = (
         (staged_transcript, "transcript"),
         (staged_evidence, "baseline evidence"),
         (staged_tool, "Fastboot tool evidence"),
+        (staged_capture, "Fastboot capture bundle"),
     )
     for path, label in staged:
         if path.exists() or path.is_symlink():
@@ -112,13 +122,20 @@ def main() -> int:
             raise SystemExit("captured getvar serialno does not match requested fastboot serial")
         baseline_digest = write_fastboot_baseline_evidence(evidence, staged_evidence)
         tool_digest = write_fastboot_tool_evidence(tool_evidence, staged_tool)
+        capture_bundle = bind_fastboot_capture(
+            profile,
+            evidence,
+            tool_evidence,
+            transcript=staged_transcript,
+        )
+        capture_digest = write_fastboot_capture_bundle(capture_bundle, staged_capture)
 
-        saved = json.loads(staged_evidence.read_text(encoding="utf-8"))
-        if saved != json.loads(evidence.canonical_json()):
-            raise SystemExit("fastboot baseline evidence round-trip mismatch")
-        saved_tool = json.loads(staged_tool.read_text(encoding="utf-8"))
-        if saved_tool != json.loads(tool_evidence.canonical_json()):
+        if json.loads(staged_evidence.read_text(encoding="utf-8")) != json.loads(evidence.canonical_json()):
+            raise SystemExit("Fastboot baseline evidence round-trip mismatch")
+        if json.loads(staged_tool.read_text(encoding="utf-8")) != json.loads(tool_evidence.canonical_json()):
             raise SystemExit("Fastboot tool evidence round-trip mismatch")
+        if json.loads(staged_capture.read_text(encoding="utf-8")) != json.loads(capture_bundle.canonical_json()):
+            raise SystemExit("Fastboot capture bundle round-trip mismatch")
         if any(path.exists() for path, _label in destinations):
             raise SystemExit("capture destination appeared during validation")
 
@@ -126,9 +143,14 @@ def main() -> int:
             (staged_transcript, args.transcript_out),
             (staged_evidence, args.evidence_out),
             (staged_tool, args.tool_evidence_out),
+            (staged_capture, args.capture_evidence_out),
         ):
             staged_path.replace(final_path)
             published.append(final_path)
+    except FastbootCaptureBundleError as exc:
+        for path in reversed(published):
+            path.unlink(missing_ok=True)
+        raise SystemExit(str(exc)) from exc
     except BaseException:
         for path in reversed(published):
             path.unlink(missing_ok=True)
@@ -152,8 +174,11 @@ def main() -> int:
         "fastboot_platform_tools_version": tool_evidence.observed_platform_tools_version,
         "fastboot_executable_sha256": tool_evidence.executable_sha256,
         "fastboot_tool_evidence_sha256": tool_digest,
+        "fastboot_capture_bundle_sha256": capture_digest,
+        "capture_policy": capture_bundle.capture_policy,
         "commands": ["fastboot --version", "fastboot devices", "fastboot -s SERIAL getvar all"],
         "phone_storage_written": False,
+        "hardware_verified": False,
         "beta_gate_credit": False,
     }, sort_keys=True))
     return 0
