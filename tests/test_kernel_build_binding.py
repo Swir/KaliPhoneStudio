@@ -62,10 +62,10 @@ def _repro(plan, **changes):
         "config_size": 2048,
         "image_sha256": "9" * 64,
         "image_size": 4096,
-        "build_a_config_evidence_sha256": "a" * 64,
-        "build_b_config_evidence_sha256": "b" * 64,
-        "build_a_image_evidence_sha256": "c" * 64,
-        "build_b_image_evidence_sha256": "d" * 64,
+        "build_a_config_evidence_sha256": "6" * 64,
+        "build_b_config_evidence_sha256": "6" * 64,
+        "build_a_image_evidence_sha256": "8" * 64,
+        "build_b_image_evidence_sha256": "8" * 64,
         "distinct_build_roots_verified": True,
         "byte_identical": True,
         "beta_gate_credit": False,
@@ -131,7 +131,34 @@ def test_binding_rejects_toolchain_or_output_substitution():
         )
     with pytest.raises(KernelContractError, match="build B Image does not match"):
         bind_kernel_reproducibility_to_build_runs(
-            plan, lock, repro, build_a, _run(plan, lock, image_sha256="e" * 64)
+            plan,
+            lock,
+            replace(repro, build_b_image_evidence_sha256="e" * 64),
+            build_a,
+            _run(plan, lock, image_sha256="e" * 64, image_evidence_sha256="e" * 64),
+        )
+
+
+def test_binding_rejects_detached_per_build_verifier_evidence():
+    plan, lock = _plan_and_lock()
+    build_a = _run(plan, lock)
+    build_b = _run(plan, lock)
+
+    with pytest.raises(KernelContractError, match="build A config verifier evidence"):
+        bind_kernel_reproducibility_to_build_runs(
+            plan,
+            lock,
+            _repro(plan, build_a_config_evidence_sha256="a" * 64),
+            build_a,
+            build_b,
+        )
+    with pytest.raises(KernelContractError, match="build B Image verifier evidence"):
+        bind_kernel_reproducibility_to_build_runs(
+            plan,
+            lock,
+            _repro(plan, build_b_image_evidence_sha256="b" * 64),
+            build_a,
+            build_b,
         )
 
 

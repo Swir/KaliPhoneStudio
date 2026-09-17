@@ -16,6 +16,9 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] Kernel compiler/toolchain evidence is source-locked and bound to the approved kernel plan/build configuration; a moving host compiler or PATH fallback is not acceptable.
 - [ ] Reviewed kernel reproducibility evidence proves two independent builds produced byte-identical final `.config` and ARM64 `Image` outputs for the same approved kernel plan and locked toolchain.
 - [ ] Kernel reproducibility is bound to the exact two executed build-run evidence records, with the same kernel plan, source commit, toolchain lock, canonical build recipe and reproducibility environment; output-only equality without execution provenance is insufficient.
+- [ ] The strict kernel reproducibility record's build-A/build-B config-verifier and Image-verifier evidence digests match the exact per-build run records; detached verifier evidence is not acceptable.
+- [ ] The accepted kernel has a reviewed immutable authority record binding exact authority run/commit/artifact identity, profile/source/plan/toolchain/recipe/environment, both executed-build records, strict reproducibility evidence, reproducibility-binding evidence and final config/Image identity. The authority must explicitly record strict byte equality, distinct build roots, `hardware_verified=false` and `beta_gate_credit=false`.
+- [ ] A first-boot kernel authority record additionally binds the exact schema-v8 candidate-manifest digest to the reviewed kernel authority digest/run/commit/artifact identity and rejects source/plan/toolchain/build/repro/config/Image substitution.
 - [ ] The kernel evidence SHA-256/size matches the exact kernel input embedded in the approved boot build plan; source/config/Image evidence may not be mixed across plans or profiles.
 - [ ] Final DTB/DTBO artifacts satisfy the selected profile layout and are bound to the same approved first-boot build evidence.
 - [ ] Reviewed reproducible Kali ARM64 rootfs evidence comes from a strict byte-identical independent double-build and is bound to the candidate manifest; diagnostic or semantic-equality reports cannot substitute for this evidence.
@@ -49,6 +52,6 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] Release manifest and SHA-256 files.
 - [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
 
-Importing a saved Fastboot transcript, producing host-side authorization evidence, pinning a public kernel/compiler source, binding exact executed kernel builds, accepting or binding a reviewed rootfs authority, canonicalizing a rootfs, binding candidate/rootfs provenance, generating a deterministic provisioning overlay, or passing host-side kernel/rootfs checks does **not** by itself satisfy any physical-device checkbox above.
+Importing a saved Fastboot transcript, producing host-side authorization evidence, pinning a public kernel/compiler source, binding exact executed kernel builds, accepting or binding a reviewed kernel/rootfs authority, canonicalizing a rootfs, binding candidate provenance, generating a deterministic provisioning overlay, or passing host-side kernel/rootfs checks does **not** by itself satisfy any physical-device checkbox above.
 
 Only after these gates pass should a GitHub **Beta** be created. Stable releases require a substantially higher hardware-completeness and regression threshold.
