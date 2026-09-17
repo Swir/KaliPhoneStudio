@@ -6,7 +6,11 @@ import subprocess
 
 import pytest
 
-from kaliphonestudio.kernel_toolchain import KernelToolchainError, load_kernel_toolchain_lock
+from kaliphonestudio.kernel_toolchain import (
+    KernelToolchainError,
+    create_source_evidence,
+    load_kernel_toolchain_lock,
+)
 from kaliphonestudio.kernel_toolchain_checkout import capture_local_git_source_evidence
 
 
@@ -75,6 +79,33 @@ def _make_checkout_and_lock(tmp_path: Path) -> tuple[Path, Path, dict[str, objec
     return repo, lock_path, data
 
 
+def _gitiles_tree_payload(data: dict[str, object]) -> bytes:
+    payload = {
+        "id": data["tree_sha1"],
+        "entries": [
+            {
+                "mode": 33188,
+                "type": "blob",
+                "id": data["android_version_blob_sha1"],
+                "name": "AndroidVersion.txt",
+            },
+            {
+                "mode": 33188,
+                "type": "blob",
+                "id": data["manifest_blob_sha1"],
+                "name": "manifest_7284624.xml",
+            },
+            {
+                "mode": 16384,
+                "type": "tree",
+                "id": data["bin_tree_sha1"],
+                "name": "bin",
+            },
+        ],
+    }
+    return b")]}'\n" + json.dumps(payload).encode("utf-8")
+
+
 def test_local_git_capture_verifies_exact_object_graph(tmp_path: Path):
     repo, lock_path, data = _make_checkout_and_lock(tmp_path)
     lock = load_kernel_toolchain_lock(lock_path)
@@ -88,6 +119,21 @@ def test_local_git_capture_verifies_exact_object_graph(tmp_path: Path):
     assert evidence.manifest_blob_sha1 == data["manifest_blob_sha1"]
     assert evidence.beta_gate_credit is False
     assert len(evidence.evidence_sha256()) == 64
+
+
+def test_local_git_and_gitiles_paths_emit_identical_canonical_source_evidence(tmp_path: Path):
+    repo, lock_path, data = _make_checkout_and_lock(tmp_path)
+    lock = load_kernel_toolchain_lock(lock_path)
+
+    local_evidence = capture_local_git_source_evidence(lock, repo)
+    network_shape_evidence = create_source_evidence(
+        lock,
+        tree_payload=_gitiles_tree_payload(data),
+        android_version_payload=b"12.0.5\nbased on r416183b\n",
+    )
+
+    assert local_evidence.canonical_json() == network_shape_evidence.canonical_json()
+    assert local_evidence.evidence_sha256() == network_shape_evidence.evidence_sha256()
 
 
 def test_local_git_capture_rejects_dirty_tracked_content(tmp_path: Path):
