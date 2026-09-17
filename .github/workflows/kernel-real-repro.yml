@@ -9,6 +9,7 @@ on:
       - "kaliphonestudio/kernel_repro.py"
       - "kaliphonestudio/kernel_repro_diagnostics.py"
       - "kaliphonestudio/kernel_build_tree_diagnostics.py"
+      - "kaliphonestudio/kernel_elf_diagnostics.py"
       - "kaliphonestudio/kernel_toolchain.py"
       - "kaliphonestudio/kernel_toolchain_checkout.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
@@ -21,12 +22,15 @@ on:
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
       - "scripts/diagnose_kernel_build_tree.py"
+      - "scripts/diagnose_kernel_elf_sections.py"
       - "scripts/normalize_kernel_source_mtimes.py"
       - "scripts/verify_kernel_toolchain_checkout.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
       - "tests/test_kernel_build_tree_diagnostics.py"
+      - "tests/test_kernel_elf_diagnostics.py"
+      - "tests/test_kernel_archive_repro_policy.py"
       - "tests/test_kernel_source_normalization.py"
       - "tests/test_kernel_toolchain_checkout.py"
       - ".github/workflows/kernel-real-repro.yml"
@@ -37,6 +41,7 @@ on:
       - "kaliphonestudio/kernel_repro.py"
       - "kaliphonestudio/kernel_repro_diagnostics.py"
       - "kaliphonestudio/kernel_build_tree_diagnostics.py"
+      - "kaliphonestudio/kernel_elf_diagnostics.py"
       - "kaliphonestudio/kernel_toolchain.py"
       - "kaliphonestudio/kernel_toolchain_checkout.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
@@ -49,12 +54,15 @@ on:
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
       - "scripts/diagnose_kernel_build_tree.py"
+      - "scripts/diagnose_kernel_elf_sections.py"
       - "scripts/normalize_kernel_source_mtimes.py"
       - "scripts/verify_kernel_toolchain_checkout.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
       - "tests/test_kernel_build_tree_diagnostics.py"
+      - "tests/test_kernel_elf_diagnostics.py"
+      - "tests/test_kernel_archive_repro_policy.py"
       - "tests/test_kernel_source_normalization.py"
       - "tests/test_kernel_toolchain_checkout.py"
       - ".github/workflows/kernel-real-repro.yml"
@@ -84,6 +92,7 @@ jobs:
           kaliphonestudio/kernel_build_binding.py
           kaliphonestudio/kernel_repro_diagnostics.py
           kaliphonestudio/kernel_build_tree_diagnostics.py
+          kaliphonestudio/kernel_elf_diagnostics.py
           kaliphonestudio/kernel_source_normalization.py
           kaliphonestudio/kernel_toolchain_checkout.py
           scripts/run_locked_kernel_build.py
@@ -91,6 +100,7 @@ jobs:
           scripts/verify_kernel_repro_pair.py
           scripts/diagnose_kernel_image_repro.py
           scripts/diagnose_kernel_build_tree.py
+          scripts/diagnose_kernel_elf_sections.py
           scripts/normalize_kernel_source_mtimes.py
           scripts/verify_kernel_toolchain_checkout.py
 
@@ -104,6 +114,8 @@ jobs:
           tests/test_kernel_repro.py
           tests/test_kernel_repro_diagnostics.py
           tests/test_kernel_build_tree_diagnostics.py
+          tests/test_kernel_elf_diagnostics.py
+          tests/test_kernel_archive_repro_policy.py
           tests/test_kernel_source_normalization.py
           tests/test_kernel_toolchain.py
           tests/test_kernel_toolchain_checkout.py
@@ -311,14 +323,17 @@ jobs:
             --max-ranges 256 \
             --out evidence/kernel-image-divergence.json
 
-      - name: Diagnose intermediate build-tree divergence without relaxing acceptance
+      - name: Diagnose intermediate and ELF-section divergence without relaxing acceptance
         if: failure() && steps.build_pair.outcome == 'success'
         run: |
           python scripts/diagnose_kernel_build_tree.py \
             --build-a build-a \
             --build-b build-b \
             --max-differences 512 \
-            --out evidence/kernel-build-tree-divergence.json
+            --max-elf-files 64 \
+            --max-sections-per-file 64 \
+            --out evidence/kernel-build-tree-divergence.json \
+            --elf-out evidence/kernel-elf-section-divergence.json
 
       - name: Bind strict reproducibility to exact executed build evidence
         if: success()
