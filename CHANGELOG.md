@@ -2,6 +2,17 @@
 
 This file tracks the current development line. Historical entries through **0.6.27-dev** remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). The detailed pre-sync `0.6.28-dev`–`0.6.42-dev` active-line changelog remains permanently recoverable from repository commit `43e9836bfdca651ad31727a303714e44c44929db` and earlier Git history.
 
+## 0.6.47-dev — reviewed strict DTB/DTBO authority and unified candidate provenance
+
+- Completed real DT authority run `35196447576` as the first **strict SUCCESS** for profile-selected avicii device-tree artifacts. Two independent exact-source roots produced byte-identical `arch/arm64/boot/dts/vendor/20801/lito.dtb`, raw `avicii-overlay.dtbo` and packed `dtbo.img` while retaining the exact reviewed kernel authority as an input.
+- Accepted DTB SHA-256 `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce` (406,620 bytes), raw overlay SHA-256 `b3991f2fda96d3675778299b45b9802823022ef25d593c5d00c756ceea35b90c` (345,405 bytes), and packed DTBO SHA-256 `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` (352,256 bytes, one entry).
+- Fixed reuse of historical accepted kernel artifact `10482645697`: GitHub Actions had omitted hidden `.config` files even though both accepted ARM64 Images and the full reviewed evidence chain were intact. KaliPhoneStudio now deterministically rehydrates only the exact final config from pinned source/profile/toolchain policy, verifies its SHA-256/size against the immutable kernel authority, and verifies the existing Image remains unchanged. The kernel Image is never rebuilt by this path.
+- Added fail-closed `ReviewedKernelBuildRootEvidence` plus focused tests covering rehydration, verification-only reuse, recipe drift and config substitution.
+- Added and reviewed `DeviceTreeAuthorityRecord` for run `35196447576`, main commit `50a10688a20e3189b97291426118e7d0c466e108` and workflow artifact `10486420567`.
+- Preserved exact DT plan, build-A/build-B, strict reproducibility, config-rehydration, source-normalization and toolchain evidence under `evidence/authorities/device-tree/oneplus-avicii-2026-09-17/` and added CI reconstruction of the checked-in authority chain.
+- Added `FirstBootAuthorityBundleEvidence`, a final host-side cross-binding that requires reviewed kernel, rootfs and device-tree candidate authority bindings to refer to the exact same schema-v8 first-boot manifest/profile; it also requires the DT authority to reference the same reviewed kernel authority and rechecks candidate kernel/rootfs/DTB/DTBO identities.
+- Project completion advances to **58%** for the reviewed host-side DT authority milestone. Physical bootloader/kernel acceptance remains unverified; `hardware_verified=false`, `beta_gate_credit=false`, and the Beta gate remains blocked until exact AC2003 firmware/stock-boot evidence and physical bring-up are complete.
+
 ## 0.6.46-dev — reviewed strict kernel authority and candidate binding
 
 - Reviewed real kernel authority run `35183670399` as the first **strict SUCCESS** for `oneplus/avicii`: two independent exact-source, source-mtime-normalized `jobs=1` builds produced byte-identical final `.config` and byte-identical 43,878,416-byte ARM64 `Image` outputs.
