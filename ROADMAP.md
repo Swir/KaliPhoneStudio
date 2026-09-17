@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-**Current development line — 0.6.61-dev**
+**Current development line — 0.6.62-dev**
 
 **58% complete**
 
@@ -40,6 +40,10 @@ Host-side preparation now complete:
 - [x] **0.6.60:** bounded automatic sysfs-only hardware-presence survey covering USB UDC/device identity, network interfaces, rfkill, sound, thermal, input, framebuffer/DRM and power-supply state without activating those subsystems.
 - [x] **0.6.61:** fail-closed manual hardware-survey review contract binds the exact survey to canonical review-record bytes and separate notes.
 - [x] **0.6.61:** contextual acceptance requires a non-empty survey plus explicit physical-context, integrity, USB, network/radio, audio, input/display, thermal/power and limitations review; all functional/hardware/Beta flags remain false.
+- [x] **0.6.61:** profile-driven physical functional-hardware test plan binds the exact accepted survey review to pending-only, non-destructive, no-write tests and fails readiness closed when required context signals are absent.
+- [x] **0.6.62:** exact physical functional-test observation evidence binds one actually executed test to the exact plan/test/candidate identity, canonical operator record and separate notes; a `pass_candidate` requires every exact required observation but still grants no hardware/Beta credit.
+- [x] **0.6.62:** separate manual functional-test review binds accepted pass/fail/inconclusive outcomes only after exact-plan, exact-observation, physical-context, required-observation, notes/limitations and no-write checks are complete.
+- [x] **0.6.62:** deterministic exact-plan functional-test summary reports pending/reviewed-pass/fail/inconclusive/rejected coverage and Beta-required reviewed-pass counts while keeping project support/hardware/Beta promotion false.
 - [x] Deterministic Kali-rootfs/systemd early-userspace proof overlay bound to exact candidate/rootfs authority identity.
 - [x] Physical transcript evidence contract requiring exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers while keeping automatic hardware/Beta credit false.
 - [x] **0.6.55:** discovery-only, source-pinned rootfs handoff contract bound to exact physical candidate and reviewed rootfs authority without target selection or write authorization.
@@ -55,6 +59,8 @@ Still physically blocked:
 - [ ] Validate matching stock `boot.img` from the exact physical firmware OTA.
 - [ ] Instantiate one exact physical first-boot candidate.
 - [ ] Capture the real bounded hardware-presence survey and bind an accepted-as-context manual review; contextual acceptance still gives no functional credit.
+- [ ] Build the exact profile-driven functional-test plan from that real accepted survey review.
+- [ ] Execute and bind real subsystem-specific tests to that exact plan, then independently review each observation; no synthetic/host-only result counts.
 - [ ] Capture real physical block topology, filesystem identity, encryption state, free-space evidence and recovery plan under the typed discovery contract.
 - [ ] Complete and bind a manual review of that exact storage discovery; `accepted_for_strategy_design=true` is not target approval.
 - [ ] Cross-bind real candidate/rescue/storage records into one physical bring-up session.
@@ -70,7 +76,7 @@ Still physically blocked:
 
 ## Milestone D — hardware enablement
 
-No item here may be marked complete from host CI, sysfs presence or contextual review alone.
+No item here may be marked complete from host CI, sysfs presence, contextual review, a pending test plan or synthetic functional-test records alone.
 
 - [ ] Display/framebuffer/DRM.
 - [ ] Touch/input.
@@ -89,6 +95,7 @@ No item here may be marked complete from host CI, sysfs presence or contextual r
 Required before release:
 
 - [ ] All mandatory physical gates in `BETA_RELEASE_GATE.md` reviewed and recorded.
+- [ ] Every Beta-required physical functional test has real exact-device evidence and an accepted manual review, or a documented explicitly reviewed scope exception where the gate permits one.
 - [ ] Exact compatibility matrix and known issues.
 - [ ] Release manifest with SHA-256 for every published binary/image.
 - [ ] Recovery instructions validated on the exact supported firmware.
@@ -101,7 +108,7 @@ Stable requires repeated device testing, stronger recovery confidence, broader h
 
 ## Immediate highest-impact work
 
-1. Keep rescue diagnostics, hardware survey/review, storage discovery/review, session and dossier layers fail-closed; none may convert observed presence into functional support or authorize a storage write.
+1. Keep rescue diagnostics, hardware survey/review, functional test plan/observation/review/summary, storage discovery/review, session and dossier layers fail-closed; none may turn host-only or synthetic evidence into support or authorize a storage write.
 2. Do **not** implement storage-target selection before a real AC2003 discovery record has passed exact manual review and dossier audit.
-3. When a physical AC2003 is available, capture the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect rescue marker/diagnostic/hardware-survey evidence and manual reviews before any persistent write.
-4. Treat accepted hardware-survey context only as an input to later subsystem-specific functional tests; it must never mark display/touch/USB/Wi-Fi/Bluetooth/audio/modem/power/thermal as verified.
+3. When a physical AC2003 is available, capture the real read-only Fastboot/OxygenOS baseline first, validate the exact OTA/stock boot, instantiate the exact physical candidate, then collect rescue marker/diagnostic/hardware-survey evidence and manual review before building the functional-test plan.
+4. Run each functional test manually against the exact real candidate, bind the exact observation and independent review, and treat the aggregate summary only as release-gate input — never automatic Beta credit.
