@@ -13,31 +13,58 @@ A baseline binds one device profile to:
 - bootloader/baseband version strings required by the profile,
 - an operator-recorded exact firmware build and Android build fingerprint.
 
-The generated JSON sets `beta_gate_credit` to `false`. Importing a transcript therefore cannot by itself satisfy a physical Beta gate.
+The generated JSON sets `beta_gate_credit` to `false`. Capturing or importing a transcript therefore cannot by itself satisfy a physical Beta gate.
 
-## Capture
+## Guarded read-only capture
 
-Use an official/current Android platform-tools `fastboot` binary. Capture the output before destructive work and preserve the original file unchanged. `fastboot getvar all` normally writes its variables to stderr, so capture both streams.
+Use an official/current Android platform-tools `fastboot` binary. KaliPhoneStudio includes a serial-bound helper that executes **only** these two read-only commands:
+
+```text
+fastboot devices
+fastboot -s SERIAL getvar all
+```
+
+It never invokes `boot`, `reboot`, `flash`, `erase`, `set_active`, `flashing` or any other phone-storage/state-changing verb. The requested serial must first appear in `fastboot devices`, and the `serialno` returned inside `getvar all` must match the same exact serial before evidence is published.
+
+PowerShell example:
+
+```powershell
+python scripts/capture_fastboot_baseline.py `
+  --profile-id oneplus/avicii `
+  --serial "EXACT_FASTBOOT_SERIAL" `
+  --firmware-build "EXACT_BUILD" `
+  --firmware-fingerprint "EXACT_ANDROID_BUILD_FINGERPRINT" `
+  --transcript-out evidence/fastboot-getvar-all.txt `
+  --evidence-out evidence/fastboot-baseline.json
+```
+
+Use `--fastboot "C:\path\to\platform-tools\fastboot.exe"` when `fastboot` is not on `PATH`. The helper runs subprocesses as fixed argv arrays with `shell=False`, combines Fastboot stdout/stderr exactly for the transcript, rejects failed/malformed/oversized output, refuses serial option injection and refuses to overwrite existing transcript/evidence paths. Raw and canonical evidence are staged and validated before the requested output paths are published.
+
+This is still an operator-initiated physical read operation. It does **not** authorize temporary boot or persistent writes.
+
+## Manual capture alternative
+
+If the guarded helper is not available, preserve the original output unchanged. `fastboot getvar all` normally writes its variables to stderr, so capture both streams.
 
 PowerShell:
 
 ```powershell
 fastboot devices
-fastboot getvar all 2>&1 | Tee-Object -FilePath fastboot-getvar-all.txt
+fastboot -s EXACT_FASTBOOT_SERIAL getvar all 2>&1 | Tee-Object -FilePath fastboot-getvar-all.txt
 ```
 
 POSIX shell:
 
 ```sh
 fastboot devices
-fastboot getvar all >fastboot-getvar-all.txt 2>&1
+fastboot -s EXACT_FASTBOOT_SERIAL getvar all >fastboot-getvar-all.txt 2>&1
 ```
 
 Do not edit the transcript after capture. It may contain a device serial and other identifying data, so keep the raw transcript and generated evidence private unless identifiers have been intentionally handled for publication.
 
-## Import
+## Offline import
 
-The importer never invokes `adb` or `fastboot` and never writes to a phone:
+The existing importer remains available when a transcript was captured separately. It never invokes `adb` or `fastboot` and never writes to a phone:
 
 ```powershell
 python scripts/import_fastboot_baseline.py `
