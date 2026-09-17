@@ -89,7 +89,7 @@ def _install_probe_file(staging_root: Path, payload: bytes) -> str:
     return sha256(payload).hexdigest()
 
 
-def _validate_evidence(evidence: RescueCandidateEvidence) -> None:
+def validate_rescue_candidate_evidence(evidence: RescueCandidateEvidence) -> None:
     if not isinstance(evidence, RescueCandidateEvidence) or evidence.schema_version != 2:
         raise RescuePayloadError("rescue candidate evidence must be schema-v2 typed evidence")
     if evidence.verified is not True:
@@ -198,7 +198,7 @@ def build_verified_rescue_candidate(
         rescue_probe_policy=_RESCUE_PROBE_POLICY,
         verified=True,
     )
-    _validate_evidence(evidence)
+    validate_rescue_candidate_evidence(evidence)
     return evidence
 
 
@@ -219,7 +219,7 @@ def load_rescue_candidate_evidence(path: Path) -> RescueCandidateEvidence:
         evidence = RescueCandidateEvidence(**raw)
     except TypeError as exc:
         raise RescuePayloadError("rescue candidate evidence types are invalid") from exc
-    _validate_evidence(evidence)
+    validate_rescue_candidate_evidence(evidence)
     return evidence
 
 
@@ -227,7 +227,7 @@ def write_rescue_candidate_evidence(
     evidence: RescueCandidateEvidence,
     destination: Path,
 ) -> str:
-    _validate_evidence(evidence)
+    validate_rescue_candidate_evidence(evidence)
     destination = Path(destination)
     if destination.exists() or destination.is_symlink():
         raise RescuePayloadError("refusing to overwrite existing rescue candidate evidence")
