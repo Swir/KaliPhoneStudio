@@ -152,6 +152,8 @@ jobs:
 
       - name: Cross-check schema-v2 candidate probe evidence and offline policy
         shell: python
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           import hashlib, json
           from pathlib import Path
