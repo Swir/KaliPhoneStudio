@@ -14,9 +14,23 @@ ROOT = Path(__file__).resolve().parents[1]
 PROFILE = ROOT / "devices" / "oneplus" / "avicii" / "profile.json"
 
 
+def _profile_data(path: Path = PROFILE) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _contract():
-    data = json.loads(PROFILE.read_text(encoding="utf-8"))
-    return data["test_contract"]["functional_hardware"]
+    return _profile_data()["test_contract"]["functional_hardware"]
+
+
+def test_every_repository_device_profile_has_a_strict_functional_hardware_contract():
+    profile_paths = sorted((ROOT / "devices").glob("*/*/profile.json"))
+    assert profile_paths, "at least one device profile is required"
+    for path in profile_paths:
+        data = _profile_data(path)
+        assert "test_contract" in data, f"{path}: missing test_contract"
+        assert "functional_hardware" in data["test_contract"], f"{path}: missing functional_hardware contract"
+        normalized = validate_functional_hardware_contract(data["test_contract"]["functional_hardware"])
+        assert normalized["tests"], f"{path}: functional hardware test list is empty"
 
 
 def test_avicii_functional_hardware_contract_is_strict_and_deterministic():
