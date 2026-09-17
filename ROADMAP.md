@@ -4,15 +4,15 @@ KaliPhoneStudio separates **device-independent studio engineering** from **per-d
 
 ## Overall project progress
 
-**56% complete**
+**58% complete**
 
-`███████████▏░░░░░░░░ 56%`
+`███████████▋░░░░░░░░ 58%`
 
 The percentage is weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but do not receive the same weight as verified device milestones.
 
-## Current development line — 0.6.46-dev
+## Current development line — 0.6.47-dev
 
-### Completed in the current kernel/rootfs milestone
+### Completed in the current kernel/rootfs/DT authority milestone
 
 - [x] Migrate the project to the device-independent `kaliphonestudio/` package and profile registry.
 - [x] Make `Swir/KaliPhoneStudio` the only project source of truth.
@@ -45,15 +45,22 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Review and accept the first strict byte-identical Kali ARM64 rootfs authority from run `35158577624`.
 - [x] Bind rootfs authority, raw A/B provenance and canonicalization evidence to first-boot candidate contracts.
 - [x] Add deterministic credential-free first-boot provisioning and reproducible rescue-initramfs foundations.
+- [x] Add a profile-driven DT build plan tied to the exact reviewed kernel authority, source/toolchain locks and selected avicii DTB/DTBO outputs.
+- [x] Repair historical reviewed-kernel artifact reuse without rebuilding `Image`: if Actions omitted hidden `.config`, deterministically rehydrate only the exact final config and verify both config and existing Image against the immutable kernel authority.
+- [x] Complete real DTB/DTBO A/B run `35196447576` with strict byte-identical `lito.dtb`, raw `avicii-overlay.dtbo` and packed `dtbo.img` from two independent exact-source roots.
+- [x] Accept DTB SHA-256 `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce` (406,620 bytes), raw overlay SHA-256 `b3991f2fda96d3675778299b45b9802823022ef25d593c5d00c756ceea35b90c` (345,405 bytes) and packed DTBO SHA-256 `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` (352,256 bytes, one entry).
+- [x] Add and populate a reviewed `DeviceTreeAuthorityRecord` for run `35196447576`, main commit `50a10688a20e3189b97291426118e7d0c466e108` and artifact `10486420567`, retaining `hardware_verified=false` and `beta_gate_credit=false`.
+- [x] Preserve exact DT plan/build-A/build-B/reproducibility, source-normalization, config-rehydration and toolchain evidence under `evidence/authorities/device-tree/oneplus-avicii-2026-09-17/`.
+- [x] Add candidate-level reviewed DT authority binding and a unified first-boot authority bundle that requires kernel/rootfs/DT authority bindings to reference the same schema-v8 manifest/profile and the DT authority to reference the same reviewed kernel authority.
 
 ### Immediate next gates
 
-- [ ] Bind the accepted kernel authority to final DTB/DTBO artifacts and one exact first-boot candidate without granting hardware credit.
-- [ ] Produce reviewed source-locked DTB/DTBO build evidence tied to the same kernel source/plan where the profile requires it.
 - [ ] Capture the exact physical AC2003 Fastboot/OxygenOS baseline.
 - [ ] Validate matching stock `boot.img` provenance from that exact OTA.
-- [ ] Instantiate the reviewed kernel/rootfs/DT evidence against the physical-firmware candidate.
-- [ ] Attempt only an authorized physical **temporary boot** first.
+- [ ] Instantiate one schema-v8 first-boot candidate against the physical firmware/stock boot baseline and reviewed kernel/rootfs/DT authorities.
+- [ ] Emit and verify the unified first-boot authority bundle for that exact candidate.
+- [ ] Assemble the exact temporary-boot candidate and rescue/log path without performing a persistent write.
+- [ ] Attempt only an explicitly authorized physical **temporary boot** first.
 
 ## Phase A — Multi-device studio core
 
@@ -121,8 +128,12 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] FDT and Android DT table format source locks.
 - [x] Structural FDT/DTBO verification.
 - [x] Partition-limit and exact boot-plan binding.
-- [ ] Produce/review final source-locked DTB/DTBO artifact evidence for the first candidate.
-- [ ] Bind final kernel + DTB + DTBO into one reviewed first-boot candidate.
+- [x] Profile-driven exact DT build plan bound to source, toolchain and reviewed kernel authority.
+- [x] Strict two-root DTB/raw-DTBO/packed-DTBO reproducibility contract.
+- [x] Accept real strict DT authority run `35196447576` and preserve its exact evidence chain in-repo.
+- [x] Add reviewed DT authority schema and candidate-level binding contract.
+- [x] Add unified candidate authority bundle across reviewed kernel/rootfs/DT provenance.
+- [ ] Bind the reviewed DT authority to one exact physical-firmware first-boot candidate.
 - [ ] Verify device-tree functionality on physical AC2003.
 
 ## Phase C — Kali userspace and rescue
@@ -145,6 +156,8 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Candidate-level rootfs raw-A/B/canonicalization provenance binding.
 - [x] Candidate-level reviewed-rootfs-authority binding.
 - [x] Candidate-level reviewed-kernel-authority binding contract.
+- [x] Candidate-level reviewed-device-tree-authority binding contract.
+- [x] Unified fail-closed candidate authority bundle across reviewed kernel/rootfs/DT authorities.
 - [x] Deterministic provisioning overlay with no credentials and remote access disabled.
 - [ ] Instantiate the exact candidate against physical firmware + stock boot + reviewed kernel/rootfs/DT evidence.
 
@@ -185,7 +198,7 @@ A first GitHub Beta is allowed only when [`BETA_RELEASE_GATE.md`](BETA_RELEASE_G
 
 - [ ] CI green for exact release commit.
 - [ ] Exact device/firmware compatibility matrix.
-- [ ] Reviewed strict kernel/rootfs/DT evidence bound to the candidate.
+- [ ] Reviewed strict kernel/rootfs/DT evidence instantiated and bound to the exact physical-firmware candidate.
 - [ ] Required physical-device evidence complete.
 - [ ] Installation instructions.
 - [ ] Recovery/restore instructions.
