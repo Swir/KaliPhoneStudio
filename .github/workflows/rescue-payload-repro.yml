@@ -66,6 +66,24 @@ jobs:
               print(f"ldflags={build['ldflags']}", file=f)
               print(f"source_date_epoch={build['source_date_epoch']}", file=f)
 
+      - name: Verify checked-in rescue material locks before expensive build
+        shell: python
+        run: |
+          import hashlib, json
+          from pathlib import Path
+
+          lock = json.loads(Path("tools/rescue-payload-lock.json").read_text(encoding="utf-8"))
+          materials = lock["materials"]
+          for relative, key in (
+              ("rescue/busybox-minimal.config", "config_sha256"),
+              ("rescue/init", "init_sha256"),
+          ):
+              actual = hashlib.sha256(Path(relative).read_bytes()).hexdigest()
+              expected = materials[key]
+              print(f"{relative}: expected={expected} actual={actual}")
+              if actual != expected:
+                  raise SystemExit(f"locked material drift: {relative}")
+
       - name: Install ARM64 cross-build and execution prerequisites
         shell: bash
         run: |
