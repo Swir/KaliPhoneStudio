@@ -45,7 +45,7 @@ if [ -r "$KPS_PROBE_FILE" ]; then
 fi
 
 # Keep automatic physical bring-up inventory strictly read-only. It does not mount,
-# fsck, decrypt, write, charge-control, initialize display, or touch input nodes.
+# repair, decrypt, write, charge-control, initialize display, or touch input nodes.
 # Every field is reduced to a bounded ASCII token for deterministic offline parsing.
 kps_read_token() {
     if [ -r "$1" ]; then
