@@ -9,8 +9,10 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] CI/tests green for the exact release commit.
 - [ ] Device profile schema/identity tests pass.
 - [ ] Read-only Fastboot baseline evidence records the exact physical profile/serial plus firmware build/fingerprint and is SHA-256 bound to the original transcript.
+- [ ] The exact reviewed Fastboot executable/tool-policy evidence used during guarded capture is cryptographically joined to that raw transcript and parsed baseline in one immutable read-only capture bundle; detached tool evidence is not acceptable.
 - [ ] The baseline firmware fingerprint/build matches the exact stock OTA provenance used for the candidate.
 - [ ] Matching stock `boot.img` provenance is bound to the exact OTA/payload evidence used by the build.
+- [ ] One physical-baseline/stock-provenance bundle joins the exact capture bundle, baseline/transcript, OTA/payload/stock `boot.img` evidence and canonical firmware metadata before candidate instantiation. That bundle must keep `temporary_boot_authorized=false`, `hardware_verified=false` and `beta_gate_credit=false`.
 - [ ] Candidate manifest records exact `profile_id`, firmware baseline and hashes.
 - [ ] Kernel evidence records an exact pinned source commit, expected kernel version, generated final `.config` digest and exact ARM64 `Image` digest/size.
 - [ ] Kernel compiler/toolchain evidence is source-locked and bound to the approved kernel plan/build configuration; a moving host compiler or PATH fallback is not acceptable.
@@ -57,6 +59,6 @@ For a device profile to receive its first public Beta, all items below must be s
 - [ ] Release manifest and SHA-256 files.
 - [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
 
-Importing a saved Fastboot transcript, producing host-side authorization evidence, pinning a public kernel/compiler source, binding exact executed kernel or DT builds, accepting or binding reviewed kernel/rootfs/DT authorities, reconstructing a reviewed hidden kernel config, canonicalizing a rootfs, binding candidate provenance, creating a unified host authority bundle, generating a deterministic provisioning overlay, or passing host-side kernel/rootfs/DT checks does **not** by itself satisfy any physical-device checkbox above.
+Importing a saved Fastboot transcript, creating a joined capture bundle or physical-baseline/stock-provenance bundle, producing host-side authorization evidence, pinning a public kernel/compiler source, binding exact executed kernel or DT builds, accepting or binding reviewed kernel/rootfs/DT authorities, reconstructing a reviewed hidden kernel config, canonicalizing a rootfs, binding candidate provenance, creating a unified host authority bundle, generating a deterministic provisioning overlay, or passing host-side kernel/rootfs/DT checks does **not** by itself satisfy any physical-device checkbox above.
 
 Only after these gates pass should a GitHub **Beta** be created. Stable releases require a substantially higher hardware-completeness and regression threshold.
