@@ -1,7 +1,7 @@
 """Bounded non-release diagnostics for divergent kernel build trees.
 
 Strict kernel acceptance remains byte-for-byte equality of the final approved
-outputs.  This module is only used after that strict check fails.  It compares a
+outputs. This module is only used after that strict check fails. It compares a
 selected, deterministic set of intermediate kernel build artifacts from two
 independent output roots so a later iteration can identify where divergence
 first becomes visible without weakening any release or Beta gate.
@@ -12,7 +12,6 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
 from pathlib import Path, PurePosixPath
-from typing import Iterable
 
 
 DIAGNOSTIC_SCHEMA_VERSION = 1
@@ -22,6 +21,7 @@ MAX_SELECTED_FILES = 100_000
 
 _KEY_NAMES = frozenset({".config", "vmlinux", "System.map", "Module.symvers", "Image"})
 _KEY_SUFFIXES = frozenset({".o", ".a"})
+_EXACT_DIAGNOSTIC_PATHS = frozenset({"kernel/kheaders_data.tar.xz"})
 
 
 class KernelBuildTreeDiagnosticError(ValueError):
@@ -92,6 +92,8 @@ def _safe_relative(root: Path, path: Path) -> str:
 def _selected(relative: str) -> bool:
     path = PurePosixPath(relative)
     name = path.name
+    if relative in _EXACT_DIAGNOSTIC_PATHS:
+        return True
     if relative == "arch/arm64/boot/Image":
         return True
     if name in _KEY_NAMES:
@@ -101,6 +103,8 @@ def _selected(relative: str) -> bool:
 
 def _category(relative: str) -> str:
     path = PurePosixPath(relative)
+    if relative == "kernel/kheaders_data.tar.xz":
+        return "kheaders_archive"
     if relative == "arch/arm64/boot/Image" or path.name == "Image":
         return "image"
     if path.name == "vmlinux":
@@ -192,11 +196,7 @@ def diagnose_kernel_build_tree(
 ) -> KernelBuildTreeDivergenceEvidence:
     if not isinstance(chunk_size, int) or isinstance(chunk_size, bool) or chunk_size < 4096:
         raise KernelBuildTreeDiagnosticError("chunk_size must be an integer >= 4096")
-    if (
-        not isinstance(max_differences, int)
-        or isinstance(max_differences, bool)
-        or max_differences < 1
-    ):
+    if not isinstance(max_differences, int) or isinstance(max_differences, bool) or max_differences < 1:
         raise KernelBuildTreeDiagnosticError("max_differences must be an integer >= 1")
 
     root_a = _safe_root(build_a, "build A")
@@ -233,30 +233,12 @@ def diagnose_kernel_build_tree(
         if path_a is None:
             missing_a += 1
             hash_b, bytes_b = _hash_regular(path_b, chunk_size=chunk_size)  # type: ignore[arg-type]
-            record(
-                _difference(
-                    relative,
-                    kind="missing_from_a",
-                    size_a=None,
-                    size_b=bytes_b,
-                    sha_a=None,
-                    sha_b=hash_b,
-                )
-            )
+            record(_difference(relative, kind="missing_from_a", size_a=None, size_b=bytes_b, sha_a=None, sha_b=hash_b))
             continue
         if path_b is None:
             missing_b += 1
             hash_a, bytes_a = _hash_regular(path_a, chunk_size=chunk_size)
-            record(
-                _difference(
-                    relative,
-                    kind="missing_from_b",
-                    size_a=bytes_a,
-                    size_b=None,
-                    sha_a=hash_a,
-                    sha_b=None,
-                )
-            )
+            record(_difference(relative, kind="missing_from_b", size_a=bytes_a, size_b=None, sha_a=hash_a, sha_b=None))
             continue
 
         stat_a = path_a.stat()
@@ -267,28 +249,10 @@ def diagnose_kernel_build_tree(
             raise KernelBuildTreeDiagnosticError("build artifact size changed while being diagnosed")
         if bytes_a != bytes_b:
             size_mismatch += 1
-            record(
-                _difference(
-                    relative,
-                    kind="size_mismatch",
-                    size_a=bytes_a,
-                    size_b=bytes_b,
-                    sha_a=hash_a,
-                    sha_b=hash_b,
-                )
-            )
+            record(_difference(relative, kind="size_mismatch", size_a=bytes_a, size_b=bytes_b, sha_a=hash_a, sha_b=hash_b))
         elif hash_a != hash_b:
             content_mismatch += 1
-            record(
-                _difference(
-                    relative,
-                    kind="content_mismatch",
-                    size_a=bytes_a,
-                    size_b=bytes_b,
-                    sha_a=hash_a,
-                    sha_b=hash_b,
-                )
-            )
+            record(_difference(relative, kind="content_mismatch", size_a=bytes_a, size_b=bytes_b, sha_a=hash_a, sha_b=hash_b))
         else:
             identical += 1
 
@@ -313,10 +277,7 @@ def diagnose_kernel_build_tree(
     )
 
 
-def write_kernel_build_tree_evidence(
-    evidence: KernelBuildTreeDivergenceEvidence,
-    destination: Path,
-) -> str:
+def write_kernel_build_tree_evidence(evidence: KernelBuildTreeDivergenceEvidence, destination: Path) -> str:
     path = Path(destination)
     if path.exists():
         raise KernelBuildTreeDiagnosticError(f"refusing to overwrite evidence: {path}")
