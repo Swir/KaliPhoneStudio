@@ -92,3 +92,63 @@ def test_pinned_vdso32_cc_compat_inherits_expanded_recursive_maps(tmp_path: Path
     assert f"-fmacro-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
     assert f"-fdebug-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
     assert f"-fmacro-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
+
+
+def test_recursive_out_of_tree_make_preserves_unexpanded_cc_until_submake(tmp_path: Path) -> None:
+    """Model the Kbuild -C source O=output recursion before approving the experiment.
+
+    The outer make must forward the command-line CC definition without baking the
+    outer source directory into it. The inner make owns KBUILD_SRC/CURDIR and must
+    therefore expand the two canonical prefix maps against the actual source and
+    output roots used by that build.
+    """
+    make = shutil.which("make")
+    if make is None:
+        pytest.skip("GNU make is not installed on this host")
+
+    plan, _recipe = _plan_and_recipe()
+    cc = dict(plan.make_flags)["CC"]
+    source = (tmp_path / "kernel-source").resolve()
+    output = (tmp_path / "kernel-output").resolve()
+    source.mkdir()
+    output.mkdir()
+
+    (source / "Makefile").write_text(
+        "O ?= $(CURDIR)/out\n"
+        "all:\n"
+        "\t@$(MAKE) --no-print-directory -C '$(O)' KBUILD_SRC='$(CURDIR)' inner\n",
+        encoding="utf-8",
+    )
+    (output / "Makefile").write_text(
+        "CC_COMPAT ?= $(CC)\n"
+        "CC_COMPAT += --target=arm-linux-gnueabi\n"
+        "inner:\n"
+        "\t@printf '%s\\n' '$(CC_COMPAT)'\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            make,
+            "--no-print-directory",
+            "-C",
+            str(source),
+            f"O={output}",
+            f"CC={cc}",
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=20,
+    )
+    expanded = result.stdout.strip()
+
+    assert "$(KBUILD_SRC)" not in expanded
+    assert "$(CURDIR)" not in expanded
+    assert expanded.startswith("clang ")
+    assert expanded.endswith("--target=arm-linux-gnueabi")
+    assert f"-fdebug-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
+    assert f"-fmacro-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
+    assert f"-fdebug-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
+    assert f"-fmacro-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
