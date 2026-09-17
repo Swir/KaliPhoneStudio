@@ -137,6 +137,124 @@ done
 
 echo "KPS_DIAG_END=$KPS_DIAG_POLICY"
 
+# Broader hardware-presence survey. This remains automatic only because it reads
+# bounded sysfs attributes; it never opens input event streams, activates radios,
+# configures USB/network/audio/display hardware, changes thermal/power policy, or
+# touches persistent storage. Presence is evidence for later manual review only.
+KPS_SURVEY_POLICY="readonly-hardware-presence-v1"
+echo "KPS_SURVEY_BEGIN=$KPS_SURVEY_POLICY"
+
+count=0
+for udc in /sys/class/udc/*; do
+    [ -e "$udc" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${udc##*/}"
+    echo "KPS_SURVEY_USB_UDC=$(kps_token_or_dash "$name")"
+    count=$((count + 1))
+done
+
+count=0
+for usb in /sys/bus/usb/devices/*; do
+    [ -e "$usb" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${usb##*/}"
+    vendor="$(kps_read_token "$usb/idVendor")"
+    product="$(kps_read_token "$usb/idProduct")"
+    class="$(kps_read_token "$usb/bDeviceClass")"
+    echo "KPS_SURVEY_USB_DEVICE=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$vendor")|$(kps_token_or_dash "$product")|$(kps_token_or_dash "$class")"
+    count=$((count + 1))
+done
+
+count=0
+for net in /sys/class/net/*; do
+    [ -e "$net" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${net##*/}"
+    type="$(kps_read_token "$net/type")"
+    state="$(kps_read_token "$net/operstate")"
+    echo "KPS_SURVEY_NET=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$type")|$(kps_token_or_dash "$state")"
+    count=$((count + 1))
+done
+
+count=0
+for rfkill in /sys/class/rfkill/rfkill*; do
+    [ -e "$rfkill" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="$(kps_read_token "$rfkill/name")"
+    type="$(kps_read_token "$rfkill/type")"
+    state="$(kps_read_token "$rfkill/state")"
+    soft="$(kps_read_token "$rfkill/soft")"
+    hard="$(kps_read_token "$rfkill/hard")"
+    echo "KPS_SURVEY_RFKILL=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$type")|$(kps_token_or_dash "$state")|$(kps_token_or_dash "$soft")|$(kps_token_or_dash "$hard")"
+    count=$((count + 1))
+done
+
+count=0
+for card in /sys/class/sound/card*; do
+    [ -e "$card" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${card##*/}"
+    card_id="$(kps_read_token "$card/id")"
+    echo "KPS_SURVEY_SOUND=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$card_id")"
+    count=$((count + 1))
+done
+
+count=0
+for zone in /sys/class/thermal/thermal_zone*; do
+    [ -e "$zone" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${zone##*/}"
+    type="$(kps_read_token "$zone/type")"
+    temp="$(kps_read_token "$zone/temp")"
+    echo "KPS_SURVEY_THERMAL=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$type")|$(kps_token_or_dash "$temp")"
+    count=$((count + 1))
+done
+
+count=0
+for event in /sys/class/input/event*; do
+    [ -e "$event" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${event##*/}"
+    device_name="$(kps_read_token "$event/device/name")"
+    echo "KPS_SURVEY_INPUT=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$device_name")"
+    count=$((count + 1))
+done
+
+count=0
+for fb in /sys/class/graphics/fb*; do
+    [ -e "$fb" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${fb##*/}"
+    driver="$(kps_read_token "$fb/name")"
+    echo "KPS_SURVEY_GRAPHICS=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$driver")"
+    count=$((count + 1))
+done
+
+count=0
+for connector in /sys/class/drm/card*-*; do
+    [ -e "$connector" ] || continue
+    [ "$count" -lt 32 ] || break
+    [ -r "$connector/status" ] || continue
+    name="${connector##*/}"
+    status="$(kps_read_token "$connector/status")"
+    echo "KPS_SURVEY_DRM=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$status")"
+    count=$((count + 1))
+done
+
+count=0
+for supply in /sys/class/power_supply/*; do
+    [ -e "$supply" ] || continue
+    [ "$count" -lt 32 ] || break
+    name="${supply##*/}"
+    type="$(kps_read_token "$supply/type")"
+    status="$(kps_read_token "$supply/status")"
+    capacity="$(kps_read_token "$supply/capacity")"
+    echo "KPS_SURVEY_POWER=$(kps_token_or_dash "$name")|$(kps_token_or_dash "$type")|$(kps_token_or_dash "$status")|$(kps_token_or_dash "$capacity")"
+    count=$((count + 1))
+done
+
+echo "KPS_SURVEY_END=$KPS_SURVEY_POLICY"
+
 # Generate an explicit, local-only read probe in initramfs RAM. It is NOT executed
 # automatically. The operator must type the exact confirmation argument below.
 # It reads at most one 4 KiB block from at most eight non-removable whole block
