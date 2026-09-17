@@ -2,6 +2,19 @@
 
 This file tracks the current development line. Historical detailed entries remain available in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md) and Git history.
 
+## 0.6.50-dev — fresh runtime revalidation before one temporary boot
+
+- Added device-independent `TemporaryBootRuntimeProbeEvidence` and `TemporaryBootExecutionEvidence` for the first real physical temporary-boot attempt path.
+- The execution path re-runs exact offer verification immediately before use, so the concrete reviewed Fastboot executable and candidate `boot.img` are rehashed again and must still match the physical-candidate gate.
+- Explicit `TemporaryBootUserAuthorizationEvidence` is mandatory and must bind the exact offer/profile/serial/confirmation policy while still containing no prior execution/write/hardware/Beta claim.
+- Added a fresh read-only serial-bound `fastboot devices` + `getvar all` runtime probe before the boot command. Critical product, serial, active slot, slot count, unlock/security state and bootloader/baseband identities must remain equal to the reviewed baseline; device swap or state drift fails closed before `boot` is invoked.
+- The baseline must report an unlocked bootloader and the fresh runtime probe must still report it unlocked.
+- The only executable command remains one argv-only `fastboot -s SERIAL boot IMAGE`; no shell string and no `flash`, `erase`, `set_active`, `reboot` or persistent-write path is exposed.
+- Normal Fastboot command failure is preserved as immutable execution evidence rather than being misreported as hardware failure/success. Even a return code 0 records only command acceptance: `kali_userspace_verified=false`, `hardware_verified=false`, `beta_gate_credit=false`.
+- Added immutable probe/execution evidence writers plus `scripts/execute_temporary_boot_once.py`. The CLI refuses to act unless `--execute-temporary-boot` and the exact profile confirmation are both supplied.
+- Added focused tests for read-only runtime revalidation, exact serial-bound boot invocation, device swap, unlock/slot drift, detached authorization, local image TOCTOU drift, normal Fastboot failure evidence and immutable outputs.
+- Kept project completion at **58%** because no physical AC2003 boot/hardware gate has actually passed. Beta remains blocked.
+
 ## 0.6.49-dev — exact temporary-boot offer, no execution
 
 - Added device-independent `TemporaryBootOfferEvidence` and `PreparedTemporaryBootOffer` as the last host-local file-identity boundary before an explicitly confirmed physical temporary boot.
