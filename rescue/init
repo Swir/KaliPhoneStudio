@@ -54,7 +54,7 @@ kps_read_token() {
 }
 
 kps_token_or_dash() {
-    value="$1"
+    value="$(printf '%s' "$1" | tr -cd 'A-Za-z0-9._:+-' | cut -c1-128)"
     if [ -n "$value" ]; then
         printf '%s' "$value"
     else
