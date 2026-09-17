@@ -12,7 +12,7 @@ The repository is intentionally conservative about hardware claims: a device pro
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host-side reproducibility, provenance and safety are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> **Current development line: `0.6.44-dev`.** The reviewed Kali ARM64 rootfs authority is strict-byte-identical. Kernel reproducibility is **not** accepted yet. Real authority run `35177350001` completed two exact-source, source-mtime-normalized `jobs=1` builds with identical final `.config` and equal 43,878,416-byte Images, but 4,388,978 Image bytes still differed across 229,151 ranges. Build-tree diagnostics narrowed the divergence to only 20 of 4,597 selected artifacts. `0.6.44-dev` adds bounded ARM64 ELF-section diagnostics and deterministic `CONFIG_IKHEADERS` tar/xz policy for the next real A/B retry. No physical AC2003/Beta credit is granted.
+> **Current development line: `0.6.46-dev`.** The reviewed Kali ARM64 rootfs authority remains strict-byte-identical. Kernel authority is **not accepted yet**. Reviewed real run `35181516724` reduced the remaining final Image drift to only **16 bytes in 2 ranges** while keeping the final `.config` byte-identical and both Images exactly 43,878,416 bytes. Deterministic IKHEADERS removed the earlier `kernel/kheaders.o`, kallsyms and `System.map` divergence; the remaining target-linked source was narrowed to four ARM32 compat-vDSO objects. `0.6.45-dev` sends canonical source/output prefix maps through the recursive `CC_COMPAT` path used by that pinned vDSO32 Makefile, and real run `35183670399` is testing that exact single-variable experiment. `0.6.46-dev` adds a reviewed kernel-authority contract and first-boot candidate binding that can only be populated after a real strict A/B pass. No physical AC2003/Beta credit is granted.
 
 ## Source of truth and architecture
 
@@ -86,9 +86,14 @@ Profile inspection is offline and explicitly reports `hardware_verified=false` a
 - `oneplus/avicii` requires `CONFIG_RD_LZ4=y`; engineering module signing is deterministic for reproducibility-sensitive bring-up.
 - Android Clang `clang-r416183b` is source/object locked, independently verified from Gitiles, and locally reverified from the fetched Git object graph before compiler byte/banner checks.
 - Main compiler source/output paths are remapped to fixed virtual roots with debug/macro prefix maps and `KBUILD_ABS_SRCTREE=0`.
+- The compat-vDSO32 compiler path is separately normalized through profile-bound recursive GNU make `CC` flags using `$(KBUILD_SRC)` and `$(CURDIR)`, so `CC_COMPAT ?= $(CC)` receives the same canonical source/output identities without hardcoding host paths.
 - `KBUILD_BUILD_USER`, host, timestamp, version, `SOURCE_DATE_EPOCH`, locale and timezone are fixed and evidence-bound.
 - Clean Git-tracked source mtimes can be normalized to epoch 0 with canonical mode/blob/path evidence while `.git` and untracked files remain untouched.
+- `CONFIG_IKHEADERS` remains enabled while its generated tar/xz payload is forced through deterministic sort/mtime/uid/gid/compressor policy; diagnostics compare `kernel/kheaders_data.tar.xz` directly.
 - Strict reproducibility requires **two independent builds with byte-identical final `.config` and ARM64 `Image`**, plus exact executed-build provenance.
+- Strict execution binding now also requires the reproducibility record to match each build's exact config-verifier and Image-verifier evidence digests.
+- A reviewed `KernelAuthorityRecord` contract is available for a future real strict pass. It binds run/commit/artifact IDs, exact plan/toolchain/recipe/environment, both build records, strict reproducibility/binding evidence and final config/Image identities. It cannot claim hardware or Beta credit.
+- A separate first-boot kernel-authority binding requires the schema-v8 candidate to match that exact reviewed authority before release-candidate preparation.
 
 ### Kernel reproducibility evidence
 
@@ -98,16 +103,20 @@ The acceptance criterion has **not** been weakened after failures.
 |---|---|---|
 | `35166301228` | exact source/toolchain, internal `jobs=1` | strict failure; 11,293,315 differing Image bytes / 897,561 ranges |
 | `35174347350` | add tracked-source mtime normalization | strict failure; 11,776,181 differing bytes / 998,609 ranges |
-| `35177350001` | same experiment with intermediate build-tree diagnostics | strict failure; 4,388,978 differing bytes / 229,151 ranges; only 20/4,597 selected intermediates differ |
-| `35181516724` | deterministic `CONFIG_IKHEADERS` tar/xz policy + ELF-section diagnostics | real authority retry started from `0.6.44-dev`; result remains authoritative only after completion/review |
+| `35177350001` | intermediate build-tree diagnostics | strict failure; 4,388,978 differing bytes / 229,151 ranges; only 20/4,597 selected intermediates differ |
+| `35181516724` | deterministic `CONFIG_IKHEADERS` tar/xz policy | strict failure; **16 differing bytes / 2 ranges**; only 14/4,597 selected intermediates differ; compat-vDSO32 remains target-linked |
+| `35183670399` | recursive compat-vDSO source/output prefix maps | real A/B retry in progress; no reproducibility credit before strict completion/review |
 
-The reviewed `35177350001` build-tree evidence includes divergence in `kernel/kheaders.o`, compat-vDSO32 objects, kallsyms objects, `System.map`, `vmlinux.o` and `vmlinux`. The `0.6.44-dev` profile keeps `CONFIG_IKHEADERS` enabled while forcing deterministic GNU tar order/mtime/uid/gid and single-threaded xz. This is an experiment, not a success claim.
+The reviewed `35181516724` result is a major narrowing but still a strict failure. Both Images were 43,878,416 bytes and final `.config` stayed identical; Image A SHA-256 was `5c34e4e86b858ec02cc28abd06673747620dc00d45160b0fc084df997f7faf9c`, Image B SHA-256 was `97d6ba26afbea7aa543803a9f15e111e6ed5826cbf4c3c3c819e896998a64e54`. The only Image byte ranges still differing were offsets `24740796..24740803` and `38215952..38215959`.
 
-Failure diagnostics are deliberately non-release evidence:
+Build-tree evidence showed that deterministic IKHEADERS eliminated the earlier `kernel/kheaders.o`, `System.map` and kallsyms differences. Four ARM32 compat-vDSO objects still differed: `note.o`, `sigreturn.o`, `vdso.o` and `vgettimeofday.o`. The first ELF classifier correctly failed closed because it only accepted AArch64 ELF64; the current diagnostics understand target ARM ELF32 compat-vDSO objects while excluding unrelated `scripts/*` host-tool objects.
+
+Failure diagnostics remain non-release evidence:
 
 - bounded final-Image byte/range diagnostics,
 - bounded intermediate build-tree SHA-256 comparison,
-- bounded ARM64 ELF section classification for executable/debug/metadata/relocation/data differences.
+- direct generated IKHEADERS archive comparison,
+- bounded ARM/AArch64 ELF section classification for executable/debug/metadata/relocation/data differences.
 
 Every diagnostic record keeps `hardware_verified=false` and `beta_gate_credit=false`.
 
@@ -139,6 +148,7 @@ The rootfs authority proves host-side reproducibility only. It does not prove bo
 
 - First-boot candidate schema v8 binds exact firmware, temporary-boot authorization, boot plan, executed/reproducible kernel/compiler provenance, DTB/DTBO and strict rootfs evidence.
 - Reviewed rootfs authority can be cryptographically linked to a concrete candidate only after the exact physical firmware baseline and stock boot provenance exist.
+- Reviewed kernel authority can likewise be linked only to a candidate whose exact kernel plan/toolchain/build/repro/config/Image identities match the reviewed host authority; this never substitutes for physical boot evidence.
 - Deterministic device-independent provisioning overlay contains no credentials, keeps the root account locked and remote access disabled by default.
 - Deterministic rescue initramfs supports gzip/LZ4 with source-locked static ARM64 BusyBox payload and exact boot-plan binding.
 - Rescue reproducibility passes host-side; the physical rescue/log path remains unverified.
