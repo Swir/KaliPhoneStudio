@@ -1,10 +1,10 @@
 {
-  "version": "0.6.51-dev",
-  "stage": "reviewed Kali ARM64 rootfs, oneplus/avicii kernel and DTB/DTBO authorities remain strict-byte-identical host-side; the host chain now reaches one guarded temporary boot plus deterministic exact-candidate rescue markers and offline physical-console observation binding, while every physical AC2003 Beta gate remains blocked pending real device evidence and manual review",
+  "version": "0.6.52-dev",
+  "stage": "reviewed Kali ARM64 rootfs, oneplus/avicii kernel and DTB/DTBO authorities remain strict-byte-identical host-side; the guarded rescue path now emits bounded read-only sysfs inventory and can bind those raw UFS/power/input/graphics signals to the exact already-bound physical transcript, while every physical AC2003 Beta gate remains blocked pending real device evidence and manual review",
   "repository_source_of_truth": true,
   "project_progress_percent": 58,
   "python_ci": ["3.11", "3.12", "3.13", "3.14"],
-  "host_ci": "Reviewed rootfs/kernel/DT authorities remain accepted. 0.6.51 upgrades rescue candidates to schema v2 with a deterministic provenance probe embedded in the exact ramdisk, emits exact /init proof markers, and adds an offline transcript binder to one successful temporary-boot execution. Matching markers require manual review and grant no Kali-rootfs, storage, charging, hardware or Beta credit.",
+  "host_ci": "Reviewed rootfs/kernel/DT authorities remain accepted. 0.6.52 adds bounded read-only rescue diagnostics for block/SCSI/power/input/framebuffer/DRM sysfs signals and binds them to one exact PhysicalBootObservationEvidence transcript. Signal presence never promotes storage, display/touch, charging/battery, recovery, hardware or Beta state; all require manual physical review.",
   "application_entrypoint": "implemented; main.py provides safe offline GUI/CLI profile inspection",
   "profile_schema_version": 2,
   "profile_contract": "implemented and CI-enforced; identity, confirmation token, boot/partition constraints, source pins, recovery notes, host tests and hardware Beta tests are required",
@@ -75,7 +75,8 @@
   "rescue_payload_reproducibility": "host-side PASS; exact source/material locks and two byte-identical ARM64 BusyBox builds required; physical rescue/log behavior remains unverified",
   "rescue_candidate_evidence": "schema-v2 binds exact reproducible payload/staging/initramfs evidence, ramdisk SHA-256/size/compression, locked init digest and deterministic rescue probe id/file digest; host-only and not a hardware claim",
   "physical_boot_observation": "schema-v1 offline evidence binds one successful TemporaryBootExecutionEvidence, exact schema-v2 RescueCandidateEvidence and raw operator-captured console/log transcript; exact init-reached and rescue-probe markers are mandatory, conflicts fail closed, raw transcript is SHA-256-bound, manual_review_required=true and all Kali-rootfs/storage/display/charging/recovery/hardware/Beta verification flags remain false",
-  "destructive_write_policy": "temporary-boot-first; runtime executor exposes only one fastboot boot command and no persistent-write verb; physical observation recorder is offline and cannot access or write the phone",
+  "physical_rescue_diagnostics": "schema-v1 offline evidence binds one exact PhysicalBootObservationEvidence plus the exact same transcript to a bounded readonly-sysfs-inventory-v1 block. BLOCK/SCSI_HOST/POWER/INPUT/GRAPHICS/DRM records are sanitized and counted; UFS/battery/input/graphics flags mean only raw signal presence. manual_review_required=true and storage/display/charging/recovery/hardware/Beta verification remains false",
+  "destructive_write_policy": "temporary-boot-first; runtime executor exposes only one fastboot boot command and no persistent-write verb; physical observation/diagnostic recorders are offline and cannot access or write the phone",
   "beta_gate": "BLOCKED",
   "beta_blockers": [
     "physical AC2003 Fastboot transcript plus exact OxygenOS build/fingerprint capture",
@@ -83,9 +84,9 @@
     "instantiate exact schema-v8 physical-firmware candidate, reviewed authority bindings, physical-candidate preflight gate and local temporary-boot offer",
     "fresh runtime device/state probe plus successful explicitly confirmed temporary-boot attempt on physical AC2003, followed by independently captured and manually reviewed proof of actual boot progress",
     "usable rescue/logging path and Kali early userspace/rootfs proof",
-    "required UFS/storage verification",
-    "display/touch setup path or explicit console-only release decision",
-    "charging/battery safety verification",
+    "required UFS/storage verification; raw readonly sysfs presence alone is not sufficient",
+    "display/touch setup path or explicit console-only release decision; raw input/graphics sysfs presence alone is not sufficient",
+    "charging/battery safety verification; raw power-supply sysfs presence alone is not sufficient",
     "documented recovery and rollback exercised on exact baseline",
     "release compatibility matrix, manifest and SHA-256 checksums"
   ]
