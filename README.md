@@ -25,22 +25,22 @@
 
 | Item | Status |
 |---|---|
-| Current development line | `0.6.59-dev` |
+| Current development line | `0.6.60-dev` |
 | Completion | **58%** |
 | Current stage | Development / physical bring-up |
 | First device profile | OnePlus Nord AC2003 — `oneplus/avicii` |
 | Latest public release | **Not published yet** |
 | Beta gate | **BLOCKED** |
 
-**Current development line: `0.6.59-dev`**
+**Current development line: `0.6.60-dev`**
 
 **58% complete**
 
 `███████████▋░░░░░░░░ 58%`
 
-**Public Beta is not released.** The first supported profile, `oneplus/avicii` for the OnePlus Nord AC2003, is still in physical bring-up. Reviewed host-side rootfs, kernel and DTB/DTBO authorities exist, and the physical evidence chain now has both a cross-bound session contract and an exact-file audit dossier. Real-device identity, exact firmware/stock boot matching, temporary boot, accepted physical storage review, reversible rootfs staging, Kali early-userspace, hardware safety and recovery gates are still pending.
+**Public Beta is not released.** The first supported profile, `oneplus/avicii` for the OnePlus Nord AC2003, is still in physical bring-up. Reviewed host-side rootfs, kernel and DTB/DTBO authorities exist, and rescue userspace now has a bounded read-only hardware-presence survey in addition to the physical evidence chain. Real-device identity, exact firmware/stock boot matching, temporary boot, accepted physical storage review, reversible rootfs staging, manually reviewed hardware evidence, Kali early-userspace, hardware safety and recovery gates are still pending.
 
-KaliPhoneStudio is deliberately conservative: a profile, green CI, reproducible artifact, successful Fastboot return code, rescue marker, storage-discovery record, manual-review record, cross-bound bring-up session or exact-file dossier does **not** by itself mean a phone is supported. The authoritative release rules live in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+KaliPhoneStudio is deliberately conservative: a profile, green CI, reproducible artifact, successful Fastboot return code, rescue marker, hardware-presence signal, storage-discovery record, manual-review record, cross-bound bring-up session or exact-file dossier does **not** by itself mean a phone is supported. The authoritative release rules live in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Overview
 
@@ -57,10 +57,12 @@ The project currently focuses on building and proving a safe first-boot path for
 | 🧬 Reproducible builds | Reviewed strict A/B authorities for Kali ARM64 rootfs, avicii kernel and DTB/DTBO artifacts. |
 | 🛟 Rescue path | Deterministic source-locked ARM64 rescue initramfs with exact probe identity and remote access disabled by default. |
 | 📦 Boot provenance | Exact OTA → payload → stock `boot.img` evidence plus deterministic boot-image assembly and round-trip checks. |
-| 🧪 Physical evidence | Read-only rescue diagnostics, bounded functional probes, Kali early-userspace markers, typed storage discovery and one cross-bound audit session. |
+| 🧪 Physical evidence | Read-only rescue diagnostics, bounded manual functional probes, bounded sysfs-only hardware-presence survey, Kali early-userspace markers, typed storage discovery and one cross-bound audit session. |
 | 🧾 Exact-file audit | A path-independent dossier verifies the exact session/evidence/transcript/report/recovery/review byte set before manual audit or later strategy design. |
 | 💾 Storage safety | Discovery, review, session and dossier layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
 | 🖥️ Offline UI/CLI | Safe profile inspection without automatically invoking ADB/Fastboot or exposing unguarded write controls. |
+
+The 0.6.60 hardware survey observes only bounded sysfs presence/state for USB, network/rfkill, sound, thermal, input, framebuffer/DRM and power supplies. It does not activate those subsystems, and every functional hardware verification flag remains false until separate physical review proves the capability.
 
 ## Compatibility
 
@@ -211,6 +213,7 @@ See [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
 - Never flash a physical phone without explicit user interaction and a verified exact-device baseline.
 - Fail closed on identity, firmware, provenance, checksum, partition-layout or evidence drift.
 - Keep host CI and physical hardware claims separate.
+- Treat sysfs hardware presence as an observation only; it never proves the subsystem functions.
 - Never weaken strict reproducibility to make a gate pass.
 - Do not embed credentials or enable remote access by default.
 - A storage role, layout hint, review-ready discovery, accepted manual review, valid bring-up session or exact-file dossier is **not** a block-device target.
@@ -223,7 +226,7 @@ python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
-Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof, source-locked rootfs handoff, typed physical-storage discovery, manual storage review, physical bring-up session cross-binding and exact-file dossier verification. Repository documentation and checked-in authority records are part of the safety contract and are CI-validated.
+Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics and hardware-presence policy, Kali early-userspace proof, source-locked rootfs handoff, typed physical-storage discovery, manual storage review, physical bring-up session cross-binding and exact-file dossier verification. Repository documentation and checked-in authority records are part of the safety contract and are CI-validated.
 
 ## Roadmap and releases
 
@@ -236,7 +239,7 @@ There is currently **no public Beta release**. The first Beta will only be publi
 
 ## 🔎 Search Keywords
 
-`Kali Linux phone port` • `NetHunter Pro phone` • `Linux on smartphone` • `ARM64 Linux phone` • `OnePlus Nord AC2003 Linux` • `avicii Linux port` • `multi-device phone porting` • `Fastboot temporary boot` • `Android boot image tooling` • `DTB DTBO build` • `Kali ARM64 rootfs` • `phone rescue initramfs` • `reproducible kernel build` • `UFS storage discovery` • `safe phone flashing workflow`
+`Kali Linux phone port` • `NetHunter Pro phone` • `Linux on smartphone` • `ARM64 Linux phone` • `OnePlus Nord AC2003 Linux` • `avicii Linux port` • `multi-device phone porting` • `Fastboot temporary boot` • `Android boot image tooling` • `DTB DTBO build` • `Kali ARM64 rootfs` • `phone rescue initramfs` • `phone hardware survey` • `reproducible kernel build` • `UFS storage discovery` • `safe phone flashing workflow`
 
 <img width="100%" src="https://raw.githubusercontent.com/Swir/Swir/main/assets/power-divider-v4.svg" alt="SWIR electric divider" />
 
