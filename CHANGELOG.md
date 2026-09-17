@@ -2,6 +2,15 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.40-dev — candidate-level reviewed rootfs authority binding
+
+- Added `FirstBootRootfsAuthorityEvidence`, a fail-closed host-side link from an exact schema-v8 first-boot manifest and its schema-v1 rootfs canonicalization/raw-A/B provenance to one reviewed `RootfsAuthorityRecord`.
+- Candidate/authority binding cross-checks the first-boot manifest digest, candidate rootfs-provenance digest, reviewed authority digest/name/run/commit/artifact identity, strict rootfs evidence, artifact SHA-256/size, package manifest/count, source lock, signed repository snapshot, canonicalization binding/policy, both A/B transformation records and both raw A/B input identities.
+- The binding rejects a detached manifest/provenance record, artifact/package/source/snapshot/canonicalization/raw-A/B substitution, unreviewed authority records and any host evidence attempting to claim physical hardware or Beta credit.
+- Added canonical atomic evidence writing plus focused substitution/detachment/overwrite regression coverage. Initial CI correctly caught one test that mutated the manifest and was rejected earlier by the detached-provenance guard than the intended size-mismatch layer; the regression was corrected to exercise the target layer without weakening implementation checks.
+- The first real reviewed rootfs authority remains run `35158577624`, accepted artifact SHA-256 `133d5d806e09917c5a3e23293f8e3ad9d8daadab9a8c8d9f6d507179b06ddb1d`, 269 packages. This new contract does not instantiate a physical AC2003 candidate and grants no hardware/Beta credit.
+- Kept project completion at **54%** because this is provenance hardening; physical AC2003 baseline/boot/hardware/recovery gates remain unresolved.
+
 ## 0.6.39-dev — reviewed ARM64 rootfs authority and serial kernel reproducibility retry
 
 - Reviewed real `rootfs-repro` authority run `35158577624` after completion: both independently built/canonicalized Kali ARM64 rootfs outputs passed strict byte equality, normalized package-manifest equality and canonicalization-provenance binding.
