@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint or host-side storage-discovery contract does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract or syntactically valid manual-review record does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -23,7 +23,9 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Early-userspace transcript parser requires exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers and never auto-promotes them to hardware/Beta credit.
 - [x] Rootfs handoff **discovery contract** is profile-driven, exact-source/blob pinned, bound to the physical-candidate/rootfs authority chain and cannot select a storage path or authorize writes.
 - [x] Typed physical-storage discovery evidence can bind exact report/recovery-plan bytes to the exact handoff/rescue/rootfs chain while rejecting device paths, write claims and automatic target/storage/hardware/Beta promotion.
-- [ ] Capture and manually review the real storage/encryption/free-space/recovery evidence required by that contract and select/review the actual reversible rootfs staging/handoff strategy for the physical device.
+- [x] Manual storage-review evidence can bind exact review-record and review-notes bytes to one exact physical-storage discovery chain; acceptance requires a review-ready source and explicit physical-context/topology/filesystem/encryption/free-space/recovery/evidence-chain checks, but still cannot select a target or authorize writes.
+- [ ] Capture and manually review the real storage/encryption/free-space/recovery evidence required by those contracts and produce one accepted review record for the exact physical device.
+- [ ] Select and separately review the actual reversible rootfs staging/handoff strategy only after that exact physical review is accepted.
 - [ ] Final release manifest/compatibility matrix/known issues and SHA-256 set are generated from the exact reviewed physical candidate.
 
 ## Physical AC2003 mandatory gate
@@ -35,8 +37,9 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] Matching stock `boot.img` extracted from the exact OTA and validated against that physical baseline.
 - [ ] Recovery path is documented before risky testing begins.
 - [ ] Exact reviewed physical candidate is instantiated from that baseline and reviewed authorities.
-- [ ] Rootfs-handoff discovery evidence from the real phone confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan and is manually reviewed.
-- [ ] A reversible rootfs handoff target is explicitly reviewed after discovery; no guessed UFS/userdata path is accepted.
+- [ ] Rootfs-handoff discovery evidence from the real phone confirms the exact physical block topology, filesystem identity, encryption/unlock state, free space and recovery plan.
+- [ ] That exact discovery record is manually reviewed and bound; `accepted_for_strategy_design=true` only authorizes later strategy design, not a write or target selection.
+- [ ] A reversible rootfs handoff target is explicitly reviewed after accepted discovery review; no guessed UFS/userdata path is accepted.
 - [ ] `fastboot boot` succeeds on the exact phone after explicit user confirmation.
 - [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
 - [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
@@ -63,7 +66,9 @@ The following remain useful diagnostics but **cannot** satisfy a physical checkb
 - the pinned LineageOS fstab/BoardConfig storage expectations;
 - a discovery-only rootfs handoff assessment;
 - a syntactically valid or even `discovery_ready_for_manual_review=true` storage record before manual review of the exact physical context;
-- synthetic/mock storage reports or transcripts.
+- a manual-review contract or synthetic review record without real physical discovery evidence;
+- `accepted_for_strategy_design=true` before a separate reversible target/strategy review;
+- synthetic/mock storage reports, reviews or transcripts.
 
 ## Release publication rule
 
