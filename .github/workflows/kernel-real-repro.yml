@@ -9,6 +9,7 @@ on:
       - "kaliphonestudio/kernel_repro.py"
       - "kaliphonestudio/kernel_repro_diagnostics.py"
       - "kaliphonestudio/kernel_toolchain.py"
+      - "kaliphonestudio/kernel_toolchain_checkout.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
       - "kaliphonestudio/kernel_build_runner.py"
       - "kaliphonestudio/kernel_build_binding.py"
@@ -19,10 +20,12 @@ on:
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
       - "scripts/normalize_kernel_source_mtimes.py"
+      - "scripts/verify_kernel_toolchain_checkout.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
       - "tests/test_kernel_source_normalization.py"
+      - "tests/test_kernel_toolchain_checkout.py"
       - ".github/workflows/kernel-real-repro.yml"
   pull_request:
     paths:
@@ -31,6 +34,7 @@ on:
       - "kaliphonestudio/kernel_repro.py"
       - "kaliphonestudio/kernel_repro_diagnostics.py"
       - "kaliphonestudio/kernel_toolchain.py"
+      - "kaliphonestudio/kernel_toolchain_checkout.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
       - "kaliphonestudio/kernel_build_runner.py"
       - "kaliphonestudio/kernel_build_binding.py"
@@ -41,10 +45,12 @@ on:
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
       - "scripts/normalize_kernel_source_mtimes.py"
+      - "scripts/verify_kernel_toolchain_checkout.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
       - "tests/test_kernel_source_normalization.py"
+      - "tests/test_kernel_toolchain_checkout.py"
       - ".github/workflows/kernel-real-repro.yml"
   workflow_dispatch:
 
@@ -65,18 +71,20 @@ jobs:
       - name: Install focused test dependency
         run: python -m pip install pytest
 
-      - name: Compile build runner, source normalizer, verifier and diagnostics
+      - name: Compile build runner, source normalizer, toolchain checkout verifier and diagnostics
         run: >-
           python -m py_compile
           kaliphonestudio/kernel_build_runner.py
           kaliphonestudio/kernel_build_binding.py
           kaliphonestudio/kernel_repro_diagnostics.py
           kaliphonestudio/kernel_source_normalization.py
+          kaliphonestudio/kernel_toolchain_checkout.py
           scripts/run_locked_kernel_build.py
           scripts/bind_kernel_reproducible_builds.py
           scripts/verify_kernel_repro_pair.py
           scripts/diagnose_kernel_image_repro.py
           scripts/normalize_kernel_source_mtimes.py
+          scripts/verify_kernel_toolchain_checkout.py
 
       - name: Run focused kernel build-runner contract tests
         env:
@@ -89,6 +97,7 @@ jobs:
           tests/test_kernel_repro_diagnostics.py
           tests/test_kernel_source_normalization.py
           tests/test_kernel_toolchain.py
+          tests/test_kernel_toolchain_checkout.py
           tests/test_kernel_toolchain_binding.py
 
   reproducible-kernel:
@@ -161,15 +170,19 @@ jobs:
           test "$(git -C toolchain-repo rev-parse "$SOURCE_COMMIT:$SOURCE_SUBTREE")" = "$SOURCE_TREE"
           test -x "toolchain-repo/$SOURCE_SUBTREE/bin/clang"
 
-      - name: Verify immutable compiler source identity and materialized bytes
+      - name: Verify fetched compiler Git objects and materialized bytes
         shell: bash
         env:
           TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
         run: |
           set -euo pipefail
           mkdir -p evidence
-          python scripts/verify_kernel_toolchain_upstream.py \
+          # The exact source commit/subtree were already fetched above.  Verify those
+          # immutable local Git objects directly instead of issuing a second Gitiles
+          # metadata request that can fail independently after a successful fetch.
+          python scripts/verify_kernel_toolchain_checkout.py \
             --lock "$TOOLCHAIN_LOCK" \
+            --repository toolchain-repo \
             --out evidence/kernel-toolchain-source.json
           python - <<'PY'
           import os
