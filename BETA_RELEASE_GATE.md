@@ -1,59 +1,65 @@
 # KaliPhoneStudio Beta Release Gate
 
-A Beta release is a **tested device build**, not a development snapshot. A profile, green CI, host-reproducible artifact, physical-candidate gate, prepared command offer, explicit confirmation, successful Fastboot return code, unreviewed console transcript, raw sysfs signal, or bounded read-only functional probe never satisfies a physical-device checkbox.
+**Status: BLOCKED**
 
-## Required host-side evidence
+A green CI run, device profile, successful host build, reviewed reproducibility authority, Fastboot return code, rescue marker or early-userspace marker does not by itself authorize a Beta release.
 
-- [ ] CI/tests green for the exact release commit.
-- [ ] Device profile schema/identity tests pass for the declared device.
-- [ ] Read-only Fastboot baseline records exact physical profile/serial, firmware build/fingerprint, A/B/security state and SHA-256-bound original transcript.
-- [ ] Exact reviewed Fastboot executable/tool-policy evidence is joined to raw transcript and parsed baseline in one immutable capture bundle.
-- [ ] Baseline firmware matches exact stock OTA metadata and matching stock `boot.img` provenance is bound to exact OTA/payload evidence.
-- [ ] One immutable physical-baseline bundle joins exact capture, baseline/transcript, OTA/payload/stock boot and firmware metadata while keeping `temporary_boot_authorized=false`, `hardware_verified=false`, `beta_gate_credit=false`.
-- [ ] Candidate manifest records exact `profile_id`, serial, firmware, boot authorization/plan/image and reviewed artifact identities.
-- [ ] Reviewed kernel authority binds exact source, compiler, plan, recipe/environment, two executed builds, strict reproducibility and exact `.config`/ARM64 `Image` identity.
-- [ ] Reviewed DT authority binds exact DT plan, reviewed kernel authority, independent DT builds, strict equality and exact DTB/raw-DTBO/packed-DTBO identities.
-- [ ] Reviewed Kali ARM64 rootfs authority binds strict independent builds, signed repository snapshot, raw A/B inputs, canonicalization provenance and package evidence.
-- [ ] Candidate-level reviewed kernel/rootfs/device-tree authority records all bind the same exact schema-v8 first-boot manifest.
-- [ ] Unified first-boot authority bundle proves those reviewed bindings refer to the same manifest/profile and exact candidate kernel/rootfs/DT identities.
-- [ ] `PhysicalCandidateGateEvidence` cross-binds exact physical baseline/stock bundle, schema-v8 manifest, unified reviewed authority bundle, schema-v2 temporary-boot authorization and exact profile-driven `BootBuildPlan`; it still records no execution/write/hardware/Beta claim.
-- [ ] `TemporaryBootOfferEvidence` is prepared from that exact gate and original read-only Fastboot capture/tool evidence. Concrete Fastboot and candidate `boot.img` bytes must exactly match reviewed/gated SHA-256 and size. Only serial-bound `fastboot ... boot ...` is eligible.
-- [ ] Exact profile-specific confirmation is required before execution; authorization alone grants no physical/Beta credit.
-- [ ] Immediately before temporary boot, exact offer files are reverified and a fresh read-only serial-bound Fastboot runtime probe matches product, serial, active slot, slot count, unlock/security state and bootloader/baseband identity.
-- [ ] Reviewed baseline and fresh runtime probe both report the bootloader unlocked.
-- [ ] If temporary boot is invoked, immutable execution evidence records exact offer/authorization/runtime-probe digests, argv digest, return code and bounded output digest. Return code 0 still keeps Kali-userspace/hardware/Beta flags false.
-- [ ] No temporary-boot component exposes `flash`, `erase`, `set_active`, `reboot` or any persistent-write path.
-- [ ] The exact rescue candidate used for physical proof is schema-v2 and contains a deterministic probe ID bound to exact profile, reproducible payload/staging and locked `/init` provenance.
-- [ ] If rescue console/log evidence is used, `PhysicalBootObservationEvidence` binds the exact successful temporary-boot execution, exact rescue candidate, exact probe ID and raw transcript SHA-256/size. The transcript contains exact `KPS_RESCUE_STAGE=init-reached-v1` and `KPS_RESCUE_PROBE_ID=<id>` lines, contains no conflicting markers, and remains `manual_review_required=true`, `hardware_verified=false`, `beta_gate_credit=false` until separately reviewed.
-- [ ] If read-only rescue diagnostics are used, `PhysicalRescueDiagnosticsEvidence` binds the exact `PhysicalBootObservationEvidence` and exact same raw transcript SHA-256/size to one bounded `readonly-sysfs-inventory-v1` block. Raw UFS/power/input/graphics signal flags must remain distinct from functional verification and all hardware/Beta claims remain false until manual review.
-- [ ] If the optional rescue functional probe is used, it must have required explicit local `--confirm-read-only` authorization, must read only one 4096-byte block per eligible non-removable whole block device to `/dev/null`, must never emit block contents or target phone storage for writes, and `PhysicalRescueFunctionalProbeEvidence` must bind the exact physical observation, exact read-only diagnostics and exact same transcript. Storage-read/battery-sampling signals remain non-release evidence with all verification/Beta claims false until manual review.
-- [ ] If a provisioning overlay ships, its exact SHA-256/size/plan digest is bound to accepted rootfs evidence; it embeds no credentials, keeps root locked and remote access disabled by default.
-- [ ] Every release image has SHA-256 recorded and partition-size/boot-layout gates pass.
-- [ ] Build instructions reproduce artifacts from pinned sources.
+The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
-## Required physical-device evidence
+## Host-side mandatory gate
 
-- [ ] Exact model/profile and serial recognized correctly before any destructive action.
-- [ ] Exact OxygenOS build/fingerprint captured from the physical device.
-- [ ] Stock recovery/restore information captured before persistent experiments.
-- [ ] Explicitly confirmed candidate succeeds with **temporary boot** where supported, with evidence beyond the host Fastboot return code.
-- [ ] Rescue/log channel is usable after candidate boot; matching rescue marker/diagnostic/probe transcripts must be manually reviewed and tied to the exact candidate/execution.
-- [ ] Kernel reaches intended Kali early userspace/rootfs path. Rescue `/init` observation alone is not sufficient.
-- [ ] Required internal storage/UFS path is functionally verified; enumeration, `ufshcd` presence, or one successful bounded 4096-byte read alone is not sufficient.
-- [ ] Display/touch is usable enough for setup, or release is explicitly console-only; framebuffer/DRM/input enumeration alone is not sufficient.
-- [ ] Charging/battery behavior is safe enough for testing; power-supply telemetry presence or two read-only samples alone are not sufficient.
-- [ ] Failed boot can be recovered by a documented procedure and required rollback/recovery has been exercised.
+- [x] Multi-device profile schema/identity/path contract is enforced.
+- [x] The selected profile has a unique identity and explicit confirmation token.
+- [x] Boot layout/partition constraints, pinned sources and recovery/test contracts are declared by profile.
+- [x] Exact source/tool locks and checksums/object identities are recorded.
+- [x] Kali ARM64 rootfs has a reviewed strict byte-identical authority.
+- [x] Kernel has a reviewed strict byte-identical authority.
+- [x] Required DTB/DTBO artifacts have a reviewed strict byte-identical authority bound to the reviewed kernel.
+- [x] Exact first-boot candidate binds kernel/rootfs/DT authorities and firmware/boot provenance without claiming hardware success.
+- [x] Boot image assembly/round-trip and partition-size checks are fail-closed.
+- [x] Temporary boot is serial/profile/firmware/candidate bound and cannot silently become a flash/write action.
+- [x] Rescue initramfs/payload is deterministic, network/SSH disabled by default, and has an exact probe identity.
+- [x] Kali early-userspace proof overlay is deterministic and bound to exact candidate/rootfs authority identities.
+- [x] Early-userspace transcript parser requires exact stage/probe/manifest/rootfs-authority/rootfs-artifact markers and never auto-promotes them to hardware/Beta credit.
+- [ ] Select and review the actual rootfs staging/handoff strategy for the physical device. The common core must not guess or hard-code an unverified storage/encryption path.
+- [ ] Final release manifest/compatibility matrix/known issues and SHA-256 set are generated from the exact reviewed physical candidate.
 
-## Required release content
+## Physical AC2003 mandatory gate
 
-- [ ] Clear device/firmware compatibility table.
-- [ ] Installation instructions.
-- [ ] Recovery/restore instructions.
-- [ ] Known issues and hardware matrix.
-- [ ] Release manifest and SHA-256 files.
-- [ ] Real binaries/images attached; no empty or symbolic release.
-- [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
+These must come from the exact physical phone/firmware intended for support.
 
-Creating a profile, importing Fastboot evidence, accepting host-side kernel/rootfs/DT authorities, generating a schema-v8 candidate, preparing a temporary-boot argv, recording profile confirmation, passing the fresh runtime probe, receiving Fastboot return code 0, generating a deterministic rescue probe ID, matching an unreviewed console marker transcript, recording read-only sysfs signals, recording one bounded storage read or paired battery telemetry, generating a provisioning overlay, or passing host CI does **not** satisfy a physical-device checkbox.
+- [ ] Real device identity captured and matches profile `oneplus/avicii` / OnePlus Nord AC2003.
+- [ ] Exact OxygenOS build and firmware fingerprint captured read-only.
+- [ ] Matching stock `boot.img` extracted from the exact OTA and validated against that physical baseline.
+- [ ] Recovery path is documented before risky testing begins.
+- [ ] Exact reviewed physical candidate is instantiated from that baseline and reviewed authorities.
+- [ ] `fastboot boot` succeeds on the exact phone after explicit user confirmation.
+- [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
+- [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
+- [ ] Exact `KPS_KALI_STAGE=rootfs-systemd-early-v1` plus matching probe/manifest/rootfs-authority/rootfs-artifact markers are captured from the physical run and manually reviewed.
+- [ ] Reviewer confirms the kernel reached the intended Kali early userspace/rootfs; parser output alone is not sufficient.
+- [ ] Required UFS/storage behavior is validated beyond bounded diagnostic reads.
+- [ ] Charging/battery behavior is safe enough for the documented test/release scope.
+- [ ] Display/touch works for the supported scope, or Beta is explicitly reviewed and documented as console-only.
+- [ ] Required USB/rescue behavior is verified.
+- [ ] Recovery/rollback is exercised on the exact physical baseline.
 
-Only after all required gates pass for the declared compatibility scope should a GitHub **Beta** be created. Stable requires a later, higher hardware-completeness and regression threshold.
+## Non-credit evidence
+
+The following remain useful diagnostics but **cannot** satisfy a physical checkbox on their own:
+
+- green host CI;
+- profile JSON presence;
+- reproducible kernel/rootfs/DT artifacts without phone testing;
+- a `fastboot boot` process return code without observed phone-side evidence;
+- rescue `init-reached` marker without Kali-rootfs proof;
+- a Kali early-userspace marker set without manual review of the exact candidate/physical context;
+- one bounded 4096-byte block read;
+- two battery telemetry samples;
+- synthetic/mock transcripts.
+
+## Release publication rule
+
+Do not create an empty, symbolic or placeholder Beta. Only after the full gate is reviewed should a GitHub prerelease be created from the exact candidate commit with actual binaries/images, instructions, compatibility matrix, known issues and SHA-256 checksums.
+
+Stable requires a later, higher threshold.
