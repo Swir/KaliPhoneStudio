@@ -2,7 +2,7 @@
 
 **KaliPhoneStudio** is a multi-device engineering studio for porting **Kali Linux / NetHunter Pro as the primary phone OS/userspace**, without Android as the user-facing layer.
 
-The project is deliberately conservative about hardware claims. A device profile, successful host build, reproducible artifact, green CI, prepared boot offer, Fastboot return code, rescue marker, or raw sysfs signal does **not** mean a phone is supported. Public Beta releases require the complete host and physical-device gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+The project is deliberately conservative about hardware claims. A device profile, successful host build, reproducible artifact, green CI, prepared boot offer, Fastboot return code, rescue marker, raw sysfs signal, or bounded read-only functional probe does **not** mean a phone is supported. Public Beta releases require the complete host and physical-device gate in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Project progress
 
@@ -12,7 +12,7 @@ The project is deliberately conservative about hardware claims. A device profile
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host-side reproducibility, provenance and safety are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> **Current development line: `0.6.52-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. The guarded path still permits only one explicitly confirmed serial-bound `fastboot boot`. 0.6.52 extends the exact rescue `/init` with a bounded read-only sysfs inventory and adds an offline evidence binder for UFS/power/input/graphics **signals** from the already-bound physical transcript. These signals always require manual review and never set storage/display/charging/hardware/Beta verification true.
+> **Current development line: `0.6.53-dev`.** Reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel and DTB/DTBO authorities remain strict-byte-identical host-side. The guarded path still permits only one explicitly confirmed serial-bound `fastboot boot`. 0.6.53 keeps the automatic rescue inventory read-only and adds a second, **manual-only** helper generated in initramfs RAM. It runs only after the exact local `--confirm-read-only` argument, reads at most one 4096-byte block from up to eight non-removable whole block devices into `/dev/null`, and samples battery telemetry twice. The resulting evidence is bound to the exact physical observation, exact read-only diagnostics and the same transcript, but never sets storage/charging/hardware/Beta verification true without manual physical review.
 
 ## Source of truth and architecture
 
@@ -74,7 +74,7 @@ Execution requires exact offer-bound profile confirmation, re-verifies local fil
 
 The executor exposes no `flash`, `erase`, `set_active`, `reboot` or persistent-write verb. Even return code 0 proves only Fastboot command acceptance and leaves all hardware/Beta claims false.
 
-### Rescue physical proof and read-only diagnostics — 0.6.52
+### Rescue physical proof, inventory and explicit read-only probes — 0.6.53
 
 The reproducible rescue candidate is schema-v2 and embeds one deterministic 64-hex `rescue_probe_id` in `/etc/kaliphonestudio/rescue-probe-id`. The locked rescue `/init` first emits:
 
@@ -83,7 +83,7 @@ KPS_RESCUE_STAGE=init-reached-v1
 KPS_RESCUE_PROBE_ID=<exact-candidate-probe-id>
 ```
 
-It then emits exactly one bounded diagnostics block:
+It then emits exactly one bounded automatic diagnostics block:
 
 ```text
 KPS_DIAG_BEGIN=readonly-sysfs-inventory-v1
@@ -96,25 +96,44 @@ KPS_DIAG_DRM=<connector>|<status>
 KPS_DIAG_END=readonly-sysfs-inventory-v1
 ```
 
-The rescue path only reads procfs/sysfs for this inventory. It does **not** mount persistent storage, run fsck, decrypt data, change charging policy, initialize display, open input event nodes, execute Fastboot, or enable network/SSH. Each category is capped at 64 records and each field is reduced to a bounded ASCII token.
+That automatic inventory only reads procfs/sysfs. It does **not** mount persistent storage, repair/decrypt data, change charging policy, initialize display, open input event nodes, execute Fastboot, or enable network/SSH. Each category is capped at 64 records and each field is reduced to a bounded ASCII token.
 
-`PhysicalBootObservationEvidence` still proves only that the exact rescue probe markers appeared in the exact captured transcript after one recorded temporary-boot execution. `PhysicalRescueDiagnosticsEvidence` adds a second offline layer that requires the **same transcript SHA-256 and size**, one exact diagnostic block, exact profile binding and bounded typed records. It may report raw signal booleans such as:
+0.6.53 additionally writes `/run/kps-readonly-probe` into initramfs RAM but deliberately does not run it. The operator must explicitly invoke:
 
 ```text
-ufs_signal_observed=true|false
-battery_signal_observed=true|false
-input_signal_observed=true|false
-graphics_signal_observed=true|false
+/run/kps-readonly-probe --confirm-read-only
 ```
 
-Those flags mean only that matching read-only sysfs evidence appeared in the transcript. They do not promote the device. The evidence always keeps:
+Only then can the helper emit one functional block:
 
 ```text
+KPS_PROBE_BEGIN=readonly-functional-probes-v1
+KPS_PROBE_BLOCK_READ=<device>|4096|<ok|fail|missing>
+KPS_PROBE_BATTERY_SAMPLE=<name>|<1|2>|<status>|<health>|<capacity>|<voltage>|<current>|<temp>
+KPS_PROBE_END=readonly-functional-probes-v1
+```
+
+The helper considers only non-removable whole block devices, skips loop/ram/zram/dm/md devices, caps the set at eight, reads exactly one 4096-byte block per candidate **to `/dev/null`**, and never prints block contents. Battery sampling is capped at eight battery supplies and two samples separated by one second. It does not mount, format, repair, decrypt, write a block device, change charging policy, enable networking/SSH or execute Fastboot.
+
+`PhysicalBootObservationEvidence` proves only that the exact rescue markers appeared in the exact captured transcript after one recorded temporary-boot execution. `PhysicalRescueDiagnosticsEvidence` binds the automatic inventory to that same transcript. `PhysicalRescueFunctionalProbeEvidence` then requires the exact same profile, serial, transcript digest/size, rescue probe ID, physical-observation digest and read-only-diagnostics digest before accepting the manually invoked probe records.
+
+It may expose raw signal booleans such as:
+
+```text
+storage_read_signal_observed=true|false
+battery_sampling_signal_observed=true|false
+```
+
+Those booleans are deliberately **not** release-gate verdicts. The evidence always keeps:
+
+```text
+explicit_local_authorization_required=true
 manual_review_required=true
 storage_verified=false
 display_touch_verified=false
 charging_battery_verified=false
 recovery_verified=false
+phone_storage_written=false
 hardware_verified=false
 beta_gate_credit=false
 ```
@@ -136,7 +155,7 @@ Profile inspection always distinguishes profile availability from hardware suppo
 
 **Beta is BLOCKED.** The first AC2003 Beta still requires a real physical Fastboot/OxygenOS baseline, matching stock `boot.img`, exact physical-firmware candidate and reviewed bindings, an explicitly confirmed temporary boot, manually reviewed proof of the actual boot path, usable rescue/logging, Kali early userspace/rootfs, real UFS/storage verification, display/touch or an explicit console-only scope, safe charging/battery, exercised recovery/rollback, and a compatibility/release manifest with SHA-256 files.
 
-Raw rescue sysfs presence is useful diagnostic evidence, but is explicitly insufficient by itself for the storage, display/touch or charging/battery Beta gates.
+Raw rescue sysfs presence, one successful bounded 4096-byte read, or two battery telemetry samples are useful diagnostic signals, but are explicitly insufficient by themselves for the storage, display/touch or charging/battery Beta gates.
 
 ## Testing
 
@@ -147,7 +166,7 @@ python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
-The dedicated `rescue-readonly-diagnostics` workflow additionally compiles the diagnostic parser/CLI, validates `rescue/init` shell syntax and runs focused physical-observation/read-only-policy contracts.
+The dedicated `rescue-readonly-diagnostics` workflow additionally compiles both rescue diagnostic evidence layers/CLIs, validates `rescue/init` shell syntax and runs focused physical-observation, explicit-probe and no-write source-policy contracts. The rescue-payload reproducibility workflow still rebuilds the source-locked static ARM64 payload independently after `/init` changes.
 
 ## Adding another device
 
@@ -155,4 +174,4 @@ A new device starts as **profile-only / unsupported hardware**. Add `devices/<ve
 
 ## Safety model
 
-KaliPhoneStudio is built around fail-closed evidence rather than optimistic automation. Green CI, matching model strings, reproducible host artifacts, successful host-side Fastboot commands, machine-readable rescue markers and sysfs inventory signals are engineering evidence—not automatic proof that a physical device safely boots Kali. The first public Beta will be a tested device build, not a development snapshot.
+KaliPhoneStudio is built around fail-closed evidence rather than optimistic automation. Green CI, matching model strings, reproducible host artifacts, successful host-side Fastboot commands, machine-readable rescue markers, sysfs inventory and bounded explicitly authorized read-only functional probes are engineering evidence—not automatic proof that a physical device safely boots Kali. The first public Beta will be a tested device build, not a development snapshot.

@@ -1,6 +1,6 @@
 # KaliPhoneStudio Beta Release Gate
 
-A Beta release is a **tested device build**, not a development snapshot. A profile, green CI, host-reproducible artifact, physical-candidate gate, prepared command offer, explicit confirmation, successful Fastboot return code, unreviewed console transcript, or raw sysfs signal never satisfies a physical-device checkbox.
+A Beta release is a **tested device build**, not a development snapshot. A profile, green CI, host-reproducible artifact, physical-candidate gate, prepared command offer, explicit confirmation, successful Fastboot return code, unreviewed console transcript, raw sysfs signal, or bounded read-only functional probe never satisfies a physical-device checkbox.
 
 ## Required host-side evidence
 
@@ -26,6 +26,7 @@ A Beta release is a **tested device build**, not a development snapshot. A profi
 - [ ] The exact rescue candidate used for physical proof is schema-v2 and contains a deterministic probe ID bound to exact profile, reproducible payload/staging and locked `/init` provenance.
 - [ ] If rescue console/log evidence is used, `PhysicalBootObservationEvidence` binds the exact successful temporary-boot execution, exact rescue candidate, exact probe ID and raw transcript SHA-256/size. The transcript contains exact `KPS_RESCUE_STAGE=init-reached-v1` and `KPS_RESCUE_PROBE_ID=<id>` lines, contains no conflicting markers, and remains `manual_review_required=true`, `hardware_verified=false`, `beta_gate_credit=false` until separately reviewed.
 - [ ] If read-only rescue diagnostics are used, `PhysicalRescueDiagnosticsEvidence` binds the exact `PhysicalBootObservationEvidence` and exact same raw transcript SHA-256/size to one bounded `readonly-sysfs-inventory-v1` block. Raw UFS/power/input/graphics signal flags must remain distinct from functional verification and all hardware/Beta claims remain false until manual review.
+- [ ] If the optional rescue functional probe is used, it must have required explicit local `--confirm-read-only` authorization, must read only one 4096-byte block per eligible non-removable whole block device to `/dev/null`, must never emit block contents or target phone storage for writes, and `PhysicalRescueFunctionalProbeEvidence` must bind the exact physical observation, exact read-only diagnostics and exact same transcript. Storage-read/battery-sampling signals remain non-release evidence with all verification/Beta claims false until manual review.
 - [ ] If a provisioning overlay ships, its exact SHA-256/size/plan digest is bound to accepted rootfs evidence; it embeds no credentials, keeps root locked and remote access disabled by default.
 - [ ] Every release image has SHA-256 recorded and partition-size/boot-layout gates pass.
 - [ ] Build instructions reproduce artifacts from pinned sources.
@@ -36,11 +37,11 @@ A Beta release is a **tested device build**, not a development snapshot. A profi
 - [ ] Exact OxygenOS build/fingerprint captured from the physical device.
 - [ ] Stock recovery/restore information captured before persistent experiments.
 - [ ] Explicitly confirmed candidate succeeds with **temporary boot** where supported, with evidence beyond the host Fastboot return code.
-- [ ] Rescue/log channel is usable after candidate boot; matching rescue marker/diagnostic transcripts must be manually reviewed and tied to the exact candidate/execution.
+- [ ] Rescue/log channel is usable after candidate boot; matching rescue marker/diagnostic/probe transcripts must be manually reviewed and tied to the exact candidate/execution.
 - [ ] Kernel reaches intended Kali early userspace/rootfs path. Rescue `/init` observation alone is not sufficient.
-- [ ] Required internal storage/UFS path is functionally verified; enumeration or `ufshcd` presence alone is not sufficient.
+- [ ] Required internal storage/UFS path is functionally verified; enumeration, `ufshcd` presence, or one successful bounded 4096-byte read alone is not sufficient.
 - [ ] Display/touch is usable enough for setup, or release is explicitly console-only; framebuffer/DRM/input enumeration alone is not sufficient.
-- [ ] Charging/battery behavior is safe enough for testing; power-supply telemetry presence alone is not sufficient.
+- [ ] Charging/battery behavior is safe enough for testing; power-supply telemetry presence or two read-only samples alone are not sufficient.
 - [ ] Failed boot can be recovered by a documented procedure and required rollback/recovery has been exercised.
 
 ## Required release content
@@ -53,6 +54,6 @@ A Beta release is a **tested device build**, not a development snapshot. A profi
 - [ ] Real binaries/images attached; no empty or symbolic release.
 - [ ] No proprietary firmware/blob redistribution unless redistribution is explicitly permitted.
 
-Creating a profile, importing Fastboot evidence, accepting host-side kernel/rootfs/DT authorities, generating a schema-v8 candidate, preparing a temporary-boot argv, recording profile confirmation, passing the fresh runtime probe, receiving Fastboot return code 0, generating a deterministic rescue probe ID, matching an unreviewed console marker transcript, recording read-only sysfs signals, generating a provisioning overlay, or passing host CI does **not** satisfy a physical-device checkbox.
+Creating a profile, importing Fastboot evidence, accepting host-side kernel/rootfs/DT authorities, generating a schema-v8 candidate, preparing a temporary-boot argv, recording profile confirmation, passing the fresh runtime probe, receiving Fastboot return code 0, generating a deterministic rescue probe ID, matching an unreviewed console marker transcript, recording read-only sysfs signals, recording one bounded storage read or paired battery telemetry, generating a provisioning overlay, or passing host CI does **not** satisfy a physical-device checkbox.
 
 Only after all required gates pass for the declared compatibility scope should a GitHub **Beta** be created. Stable requires a later, higher hardware-completeness and regression threshold.

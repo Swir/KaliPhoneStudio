@@ -1,7 +1,9 @@
 #!/bin/sh
 # KaliPhoneStudio minimal early rescue userspace.
 # Deliberately no network/SSH bring-up and no persistent storage mounts.
-# Physical-console diagnostics are read-only sysfs/procfs inventory only.
+# Automatic physical-console diagnostics are read-only sysfs/procfs inventory only.
+# A separate bounded raw-read/battery sampler is generated into initramfs RAM and
+# runs only after explicit local --confirm-read-only authorization.
 
 export PATH=/bin:/sbin
 export HOME=/
@@ -42,8 +44,8 @@ if [ -r "$KPS_PROBE_FILE" ]; then
     esac
 fi
 
-# Keep physical bring-up inventory strictly read-only. It does not mount,
-# fsck, decrypt, write, charge-control, initialize display, or touch input nodes.
+# Keep automatic physical bring-up inventory strictly read-only. It does not mount,
+# repair, decrypt, write, charge-control, initialize display, or touch input nodes.
 # Every field is reduced to a bounded ASCII token for deterministic offline parsing.
 kps_read_token() {
     if [ -r "$1" ]; then
@@ -135,9 +137,94 @@ done
 
 echo "KPS_DIAG_END=$KPS_DIAG_POLICY"
 
+# Generate an explicit, local-only read probe in initramfs RAM. It is NOT executed
+# automatically. The operator must type the exact confirmation argument below.
+# It reads at most one 4 KiB block from at most eight non-removable whole block
+# devices into /dev/null and samples battery telemetry twice. It never mounts,
+# writes, repairs, decrypts, formats, changes charging policy, or emits block data.
+cat > /run/kps-readonly-probe <<'KPS_READONLY_PROBE'
+#!/bin/sh
+export PATH=/bin:/sbin
+KPS_POLICY="readonly-functional-probes-v1"
+
+if [ "$1" != "--confirm-read-only" ]; then
+    echo "usage: /run/kps-readonly-probe --confirm-read-only" >&2
+    echo "KPS: probe not run; explicit read-only confirmation is required" >&2
+    exit 64
+fi
+
+kps_read_token() {
+    if [ -r "$1" ]; then
+        tr -d '\r\n' < "$1" 2>/dev/null | tr -cd 'A-Za-z0-9._:+-' | cut -c1-128
+    else
+        printf '%s' '-'
+    fi
+}
+
+kps_token_or_dash() {
+    value="$(printf '%s' "$1" | tr -cd 'A-Za-z0-9._:+-' | cut -c1-128)"
+    if [ -n "$value" ]; then printf '%s' "$value"; else printf '%s' '-'; fi
+}
+
+echo "KPS_PROBE_BEGIN=$KPS_POLICY"
+
+count=0
+for node in /sys/block/*; do
+    [ -e "$node" ] || continue
+    [ "$count" -lt 8 ] || break
+    name="${node##*/}"
+    case "$name" in
+        loop*|ram*|zram*|dm-*|md*) continue ;;
+    esac
+    removable="$(kps_read_token "$node/removable")"
+    [ "$removable" = "0" ] || continue
+    safe_name="$(kps_token_or_dash "$name")"
+    dev="/dev/$name"
+    outcome="missing"
+    if [ -b "$dev" ]; then
+        if dd if="$dev" of=/dev/null bs=4096 count=1 2>/dev/null; then
+            outcome="ok"
+        else
+            outcome="fail"
+        fi
+    fi
+    echo "KPS_PROBE_BLOCK_READ=$safe_name|4096|$outcome"
+    count=$((count + 1))
+done
+
+seq=1
+while [ "$seq" -le 2 ]; do
+    count=0
+    for supply in /sys/class/power_supply/*; do
+        [ -e "$supply" ] || continue
+        [ "$count" -lt 8 ] || break
+        type="$(kps_read_token "$supply/type")"
+        name="${supply##*/}"
+        case "$(printf '%s' "$type" | tr 'A-Z' 'a-z')" in
+            battery) ;;
+            *) continue ;;
+        esac
+        status="$(kps_read_token "$supply/status")"
+        health="$(kps_read_token "$supply/health")"
+        capacity="$(kps_read_token "$supply/capacity")"
+        voltage="$(kps_read_token "$supply/voltage_now")"
+        current="$(kps_read_token "$supply/current_now")"
+        temp="$(kps_read_token "$supply/temp")"
+        echo "KPS_PROBE_BATTERY_SAMPLE=$(kps_token_or_dash "$name")|$seq|$(kps_token_or_dash "$status")|$(kps_token_or_dash "$health")|$(kps_token_or_dash "$capacity")|$(kps_token_or_dash "$voltage")|$(kps_token_or_dash "$current")|$(kps_token_or_dash "$temp")"
+        count=$((count + 1))
+    done
+    [ "$seq" -eq 2 ] || sleep 1
+    seq=$((seq + 1))
+done
+
+echo "KPS_PROBE_END=$KPS_POLICY"
+KPS_READONLY_PROBE
+chmod 0755 /run/kps-readonly-probe
+
 echo ""
 echo "KaliPhoneStudio rescue userspace"
 echo "network=disabled ssh=disabled storage_auto_mount=disabled diagnostics=read-only"
+echo "optional_probe=/run/kps-readonly-probe --confirm-read-only (manual; bounded; no storage writes)"
 if [ -r /proc/cmdline ]; then
     echo "cmdline: $(cat /proc/cmdline)"
 fi
