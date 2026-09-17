@@ -53,7 +53,7 @@ def test_compat_vdso_policy_keeps_locked_llvm_and_cross_compile_contract() -> No
     assert flags["HOSTCXX"] == "clang++"
 
 
-def test_gnu_make_expands_recursive_source_and_output_maps_at_build_scope(tmp_path: Path) -> None:
+def test_pinned_vdso32_cc_compat_inherits_expanded_recursive_maps(tmp_path: Path) -> None:
     make = shutil.which("make")
     if make is None:
         pytest.skip("GNU make is not installed on this host")
@@ -67,8 +67,10 @@ def test_gnu_make_expands_recursive_source_and_output_maps_at_build_scope(tmp_pa
     makefile = output / "Makefile"
     makefile.write_text(
         f"KBUILD_SRC := {source}\n"
+        "CC_COMPAT ?= $(CC)\n"
+        "CC_COMPAT += --target=arm-linux-gnueabi\n"
         "all:\n"
-        "\t@printf '%s\\n' '$(CC)'\n",
+        "\t@printf '%s\\n' '$(CC_COMPAT)'\n",
         encoding="utf-8",
     )
 
@@ -84,6 +86,8 @@ def test_gnu_make_expands_recursive_source_and_output_maps_at_build_scope(tmp_pa
 
     assert "$(KBUILD_SRC)" not in expanded
     assert "$(CURDIR)" not in expanded
+    assert expanded.startswith("clang ")
+    assert expanded.endswith("--target=arm-linux-gnueabi")
     assert f"-fdebug-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
     assert f"-fmacro-prefix-map={source}=/usr/src/kaliphonestudio-kernel" in expanded
     assert f"-fdebug-prefix-map={output}=/usr/src/kaliphonestudio-kernel-build" in expanded
