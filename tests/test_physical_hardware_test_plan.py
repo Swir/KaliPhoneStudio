@@ -8,6 +8,7 @@ from kaliphonestudio.physical_hardware_test_plan import (
     PhysicalHardwareTestPlanError,
     build_physical_hardware_test_plan,
     load_physical_hardware_test_plan,
+    validate_physical_hardware_test_plan,
     write_physical_hardware_test_plan,
 )
 from kaliphonestudio.profiles import load_profile
@@ -84,8 +85,10 @@ def test_plan_binds_exact_review_and_keeps_every_test_pending_without_credit(tmp
     assert plan.test_count == len(plan.tests)
     assert plan.beta_required_test_count > 0
     assert all(item["status"] == "pending" for item in plan.tests)
+    assert all(item["context_signals_satisfied"] is True for item in plan.tests)
     assert all(item["manual_review_required"] is True for item in plan.tests)
     assert all(item["destructive"] is False and item["persistent_write_allowed"] is False for item in plan.tests)
+    assert plan.plan_ready_for_physical_execution is True
     assert plan.functional_tests_executed is False
     assert plan.functional_hardware_verified is False
     assert plan.phone_storage_written is False
@@ -101,6 +104,20 @@ def test_plan_binds_exact_review_and_keeps_every_test_pending_without_credit(tmp
         write_physical_hardware_test_plan(plan, path)
 
 
+def test_missing_beta_required_context_signal_blocks_plan_readiness_without_promoting_any_claim():
+    plan = build_physical_hardware_test_plan(PROFILE, _review(power_signal_observed=False))
+    power = next(item for item in plan.tests if item["id"] == "power_charging")
+    assert power["required_for_beta"] is True
+    assert power["context_signals_satisfied"] is False
+    assert power["status"] == "pending"
+    assert plan.plan_ready_for_physical_execution is False
+    assert plan.functional_tests_executed is False
+    assert plan.functional_hardware_verified is False
+    assert plan.phone_storage_written is False
+    assert plan.hardware_verified is False
+    assert plan.beta_gate_credit is False
+
+
 def test_plan_rejects_unaccepted_review_and_profile_drift():
     review = _review(decision="rejected", accepted_as_context=False)
     with pytest.raises(PhysicalHardwareTestPlanError, match="accepted exact"):
@@ -111,10 +128,13 @@ def test_plan_rejects_unaccepted_review_and_profile_drift():
         build_physical_hardware_test_plan(PROFILE, review)
 
 
-def test_plan_validation_rejects_execution_or_beta_promotion():
+def test_plan_validation_rejects_execution_beta_promotion_and_readiness_tampering():
     plan = build_physical_hardware_test_plan(PROFILE, _review())
     with pytest.raises(PhysicalHardwareTestPlanError, match="unsupported execution"):
-        from kaliphonestudio.physical_hardware_test_plan import validate_physical_hardware_test_plan
         validate_physical_hardware_test_plan(replace(plan, functional_tests_executed=True))
     with pytest.raises(PhysicalHardwareTestPlanError, match="unsupported execution"):
         validate_physical_hardware_test_plan(replace(plan, beta_gate_credit=True))
+
+    blocked = build_physical_hardware_test_plan(PROFILE, _review(power_signal_observed=False))
+    with pytest.raises(PhysicalHardwareTestPlanError, match="readiness does not match"):
+        validate_physical_hardware_test_plan(replace(blocked, plan_ready_for_physical_execution=True))
