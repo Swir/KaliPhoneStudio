@@ -1,6 +1,6 @@
 # KaliPhoneStudio Roadmap
 
-Current development line — 0.6.65-dev
+Current development line — 0.6.66-dev
 
 **58% complete**
 
@@ -53,6 +53,7 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [x] 0.6.64 schema-v2 per-test observation contract requires that accepted exact plan review and carries its plan-file/review-record/review-notes identities into every later physical observation.
 - [x] Independent per-test result review and exact-plan status summary remain separate from project support/Beta promotion.
 - [x] 0.6.65 exact-file functional result bundle cross-binds the canonical plan, accepted plan review, schema-v2 observations, result reviews and freshly recomputed summary without granting support/hardware/Beta credit.
+- [x] 0.6.66 cross-campaign physical release-gate audit binds an accepted bring-up dossier/review to the exact functional result bundle and fail-closes on profile/device/boot/rescue/transcript/probe drift without granting Beta credit.
 - [x] Discovery-only rootfs-handoff policy and exact pinned storage-layout source validation.
 - [x] Typed physical storage discovery evidence contract.
 - [x] Manual physical-storage review contract.
@@ -68,6 +69,7 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [ ] Freeze the exact real plan/plan-review/observations/result-reviews/summary into one functional result bundle for manual release-gate review.
 - [ ] Capture and accept storage/encryption/free-space/recovery evidence from the real phone.
 - [ ] Review the exact physical bring-up session and source-file dossier.
+- [ ] Cross-bind the accepted real dossier/review and exact real functional-result bundle into one physical release-gate audit packet.
 - [ ] Select/review an actual reversible rootfs staging/handoff strategy only after accepted physical storage evidence and dossier review.
 - [ ] Confirm intended Kali early userspace/rootfs on the physical run.
 - [ ] Validate required UFS/storage behavior beyond bounded diagnostic reads.
@@ -115,6 +117,7 @@ Each subsystem requires real physical evidence before it can be called working.
 
 - [x] [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md) exists and separates host-side from physical mandatory checks.
 - [x] 0.6.64 deterministic SWIR Progress SVG PRO card/mini/template are generated from the authoritative project ledger; they are presentation only and grant no release credit.
+- [x] 0.6.66 host-side cross-campaign audit prevents unrelated bring-up and functional evidence from being combined as one release-review packet.
 - [ ] Every applicable mandatory physical AC2003 gate is passed and manually reviewed.
 - [ ] Exact release manifest + SHA-256 set is generated from the reviewed physical candidate.
 - [ ] Compatibility matrix and known issues reflect only physically verified scope.
@@ -139,4 +142,4 @@ KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual
 
 ## Immediate next work
 
-The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, run the established baseline → stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → exact functional result bundle → storage review/dossier chain. Only then design and review the reversible rootfs handoff target for that exact device state.
+The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, run the established baseline → stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → exact functional result bundle → storage review/dossier chain → cross-campaign release-gate audit. Only then design and review the reversible rootfs handoff target for that exact device state.
