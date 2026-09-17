@@ -8,6 +8,7 @@ on:
       - "kaliphonestudio/kernel_contract.py"
       - "kaliphonestudio/kernel_repro.py"
       - "kaliphonestudio/kernel_repro_diagnostics.py"
+      - "kaliphonestudio/kernel_build_tree_diagnostics.py"
       - "kaliphonestudio/kernel_toolchain.py"
       - "kaliphonestudio/kernel_toolchain_checkout.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
@@ -19,11 +20,13 @@ on:
       - "scripts/bind_kernel_reproducible_builds.py"
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
+      - "scripts/diagnose_kernel_build_tree.py"
       - "scripts/normalize_kernel_source_mtimes.py"
       - "scripts/verify_kernel_toolchain_checkout.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
+      - "tests/test_kernel_build_tree_diagnostics.py"
       - "tests/test_kernel_source_normalization.py"
       - "tests/test_kernel_toolchain_checkout.py"
       - ".github/workflows/kernel-real-repro.yml"
@@ -33,6 +36,7 @@ on:
       - "kaliphonestudio/kernel_contract.py"
       - "kaliphonestudio/kernel_repro.py"
       - "kaliphonestudio/kernel_repro_diagnostics.py"
+      - "kaliphonestudio/kernel_build_tree_diagnostics.py"
       - "kaliphonestudio/kernel_toolchain.py"
       - "kaliphonestudio/kernel_toolchain_checkout.py"
       - "kaliphonestudio/kernel_toolchain_binding.py"
@@ -44,11 +48,13 @@ on:
       - "scripts/bind_kernel_reproducible_builds.py"
       - "scripts/verify_kernel_repro_pair.py"
       - "scripts/diagnose_kernel_image_repro.py"
+      - "scripts/diagnose_kernel_build_tree.py"
       - "scripts/normalize_kernel_source_mtimes.py"
       - "scripts/verify_kernel_toolchain_checkout.py"
       - "tests/test_kernel_build_runner.py"
       - "tests/test_kernel_build_binding.py"
       - "tests/test_kernel_repro_diagnostics.py"
+      - "tests/test_kernel_build_tree_diagnostics.py"
       - "tests/test_kernel_source_normalization.py"
       - "tests/test_kernel_toolchain_checkout.py"
       - ".github/workflows/kernel-real-repro.yml"
@@ -71,18 +77,20 @@ jobs:
       - name: Install focused test dependency
         run: python -m pip install pytest
 
-      - name: Compile build runner, source normalizer, toolchain checkout verifier and diagnostics
+      - name: Compile build runner, source normalizer, toolchain verifier and diagnostics
         run: >-
           python -m py_compile
           kaliphonestudio/kernel_build_runner.py
           kaliphonestudio/kernel_build_binding.py
           kaliphonestudio/kernel_repro_diagnostics.py
+          kaliphonestudio/kernel_build_tree_diagnostics.py
           kaliphonestudio/kernel_source_normalization.py
           kaliphonestudio/kernel_toolchain_checkout.py
           scripts/run_locked_kernel_build.py
           scripts/bind_kernel_reproducible_builds.py
           scripts/verify_kernel_repro_pair.py
           scripts/diagnose_kernel_image_repro.py
+          scripts/diagnose_kernel_build_tree.py
           scripts/normalize_kernel_source_mtimes.py
           scripts/verify_kernel_toolchain_checkout.py
 
@@ -95,6 +103,7 @@ jobs:
           tests/test_kernel_build_binding.py
           tests/test_kernel_repro.py
           tests/test_kernel_repro_diagnostics.py
+          tests/test_kernel_build_tree_diagnostics.py
           tests/test_kernel_source_normalization.py
           tests/test_kernel_toolchain.py
           tests/test_kernel_toolchain_checkout.py
@@ -177,9 +186,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          # The exact source commit/subtree were already fetched above.  Verify those
-          # immutable local Git objects directly instead of issuing a second Gitiles
-          # metadata request that can fail independently after a successful fetch.
           python scripts/verify_kernel_toolchain_checkout.py \
             --lock "$TOOLCHAIN_LOCK" \
             --repository toolchain-repo \
@@ -247,11 +253,6 @@ jobs:
         env:
           TOOLCHAIN_ROOT: toolchain-repo/${{ steps.locks.outputs.toolchain_subtree }}
         run: |
-          # Serial internal make graphs still failed strict equality in authority run
-          # 35166301228: 11,293,315 bytes differed across 897,561 ranges even though
-          # normalized build logs were command-for-command identical after A/B path
-          # substitution. Keep -j1 and change one variable only: exact tracked source
-          # mtimes are now normalized to SOURCE_DATE_EPOCH before either build starts.
           set +e
           mkdir -p build-logs
           python scripts/run_locked_kernel_build.py \
@@ -309,6 +310,15 @@ jobs:
             --image-b build-b/arch/arm64/boot/Image \
             --max-ranges 256 \
             --out evidence/kernel-image-divergence.json
+
+      - name: Diagnose intermediate build-tree divergence without relaxing acceptance
+        if: failure() && steps.build_pair.outcome == 'success'
+        run: |
+          python scripts/diagnose_kernel_build_tree.py \
+            --build-a build-a \
+            --build-b build-b \
+            --max-differences 512 \
+            --out evidence/kernel-build-tree-divergence.json
 
       - name: Bind strict reproducibility to exact executed build evidence
         if: success()
