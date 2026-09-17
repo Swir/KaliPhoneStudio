@@ -12,7 +12,7 @@ The project is deliberately conservative about hardware claims. A device profile
 
 Progress is weighted toward physical boot, hardware validation, recovery and release readiness. Host-side reproducibility, provenance and safety are mandatory foundations, but they never substitute for evidence from the exact physical phone.
 
-> **Current development line: `0.6.48-dev`.** The reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel, and avicii DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.48 adds a device-independent physical-candidate preflight gate that cross-binds the exact physical-baseline/stock-provenance bundle, one schema-v8 first-boot manifest, the unified reviewed kernel/rootfs/DT authority bundle, the exact temporary-boot authorization, and the exact `BootBuildPlan`. Passing this gate only makes a temporary-boot **offer** eligible; it performs no device command, writes no phone storage, and grants no hardware or Beta credit.
+> **Current development line: `0.6.49-dev`.** The reviewed Kali ARM64 rootfs, `oneplus/avicii` kernel, and avicii DTB/DTBO authorities remain strict-byte-identical host-side. 0.6.48 added the exact physical-candidate preflight gate. 0.6.49 adds the next host-only boundary: a path-independent temporary-boot offer that rehashes the exact reviewed Fastboot executable and exact candidate `boot.img`, binds them back to the read-only capture and physical-candidate gate, and produces only one serial-bound `fastboot -s SERIAL boot IMAGE` argv. It never invokes Fastboot. A separate explicit profile confirmation can authorize the offer in memory, but that authorization still records `temporary_boot_executed=false` and grants no hardware/Beta credit.
 
 ## Source of truth and architecture
 
@@ -22,7 +22,7 @@ Progress is weighted toward physical boot, hardware validation, recovery and rel
 devices/<vendor>/<codename>/profile.json
 ```
 
-A device profile must define identity, confirmation token, boot/partition constraints, firmware hints, immutable upstream sources, recovery notes, host tests and hardware Beta tests before destructive actions can become eligible. Adding a profile JSON is never an automatic hardware-support claim.
+A profile must define identity, confirmation token, boot/partition constraints, firmware hints, immutable upstream sources, recovery notes, host tests and hardware Beta tests before destructive actions can become eligible. Adding a profile JSON is never an automatic hardware-support claim.
 
 ### Active device profiles
 
@@ -30,13 +30,7 @@ A device profile must define identity, confirmation token, boot/partition constr
 |---|---|---|---|
 | OnePlus Nord AC2003 | `oneplus/avicii` | Bring-up; physical first boot pending | **Not released** |
 
-The first profile pins:
-
-- device baseline: `LineageOS/android_device_oneplus_avicii@3f1270c2871e9893332073eb0f8f5f9499abbf13`
-- kernel baseline: `LineageOS/android_kernel_oneplus_sm7250@fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`)
-- kernel compiler: source/object-locked Android Clang `clang-r416183b`
-
-These are engineering baselines, not hardware-working claims.
+The first profile pins `LineageOS/android_device_oneplus_avicii@3f1270c2871e9893332073eb0f8f5f9499abbf13`, kernel `LineageOS/android_kernel_oneplus_sm7250@fb4b4374d3b9ad0f10ba38d159585129f092fb3d` (`4.19.300`) and source/object-locked Android Clang `clang-r416183b`. These are engineering baselines, not hardware-working claims.
 
 ## Current reviewed host authorities
 
@@ -46,7 +40,7 @@ These are engineering baselines, not hardware-working claims.
 | ARM64 kernel | `35183670399` | `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3`; `Image` SHA-256 `be4440dc335d53c752270c484fe589a9bc1ef08f9100e885478b50df67cbe712`, 43,878,416 bytes | **No** |
 | DTB / DTBO | `35196447576` | `lito.dtb` SHA-256 `48b0902a99c10a11ff52680bf81e9fec2574ad687c58ea35a00fdbf7aefe40ce`; packed `dtbo.img` SHA-256 `212392a25add2aa60fdc73163bfdbf1acc082bc5e6e1f3ff1c975e88b857b895` | **No** |
 
-The reviewed authority records are checked into `evidence/authorities/` and are independently reconstructed by CI. They prove host-side identity and reproducibility only.
+The reviewed authority records are checked into `evidence/authorities/` and are independently reconstructed by CI. `BUILD_STATUS.json` retains the exact authority run/commit/artifact identities and CI now verifies them against the immutable records.
 
 ## Implemented safety and provenance chain
 
@@ -62,7 +56,7 @@ The reviewed authority records are checked into `evidence/authorities/` and are 
 ### Physical baseline and stock provenance
 
 - Read-only Fastboot capture using a reviewed Fastboot tool policy and exact executable identity.
-- Capture bundle joins the exact Fastboot executable evidence, raw `getvar all` transcript and parsed baseline.
+- Capture bundle joins exact Fastboot executable evidence, raw `getvar all` transcript and parsed baseline.
 - Exact OTA → `payload.bin` → stock `boot.img` provenance with SHA-256 and firmware metadata evidence.
 - `PhysicalBaselineBundleEvidence` joins the read-only capture to the matching exact OTA/payload/stock boot chain and remains `temporary_boot_authorized=false`, `hardware_verified=false`, `beta_gate_credit=false`.
 - OTA metadata parsing is strict UTF-8, bounded, duplicate-aware, path-safe and TOCTOU-hardened.
@@ -72,15 +66,15 @@ The reviewed authority records are checked into `evidence/authorities/` and are 
 - Profile-driven deterministic `BootBuildPlan` with exact stock provenance plus SHA-256-bound kernel/ramdisk/DTB/DTBO inputs.
 - Source-locked `mkbootimg`/`unpack_bootimg` backend.
 - Independent double assembly and locked round-trip verification.
-- `TemporaryBootAuthorization` binds the exact verified device, baseline, stock provenance, plan, reproducible assembly, round-trip evidence and final boot image. Creating authorization does **not** execute Fastboot.
+- `TemporaryBootAuthorization` binds exact verified device, baseline, stock provenance, plan, reproducible assembly, round-trip evidence and final boot image. Creating authorization does **not** execute Fastboot.
 
 ### Kernel and device tree
 
 - Exact source/version/config/toolchain contracts with immutable source commits and Android Clang `clang-r416183b` source/object/materialized-byte verification.
 - Fixed build identity/time/locale, canonical compiler path remapping, deterministic `CONFIG_IKHEADERS`, tracked-source mtime normalization and compat-vDSO path normalization.
 - Strict kernel acceptance requires independent byte-identical `.config` and ARM64 `Image` plus executed-build provenance.
-- DT build plan is bound to the reviewed kernel authority and requires independent byte-identical selected DTB, raw overlay and packed DTBO outputs.
-- Historical kernel artifacts that omitted hidden `.config` can rehydrate only the exact authority-matching config; the reviewed `Image` is never rebuilt by that recovery path.
+- DT build plan is bound to reviewed kernel authority and requires independent byte-identical selected DTB, raw overlay and packed DTBO outputs.
+- Historical kernel artifacts that omitted hidden `.config` can rehydrate only exact authority-matching config; the reviewed `Image` is never rebuilt by that recovery path.
 
 ### Kali rootfs, first boot and rescue
 
@@ -93,17 +87,9 @@ The reviewed authority records are checked into `evidence/authorities/` and are 
 
 ### Physical candidate preflight — 0.6.48
 
-`PhysicalCandidateGateEvidence` is the final host-side cross-binding before a temporary-boot action may even be offered. It requires all of the following to agree exactly:
+`PhysicalCandidateGateEvidence` is the final artifact-level cross-binding before a temporary-boot action may even be offered. It requires selected profile/boot layout, physical Fastboot/stock-provenance bundle, schema-v8 candidate, unified reviewed authorities, schema-v2 temporary-boot authorization and exact boot plan to agree. It fail-closes on detached evidence, serial/firmware/stock/authority/kernel/DT drift, unsafe paths or host evidence that claims physical success.
 
-- selected device profile and boot-layout contract,
-- physical Fastboot/stock-provenance bundle,
-- schema-v8 first-boot manifest,
-- unified reviewed kernel/rootfs/DT authority bundle,
-- schema-v2 temporary-boot authorization,
-- exact boot build plan and kernel/DTB/DTBO input identities,
-- firmware build/fingerprint, device serial, stock OTA/boot identity and final boot image identity.
-
-The gate is fail-closed on detached evidence, profile/layout drift, serial/firmware drift, stock-provenance substitution, authority substitution, kernel/DT substitution, malformed hashes/sizes, unsafe input paths or host evidence that claims a physical action. A valid gate explicitly records:
+A valid record explicitly remains host-only:
 
 ```text
 ready_for_temporary_boot_offer=true
@@ -113,7 +99,23 @@ hardware_verified=false
 beta_gate_credit=false
 ```
 
-The accompanying CLI only binds existing evidence and writes immutable JSON. It never runs `adb`, `fastboot boot`, `flash`, `erase`, `reboot`, or slot-changing commands.
+### Temporary-boot offer — 0.6.49
+
+`TemporaryBootOfferEvidence` closes the last host-local file-identity gap without performing the boot. Preparation requires:
+
+- exact physical-candidate gate and exact read-only Fastboot capture bundle,
+- the exact reviewed `FastbootToolEvidence` originally used by that capture,
+- byte-for-byte rehash of the concrete Fastboot executable currently selected for use,
+- byte-for-byte rehash of the concrete candidate `boot.img`, with exact gate SHA-256/size and profile boot-partition limit,
+- exact profile/serial identity and profile-specific confirmation policy.
+
+The only generated command plan is an argv tuple equivalent to:
+
+```text
+<verified-fastboot> -s <verified-serial> boot <verified-candidate-boot.img>
+```
+
+No shell string is generated and no subprocess is invoked. The CLI only writes immutable offer evidence and prints an argv preview marked **NOT EXECUTED**. `authorize_temporary_boot_offer()` requires the exact profile confirmation token but still only emits authorization evidence with `temporary_boot_executed=false`, `persistent_write=false`, `phone_storage_written=false`, `hardware_verified=false` and `beta_gate_credit=false`.
 
 ## Offline application
 
@@ -128,31 +130,13 @@ Profile inspection is offline and always distinguishes profile availability from
 
 ## Beta release gate
 
-**Beta is BLOCKED.** The first AC2003 Beta still requires, at minimum:
-
-- real physical Fastboot/OxygenOS build + fingerprint capture,
-- matching stock `boot.img` from the exact OTA,
-- instantiation of one exact physical-firmware candidate and its physical-candidate preflight gate,
-- explicitly authorized physical temporary boot,
-- usable rescue/log channel and Kali early-userspace/rootfs proof,
-- required UFS/storage verification,
-- usable display/touch path or an explicit console-only scope,
-- safe charging/battery behavior,
-- exercised recovery/rollback,
-- compatibility matrix, release manifest and SHA-256 files.
+**Beta is BLOCKED.** The first AC2003 Beta still requires a real physical Fastboot/OxygenOS baseline, matching stock `boot.img`, exact physical-firmware candidate + reviewed bindings + physical candidate gate + local temporary-boot offer, explicitly confirmed physical temporary boot, rescue/log proof, Kali early userspace/rootfs, UFS/storage, display/touch or declared console-only scope, safe charging/battery, exercised recovery/rollback, and a compatibility/release manifest with SHA-256 files.
 
 No empty, symbolic, or host-CI-only Beta release is acceptable.
 
 ## Testing
 
-Primary CI matrix:
-
-- Python 3.11
-- Python 3.12
-- Python 3.13
-- Python 3.14
-
-Run locally:
+Primary CI matrix: Python 3.11, 3.12, 3.13 and 3.14.
 
 ```bash
 python -m compileall -q kaliphonestudio scripts tests
@@ -161,7 +145,7 @@ python -m pytest -q
 
 ## Adding another device
 
-A new device starts as **profile-only / unsupported hardware**. Add `devices/<vendor>/<codename>/profile.json`, pin immutable upstream sources, define identity/confirmation/boot/partition/recovery/test contracts, pass schema and CI validation, build and verify artifacts offline, capture the exact physical baseline, and prefer temporary boot before any persistent write.
+A new device starts as **profile-only / unsupported hardware**. Add `devices/<vendor>/<codename>/profile.json`, pin immutable upstream sources, define identity/confirmation/boot/partition/recovery/test contracts, pass schema and CI validation, build and verify artifacts offline, capture exact physical baseline, and prefer temporary boot before any persistent write.
 
 ## Safety model
 
