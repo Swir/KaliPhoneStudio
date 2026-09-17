@@ -14,11 +14,15 @@ mount -t devtmpfs devtmpfs /dev || echo "KPS: devtmpfs mount unavailable"
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts || echo "KPS: devpts mount unavailable"
 
+KPS_RESCUE_MARKER="KPS_RESCUE_INIT_REACHED_V1"
+
 if [ -w /dev/kmsg ]; then
+    echo "$KPS_RESCUE_MARKER" > /dev/kmsg
     echo "KaliPhoneStudio rescue userspace reached /init" > /dev/kmsg
 fi
 
 echo ""
+echo "$KPS_RESCUE_MARKER"
 echo "KaliPhoneStudio rescue userspace"
 echo "network=disabled ssh=disabled"
 if [ -r /proc/cmdline ]; then
