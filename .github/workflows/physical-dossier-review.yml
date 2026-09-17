@@ -1,0 +1,48 @@
+name: physical-dossier-review
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/physical_bringup_dossier.py"
+      - "kaliphonestudio/physical_bringup_dossier_verify.py"
+      - "kaliphonestudio/physical_bringup_dossier_review.py"
+      - "scripts/review_physical_bringup_dossier.py"
+      - "scripts/prepare_physical_bringup_dossier_review.py"
+      - "tests/test_physical_bringup_dossier_review.py"
+      - ".github/workflows/physical-dossier-review.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/physical_bringup_dossier.py"
+      - "kaliphonestudio/physical_bringup_dossier_verify.py"
+      - "kaliphonestudio/physical_bringup_dossier_review.py"
+      - "scripts/review_physical_bringup_dossier.py"
+      - "scripts/prepare_physical_bringup_dossier_review.py"
+      - "tests/test_physical_bringup_dossier_review.py"
+      - ".github/workflows/physical-dossier-review.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      - name: Compile physical dossier review sources
+        run: >-
+          python -m py_compile
+          kaliphonestudio/physical_bringup_dossier_review.py
+          scripts/review_physical_bringup_dossier.py
+          scripts/prepare_physical_bringup_dossier_review.py
+          tests/test_physical_bringup_dossier_review.py
+      - name: Run physical dossier review contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_physical_bringup_dossier_review.py
