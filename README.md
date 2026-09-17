@@ -25,14 +25,14 @@
 
 | Item | Status |
 |---|---|
-| Current development line | `0.6.57-dev` |
+| Current development line | `0.6.58-dev` |
 | Completion | **58%** |
 | Current stage | Development / physical bring-up |
 | First device profile | OnePlus Nord AC2003 — `oneplus/avicii` |
 | Latest public release | **Not published yet** |
 | Beta gate | **BLOCKED** |
 
-**Current development line: `0.6.57-dev`**
+**Current development line: `0.6.58-dev`**
 
 **58% complete**
 
@@ -40,7 +40,7 @@
 
 **Public Beta is not released.** The first supported profile, `oneplus/avicii` for the OnePlus Nord AC2003, is still in physical bring-up. Reviewed host-side rootfs, kernel and DTB/DTBO authorities exist, but real-device identity, exact firmware/stock boot matching, temporary boot, storage strategy, Kali early-userspace, hardware safety and recovery gates are still pending.
 
-KaliPhoneStudio is deliberately conservative: a profile, green CI, reproducible artifact, successful Fastboot return code, rescue marker, storage-discovery record or manual-review record does **not** by itself mean a phone is supported. The authoritative release rules live in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
+KaliPhoneStudio is deliberately conservative: a profile, green CI, reproducible artifact, successful Fastboot return code, rescue marker, storage-discovery record, manual-review record or cross-bound bring-up session does **not** by itself mean a phone is supported. The authoritative release rules live in [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
 ## Overview
 
@@ -57,8 +57,8 @@ The project currently focuses on building and proving a safe first-boot path for
 | 🧬 Reproducible builds | Reviewed strict A/B authorities for Kali ARM64 rootfs, avicii kernel and DTB/DTBO artifacts. |
 | 🛟 Rescue path | Deterministic source-locked ARM64 rescue initramfs with exact probe identity and remote access disabled by default. |
 | 📦 Boot provenance | Exact OTA → payload → stock `boot.img` evidence plus deterministic boot-image assembly and round-trip checks. |
-| 🧪 Physical evidence | Read-only rescue diagnostics, bounded functional probes, Kali early-userspace markers and typed storage discovery. |
-| 💾 Storage safety | Discovery and manual-review layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
+| 🧪 Physical evidence | Read-only rescue diagnostics, bounded functional probes, Kali early-userspace markers, typed storage discovery and one cross-bound audit session. |
+| 💾 Storage safety | Discovery, review and session layers cannot choose a `/dev/...` target, mount storage or authorize a write. |
 | 🖥️ Offline UI/CLI | Safe profile inspection without automatically invoking ADB/Fastboot or exposing unguarded write controls. |
 
 ## Compatibility
@@ -136,8 +136,9 @@ The current storage pipeline intentionally stops before target selection.
 1. `kaliphonestudio.rootfs_handoff` binds the exact physical candidate and reviewed rootfs authority to a source-pinned discovery contract.
 2. `kaliphonestudio.physical_storage_discovery` binds real topology/filesystem/encryption/free-space observations plus recovery-plan bytes to the exact rescue/rootfs chain.
 3. `kaliphonestudio.physical_storage_review` binds a human review record and review notes to that exact discovery evidence.
-4. Only a review-ready discovery with every required review check may become `accepted_for_strategy_design=true`.
-5. Even then, `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `storage_verified=false`, `recovery_verified=false`, `hardware_verified=false` and `beta_gate_credit=false` remain mandatory.
+4. `kaliphonestudio.physical_bringup_session` cross-binds the candidate/rescue/storage chain into one immutable audit record and can optionally bind matching Kali early-userspace evidence.
+5. Only a review-ready discovery with every required review check may become `accepted_for_strategy_design=true`.
+6. Even then, `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, `storage_verified=false`, `recovery_verified=false`, `hardware_verified=false` and `beta_gate_credit=false` remain mandatory.
 
 For avicii, the exact pinned LineageOS `init/fstab.qcom` blob is `20873c3a84e1e6e8d2483e313f561ad35ded7355`. It describes userdata as F2FS with `fileencryption=ice` and `wrappedkey` on UFS with separate metadata encryption state. KaliPhoneStudio treats `userdata` only as a discovery role/hint, never as an approved rootfs target.
 
@@ -160,7 +161,20 @@ python scripts/review_physical_storage_discovery.py \
   --out evidence/physical-storage-review.json
 ```
 
-Both commands perform evidence handling only. They do not connect to a phone, mount storage, choose a partition or authorize a write. See [`docs/PHYSICAL_STORAGE_REVIEW.md`](docs/PHYSICAL_STORAGE_REVIEW.md).
+Once all exact candidate/rescue/discovery/review records exist, cross-bind them offline before any later target-strategy review:
+
+```bash
+python scripts/bind_physical_bringup_session.py \
+  --candidate-gate evidence/physical-candidate-gate.json \
+  --boot-observation evidence/physical-boot-observation.json \
+  --rescue-diagnostics evidence/physical-rescue-diagnostics.json \
+  --functional-probes evidence/physical-rescue-functional-probes.json \
+  --storage-discovery evidence/physical-storage-discovery.json \
+  --storage-review evidence/physical-storage-review.json \
+  --out evidence/physical-bringup-session.json
+```
+
+These commands perform evidence handling only. They do not connect to a phone, mount storage, choose a partition or authorize a write. See [`docs/PHYSICAL_STORAGE_REVIEW.md`](docs/PHYSICAL_STORAGE_REVIEW.md) and [`docs/PHYSICAL_BRINGUP_SESSION.md`](docs/PHYSICAL_BRINGUP_SESSION.md).
 
 ## Kali early-userspace proof
 
@@ -178,7 +192,7 @@ See [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md).
 - Keep host CI and physical hardware claims separate.
 - Never weaken strict reproducibility to make a gate pass.
 - Do not embed credentials or enable remote access by default.
-- A storage role, layout hint, review-ready discovery or accepted manual review is **not** a block-device target.
+- A storage role, layout hint, review-ready discovery, accepted manual review or valid bring-up session is **not** a block-device target.
 - No public Beta or Stable release exists until the complete physical gate is reviewed.
 
 ## Development and verification
@@ -188,7 +202,7 @@ python -m compileall -q kaliphonestudio scripts tests
 python -m pytest -q
 ```
 
-Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof, source-locked rootfs handoff, typed physical-storage discovery and manual storage-review contracts. Repository documentation and checked-in authority records are part of the safety contract and are CI-validated.
+Focused CI covers kernel/rootfs/DT reproducibility, rescue payloads/read-only diagnostics, Kali early-userspace proof, source-locked rootfs handoff, typed physical-storage discovery, manual storage review and physical bring-up session cross-binding. Repository documentation and checked-in authority records are part of the safety contract and are CI-validated.
 
 ## Roadmap and releases
 

@@ -2,6 +2,16 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.58-dev — cross-bound physical bring-up evidence session
+
+- Added `kaliphonestudio.physical_bringup_session` as a schema-v1 offline audit boundary across one exact physical-candidate gate, rescue boot observation, read-only diagnostics, explicitly authorized functional probes, physical-storage discovery and manual storage-review evidence chain.
+- The binder fail-closes on profile/serial/firmware drift, detached candidate/discovery/review digests, mismatched rescue transcript/probe identity, rootfs authority/artifact drift, or storage report/recovery-plan substitution.
+- Optional physical Kali early-userspace evidence can be attached only when its candidate manifest, reviewed authority bundle, rootfs authority and strict rootfs artifact identities match the same physical candidate/storage chain.
+- Added immutable canonical session evidence and `scripts/bind_physical_bringup_session.py`; the CLI reads existing evidence only and contains no Fastboot/ADB, mount/decrypt, block-target selection or phone-write path.
+- A session may mirror `accepted_for_strategy_design=true` from an exact completed manual storage review, but always forces `target_selected=false`, `storage_path_bound=false`, `write_authorized=false`, `handoff_ready=false`, all hardware verification flags false and `beta_gate_credit=false`.
+- Added focused cross-layer tests, `docs/PHYSICAL_BRINGUP_SESSION.md`, and rootfs-handoff-policy CI coverage for the complete evidence-chain binder.
+- Project completion remains **58%** because no real AC2003 baseline/storage review/temporary boot/hardware gate has been completed; this milestone improves evidence integrity only.
+
 ## 0.6.57-dev — fail-closed physical storage manual review
 
 - Added `kaliphonestudio.physical_storage_review` with a schema-v1 manual-review record/evidence layer bound to one exact `PhysicalStorageDiscoveryEvidence` chain.
