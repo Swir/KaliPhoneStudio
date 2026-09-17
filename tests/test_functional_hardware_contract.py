@@ -9,6 +9,7 @@ from kaliphonestudio.functional_hardware_contract import (
     functional_hardware_contract_sha256,
     validate_functional_hardware_contract,
 )
+from kaliphonestudio.profiles import ProfileError, validate_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = ROOT / "devices" / "oneplus" / "avicii" / "profile.json"
@@ -31,6 +32,21 @@ def test_every_repository_device_profile_has_a_strict_functional_hardware_contra
         assert "functional_hardware" in data["test_contract"], f"{path}: missing functional_hardware contract"
         normalized = validate_functional_hardware_contract(data["test_contract"]["functional_hardware"])
         assert normalized["tests"], f"{path}: functional hardware test list is empty"
+        validate_profile(data)
+
+
+def test_runtime_profile_validation_requires_functional_hardware_contract():
+    data = _profile_data()
+    del data["test_contract"]["functional_hardware"]
+    with pytest.raises(ProfileError, match="functional_hardware is required"):
+        validate_profile(data)
+
+
+def test_runtime_profile_validation_rejects_unsafe_functional_hardware_policy():
+    data = _profile_data()
+    data["test_contract"]["functional_hardware"]["tests"][0]["persistent_write_allowed"] = True
+    with pytest.raises(ProfileError, match="functional_hardware is invalid"):
+        validate_profile(data)
 
 
 def test_avicii_functional_hardware_contract_is_strict_and_deterministic():
