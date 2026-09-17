@@ -39,6 +39,21 @@ def test_progress_is_consistent_across_active_status_docs():
     assert f"**{progress}% complete**" in roadmap
 
 
+def test_readme_keeps_swirl_readme_pro_essentials():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert '<div align="center">' in readme
+    assert "power-divider-v4.svg" in readme
+    assert "## Project status" in readme
+    assert "## Quick Start" in readme
+    assert "## Compatibility" in readme
+    assert "## Safety and limitations" in readme
+    assert "## 🔎 Search Keywords" in readme
+    assert "https://github.com/Swir" in readme
+    keyword_section = readme.split("## 🔎 Search Keywords", 1)[1]
+    keyword_line = next(line for line in keyword_section.splitlines() if "`" in line)
+    assert 8 <= keyword_line.count("`") // 2 <= 20
+
+
 def test_first_device_profile_contract():
     path = ROOT / "devices" / "oneplus" / "avicii" / "profile.json"
     data = json.loads(path.read_text(encoding="utf-8"))
