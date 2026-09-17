@@ -2,11 +2,11 @@
 
 The temporary-boot executor can prove which exact host command was issued, but a
 Fastboot return code cannot prove that the phone actually ran the intended kernel
-or userspace.  This module provides the next evidence boundary: bind one raw
-physical-console/log capture to the exact temporary-boot execution and offer,
-then detect only source-locked machine markers and well-known diagnostic strings.
+or userspace. This module binds one raw physical-console/log capture to the exact
+temporary-boot execution and offer, then detects only source-locked machine
+markers and well-known diagnostic strings.
 
-Raw captures are evidence inputs, not trusted assertions.  Marker detection may
+Raw captures are evidence inputs, not trusted assertions. Marker detection may
 make an observation eligible for later human/hardware review, but evidence from
 this module always records ``hardware_verified=false`` and
 ``beta_gate_credit=false``.
@@ -32,6 +32,8 @@ MAX_INIT_BYTES = 256 * 1024
 RESCUE_MARKER = "KPS_RESCUE_INIT_REACHED_V1"
 RESCUE_SHELL_MARKER = "Entering local rescue shell. Persistent storage is not mounted automatically."
 KERNEL_BANNER_MARKER = "Linux version "
+_TEMPORARY_BOOT_COMMAND_POLICY = "fastboot-serial-temporary-boot-only-v1"
+_TEMPORARY_BOOT_EXECUTION_POLICY = "single-serial-fastboot-boot-no-persistent-write-v1"
 _SOURCE_KINDS = frozenset({"serial-console", "uart", "usb-serial", "operator-console-log"})
 _PANIC_MARKERS = (
     b"Kernel panic - not syncing",
@@ -213,12 +215,18 @@ def _validate_execution_and_offer(
         raise PhysicalBootObservationError("temporary-boot execution must be schema-v1 typed evidence")
     if not isinstance(offer, TemporaryBootOfferEvidence) or offer.schema_version != 1:
         raise PhysicalBootObservationError("temporary-boot offer must be schema-v1 typed evidence")
+    if execution.execution_policy != _TEMPORARY_BOOT_EXECUTION_POLICY:
+        raise PhysicalBootObservationError("temporary-boot execution policy mismatch")
+    if offer.command_policy != _TEMPORARY_BOOT_COMMAND_POLICY:
+        raise PhysicalBootObservationError("temporary-boot offer command policy mismatch")
     if execution.offer_sha256 != offer.evidence_sha256():
         raise PhysicalBootObservationError("temporary-boot execution is detached from the exact offer")
     if execution.profile_id != offer.profile_id or execution.device_serial != offer.device_serial:
         raise PhysicalBootObservationError("temporary-boot execution/offer identity mismatch")
     if execution.command_invoked is not True or execution.temporary_boot_executed is not True:
         raise PhysicalBootObservationError("temporary-boot execution evidence does not record an invoked boot")
+    if not isinstance(execution.temporary_boot_command_succeeded, bool):
+        raise PhysicalBootObservationError("temporary-boot command success flag must be boolean")
     if (
         execution.persistent_write is not False
         or execution.phone_storage_written is not False
@@ -240,7 +248,6 @@ def _validate_execution_and_offer(
 
 
 def _normalize_console_bytes(payload: bytes) -> bytes:
-    # Preserve content while normalizing only line endings for stable textual comparison.
     return payload.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
 
 
