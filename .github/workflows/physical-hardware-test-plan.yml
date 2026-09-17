@@ -8,6 +8,7 @@ on:
       - "kaliphonestudio/functional_hardware_contract.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_review.py"
+      - "kaliphonestudio/profiles.py"
       - "scripts/build_physical_hardware_test_plan.py"
       - "tests/test_functional_hardware_contract.py"
       - "tests/test_physical_hardware_test_plan.py"
@@ -18,6 +19,7 @@ on:
       - "kaliphonestudio/functional_hardware_contract.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_review.py"
+      - "kaliphonestudio/profiles.py"
       - "scripts/build_physical_hardware_test_plan.py"
       - "tests/test_functional_hardware_contract.py"
       - "tests/test_physical_hardware_test_plan.py"
@@ -41,6 +43,7 @@ jobs:
           python -m py_compile
           kaliphonestudio/functional_hardware_contract.py
           kaliphonestudio/physical_hardware_test_plan.py
+          kaliphonestudio/profiles.py
           scripts/build_physical_hardware_test_plan.py
           tests/test_functional_hardware_contract.py
           tests/test_physical_hardware_test_plan.py
