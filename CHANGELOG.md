@@ -2,6 +2,18 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.62-dev — exact physical functional-test observation and review
+
+- Added `kaliphonestudio.physical_hardware_test_observation` to bind one actually executed physical functional test to one exact pending profile-driven test plan, exact device/candidate context, canonical operator record and separate notes.
+- `pass_candidate` now requires every exact `required_observations` item from the selected plan test to be satisfied; missing context signals, identity drift, changed files and any persistent-write claim fail closed.
+- Added a safe observation-template CLI that starts `inconclusive`, not executed, with candidate/device confirmation false and all observation checks false; it cannot be bound until edited after a real physical test.
+- Added `kaliphonestudio.physical_hardware_test_review` as an independent exact manual-review layer. Accepted pass/fail/inconclusive decisions must match the bound observation outcome and require exact-plan, exact-observation, physical-context, required-observation, notes/limitations and no-write checks.
+- Added rejected-by-default review templates plus offline observation/review binder CLIs. A reviewed pass remains test-level evidence only and cannot authorize a public support claim or Beta release.
+- Added `kaliphonestudio.physical_hardware_test_summary` to aggregate exact-plan statuses (`pending`, `reviewed_pass`, `reviewed_fail`, `reviewed_inconclusive`, `rejected`) and count Beta-required reviewed passes while forcing project-support/hardware/Beta promotion false.
+- Added focused fail-closed tests and dedicated `physical-hardware-functional-results` CI covering exact binding, canonical round trips, outcome/review matching, duplicate/detached review rejection, safe template defaults and forbidden support/write/Beta promotion.
+- Added `docs/PHYSICAL_HARDWARE_FUNCTIONAL_TESTS.md` and synchronized README/ROADMAP/version state with SWIR README PRO v2.
+- Project completion remains **58%** and Beta remains **BLOCKED** because no real AC2003 functional test result has been captured/reviewed and the mandatory physical release gate remains open.
+
 ## 0.6.61-dev — fail-closed physical hardware survey manual review
 
 - Added `kaliphonestudio.physical_hardware_review` as a schema-v1 offline manual-review layer for one exact bounded `PhysicalHardwareSurveyEvidence` record.
@@ -85,7 +97,7 @@ Active development changes are listed here. Older detailed entries remain in [`C
 
 ## 0.6.54-dev — exact Kali early-userspace identity proof
 
-- Added `kaliphonestudio.kali_early_userspace` with a deterministic schema-v1 proof plan bound to the exact first-boot manifest, reviewed authority bundle, rootfs-authority binding, reviewed rootfs authority, strict rootfs artifact SHA-256/size, ARM64 architecture and rootfs variant.
+- Added `kaliphonestudio.kali_early_userspace` with a deterministic schema-v1 proof plan bound to the exact first-boot manifest, reviewed authority bundle, rootfs-authority binding, reviewed rootfs authority, strict ARM64 rootfs artifact SHA-256/size, ARM64 architecture and rootfs variant.
 - Added a deterministic five-member USTAR overlay containing the canonical plan/probe id, hardened proof emitter, systemd oneshot unit and fixed relative activation link.
 - Added exact runtime markers for stage, deterministic probe id, first-boot manifest digest, rootfs-authority digest and strict rootfs-artifact digest.
 - Added `kaliphonestudio.physical_kali_early_userspace` to bind an operator-captured transcript to one successful non-persistent temporary-boot execution, one exact physical-candidate gate and one exact proof bundle.
