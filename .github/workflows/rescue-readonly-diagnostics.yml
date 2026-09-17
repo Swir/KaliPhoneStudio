@@ -4,21 +4,29 @@ on:
   push:
     paths:
       - "rescue/init"
+      - "tools/rescue-payload-lock.json"
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "scripts/record_physical_rescue_diagnostics.py"
+      - "scripts/record_physical_rescue_functional_probes.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
+      - "tests/test_physical_rescue_functional_probes.py"
       - "tests/test_rescue_init_readonly_policy.py"
       - ".github/workflows/rescue-readonly-diagnostics.yml"
   pull_request:
     paths:
       - "rescue/init"
+      - "tools/rescue-payload-lock.json"
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "scripts/record_physical_rescue_diagnostics.py"
+      - "scripts/record_physical_rescue_functional_probes.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
+      - "tests/test_physical_rescue_functional_probes.py"
       - "tests/test_rescue_init_readonly_policy.py"
       - ".github/workflows/rescue-readonly-diagnostics.yml"
   workflow_dispatch:
@@ -40,7 +48,9 @@ jobs:
         run: >-
           python -m py_compile
           kaliphonestudio/physical_rescue_diagnostics.py
+          kaliphonestudio/physical_rescue_functional_probes.py
           scripts/record_physical_rescue_diagnostics.py
+          scripts/record_physical_rescue_functional_probes.py
       - name: Validate rescue init shell syntax
         run: sh -n rescue/init
       - name: Run focused read-only rescue diagnostic contracts
@@ -50,4 +60,5 @@ jobs:
           python -m pytest -q
           tests/test_physical_boot_observation.py
           tests/test_physical_rescue_diagnostics.py
+          tests/test_physical_rescue_functional_probes.py
           tests/test_rescue_init_readonly_policy.py
