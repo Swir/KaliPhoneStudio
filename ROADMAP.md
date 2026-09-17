@@ -10,7 +10,7 @@ KaliPhoneStudio separates **device-independent studio engineering** from **per-d
 
 The percentage is weighted toward physical boot, hardware validation, recovery and release readiness. CI and offline engineering are mandatory foundations, but do not receive the same weight as verified device milestones.
 
-## Current development line — 0.6.49-dev
+## Current development line — 0.6.50-dev
 
 ### Completed host-side foundations
 
@@ -30,6 +30,8 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] BUILD_STATUS authority run/commit/artifact identities are regression-tested against immutable reviewed authority records.
 - [x] `TemporaryBootOfferEvidence` rehashes the exact local Fastboot executable and exact local candidate `boot.img`, binds them back to read-only capture + physical-candidate gate, and creates only one serial-bound `fastboot ... boot ...` argv without executing it.
 - [x] Explicit profile confirmation can authorize a prepared offer in memory, but authorization still records no execution, persistent write, hardware verification or Beta credit.
+- [x] Fresh runtime execution gate re-verifies offer files, requires exact authorization, performs a read-only serial-bound Fastboot probe and rejects device/slot/unlock/security/version drift before one temporary-boot command may run.
+- [x] Temporary-boot execution evidence records command result but can never claim Kali userspace, hardware verification or Beta credit by itself.
 
 ### Immediate next gates
 
@@ -38,8 +40,9 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [ ] Assemble the exact candidate from reviewed kernel/rootfs/DT authorities plus provisioning/rescue inputs.
 - [ ] Instantiate schema-v8 candidate + reviewed authority bindings + physical-candidate preflight gate for that exact device/firmware.
 - [ ] Prepare the exact local temporary-boot offer from the reviewed Fastboot executable and exact candidate boot image.
-- [ ] Require explicit profile confirmation before any execution path is permitted.
+- [ ] Require explicit profile confirmation and pass the fresh runtime device/state revalidation immediately before execution.
 - [ ] Attempt only a physical **temporary boot** first; no persistent write until later gates explicitly allow it.
+- [ ] Collect independent physical proof of actual kernel/rescue/Kali early-userspace progress after the Fastboot command; a return code alone is not sufficient.
 
 ## Phase A — Multi-device studio core
 
@@ -61,6 +64,7 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 - [x] Schema-v2 temporary-boot authorization.
 - [x] Physical-candidate preflight gate.
 - [x] Temporary-boot offer with exact Fastboot/image byte verification and argv-only command plan.
+- [x] Guarded execution boundary with fresh read-only identity/state probe, explicit opt-in and a single serial-bound temporary-boot verb.
 - [ ] Instantiate the complete chain against real AC2003 firmware and stock boot evidence.
 
 ### Kernel/toolchain
@@ -92,12 +96,12 @@ The percentage is weighted toward physical boot, hardware validation, recovery a
 
 ## Phase D — Physical AC2003 bring-up
 
-Nothing in this phase may be checked from host-only CI.
+Nothing in this phase may be checked from host-only CI, a prepared offer, or a Fastboot return code.
 
 - [ ] Exact model/profile/serial recognized on physical phone.
 - [ ] Exact OxygenOS build/fingerprint captured.
 - [ ] Matching stock boot image verified.
-- [ ] Explicitly confirmed temporary boot succeeds.
+- [ ] Explicitly confirmed temporary boot succeeds **and independent physical evidence confirms actual boot progress**.
 - [ ] Rescue/log channel works.
 - [ ] Kernel reaches Kali early userspace/rootfs.
 - [ ] Required UFS/storage path verified.
@@ -118,7 +122,7 @@ A GitHub Beta is allowed only when [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md
 - [ ] Exact release commit CI green.
 - [ ] Exact device/firmware compatibility matrix.
 - [ ] Reviewed authorities instantiated against exact physical candidate.
-- [ ] Physical-candidate gate and local temporary-boot offer match the exact candidate.
+- [ ] Physical-candidate gate, local temporary-boot offer and fresh runtime execution gate match the exact candidate/device state.
 - [ ] Required physical-device evidence complete.
 - [ ] Installation + recovery/restore instructions.
 - [ ] Known issues/hardware matrix.
