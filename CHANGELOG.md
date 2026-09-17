@@ -2,6 +2,16 @@
 
 Historical development entries through **0.6.27-dev** are preserved verbatim in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md). This file contains the active development line.
 
+## 0.6.41-dev — evidence-bearing kernel source-mtime normalization
+
+- Reviewed real kernel authority run `35166301228` instead of granting partial credit: both source-locked internal-`jobs=1` builds produced identical final `.config` SHA-256 `2ab588b240ed227101464f77465176f2c178ae09309a47e45f5ff56f14c3c7f3` and equal 43,878,416-byte Images, but Image SHA-256 values `6bf2626db6deb670e7771ac3e320a262c94a319aee1f239726dffe4b4265decd` and `018b0b815273fd63b2235abf342ef7bbf4e8c2324d707252e6f22112581192a7` differed. Diagnostics counted 11,293,315 differing bytes across 897,561 ranges from offset 71 through 43,876,937, so strict kernel reproducibility remains false.
+- Compared the two complete build logs after replacing only independent A/B absolute source/output roots with canonical placeholders; they are command-for-command identical until the final Image evidence, narrowing the next experiment below the visible make command graph.
+- Added `KernelSourceMtimeEvidence` and a fail-closed normalizer that requires an exact full-commit HEAD plus a clean tracked tree, hashes a canonical Git mode/blob/path manifest, and normalizes only Git-tracked regular files and symlinks to one explicit epoch. `.git` and untracked files are never traversed or modified, and tracked content is revalidated clean afterward.
+- Added `scripts/normalize_kernel_source_mtimes.py`, atomic non-overwriting evidence output and regression coverage proving two independent checkout paths with intentionally different mtimes converge to byte-identical canonical evidence while retaining `hardware_verified=false` and `beta_gate_credit=false`.
+- Wired source-mtime normalization into the real kernel A/B workflow before either build, require A/B normalization evidence itself to be byte-identical, and retain independent build roots, concurrent outer builds, internal `jobs=1`, the locked toolchain and unchanged strict final `.config`/Image acceptance. Source mtime is therefore the single new experimental variable.
+- The first CI attempt correctly exposed a test-fixture setup bug (`47 passed / 1 failed`) where a nested fixture parent was not created; it was fixed in the same iteration without weakening implementation checks. The subsequent PR `tests` and focused `kernel-real-repro` contract workflows passed.
+- Project completion remains **54%**. Source normalization is host-side reproducibility engineering only and satisfies no physical AC2003/Beta gate.
+
 ## 0.6.40-dev — candidate-level reviewed rootfs authority binding
 
 - Added `FirstBootRootfsAuthorityEvidence`, a fail-closed host-side link from an exact schema-v8 first-boot manifest and its schema-v1 rootfs canonicalization/raw-A/B provenance to one reviewed `RootfsAuthorityRecord`.
@@ -47,7 +57,7 @@ Historical development entries through **0.6.27-dev** are preserved verbatim in 
 - Wired diagnostics into the real strict kernel workflow only after equality failure; strict byte-identical acceptance remains unchanged.
 - Recorded real authority run `35157574186` as a strict failure: identical final `.config` and equal Image size, but unequal Image SHA-256 values.
 - Reconciled the already-merged fail-closed profile-hook registry into README/ROADMAP/BUILD_STATUS and marked generic profile hooks implemented.
-- PR #37 passed the full branch test workflow and was merged as `58a0d24c830ce43dcfded984658279e55224d70f`; post-merge main tests run `35161227859` passed and a fresh real kernel authority run `35161227840` started.
+- PR #37 passed the full branch test workflow and was merged as `58a0d24c830ce43dcfded984658279e55224d70f`; post-merge main test run `35161227859` passed and a fresh real kernel authority run `35161227840` started.
 - Project completion remains 52%; no hardware or Beta gate is credited.
 
 ## 0.6.35-dev — restored application entrypoint and safe offline profile studio
