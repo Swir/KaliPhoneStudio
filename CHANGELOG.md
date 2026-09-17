@@ -2,6 +2,17 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.57-dev — fail-closed physical storage manual review
+
+- Added `kaliphonestudio.physical_storage_review` with a schema-v1 manual-review record/evidence layer bound to one exact `PhysicalStorageDiscoveryEvidence` chain.
+- Acceptance for later strategy design requires the source discovery to be review-ready plus explicit review of physical context, topology, filesystem identity, encryption, free space, recovery plan and evidence-chain integrity.
+- Bound the exact original review-record bytes and separate review-notes bytes by SHA-256 and size, with TOCTOU checks, immutable evidence output and strict schema validation.
+- Added `scripts/review_physical_storage_discovery.py` as an offline-only recorder. It cannot connect to a phone, select a device path, mount storage or authorize a write.
+- Added focused tests for accepted/rejected review states, incomplete-source rejection, profile/serial drift, forbidden target/write claims, unsafe reviewer identifiers, exact-byte binding and immutable evidence.
+- Extended `rootfs-handoff-policy` CI to compile and test the manual-review layer together with discovery and exact pinned layout-source verification.
+- Brought `README.md` toward the canonical SWIR README PRO v1 standard, including a centered electric-cyan hero, truthful status badges, clearer navigation, quick start, compatibility, release/safety sections, mandatory Search Keywords and SWIR footer.
+- Project completion remains **58%** because no real AC2003 physical storage record has been captured or reviewed, no reversible handoff target is approved and no physical temporary boot has passed the Beta gate.
+
 ## 0.6.56-dev — typed physical storage discovery evidence
 
 - Added `kaliphonestudio.physical_storage_discovery` with a strict schema-v1 report/evidence layer for read-only physical storage discovery; it never carries a `/dev/...` target path, never selects a staging target and can never authorize a write.
