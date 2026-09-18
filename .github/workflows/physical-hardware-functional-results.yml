@@ -78,7 +78,6 @@ jobs:
           tests/test_physical_hardware_functional_results.py
           tests/test_physical_hardware_result_bundle.py
           tests/test_current_physical_observation_downstream_gate.py
-          tests/test_current_physical_observation_downstream_gate.py
       - name: Run fail-closed physical functional-test evidence tests
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -86,3 +85,4 @@ jobs:
           pytest -q
           tests/test_physical_hardware_functional_results.py
           tests/test_physical_hardware_result_bundle.py
+          tests/test_current_physical_observation_downstream_gate.py
