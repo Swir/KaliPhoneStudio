@@ -1,9 +1,11 @@
 """Prepare a strictly scoped temporary-Fastboot-boot offer without executing it.
 
 The physical-candidate gate proves that one exact device/firmware/candidate chain is
-eligible to *offer* a temporary boot.  This module closes the remaining host-local
-provenance gap by rehashing the exact Fastboot executable and candidate boot image,
-joining them to the original read-only Fastboot capture/tool evidence, and producing
+eligible to *offer* a temporary boot.  Before an offer can exist, schema-v2 now also
+requires the exact stock/candidate boot-identity binding produced from re-inspected
+boot bytes, component identities, optional AVB layout and profile-required DTBO.
+The module then rehashes the exact Fastboot executable and candidate boot image,
+joins them to the original read-only Fastboot capture/tool evidence, and produces
 one argv-only command plan.  It never invokes subprocesses and never writes phone
 storage.
 """
@@ -17,11 +19,16 @@ import re
 
 from .fastboot_capture_bundle import FastbootCaptureBundleEvidence
 from .fastboot_tool import FastbootToolEvidence, MAX_FASTBOOT_BINARY_BYTES
+from .physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from .physical_candidate_gate import PhysicalCandidateGateEvidence
 from .profiles import DeviceProfile
 from .safety import SafetyError, require_confirmation
+from .temporary_boot_binding import (
+    TemporaryBootBindingError,
+    require_temporary_boot_identity_binding,
+)
 
-_COMMAND_POLICY = "fastboot-serial-temporary-boot-only-v1"
+_COMMAND_POLICY = "fastboot-serial-temporary-boot-only-v2-exact-boot-identity"
 _MAX_BOOT_IMAGE_BYTES = 1024 * 1024 * 1024
 _SERIAL_RE = re.compile(r"^[!-~]{1,128}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -37,6 +44,7 @@ class TemporaryBootOfferEvidence:
     profile_id: str
     device_serial: str
     physical_candidate_gate_sha256: str
+    physical_boot_identity_binding_sha256: str
     fastboot_capture_bundle_sha256: str
     fastboot_tool_evidence_sha256: str
     fastboot_tool_policy_sha256: str
@@ -63,6 +71,7 @@ class TemporaryBootOfferEvidence:
 @dataclass(frozen=True)
 class PreparedTemporaryBootOffer:
     evidence: TemporaryBootOfferEvidence
+    boot_identity_binding: PhysicalBootIdentityBindingEvidence
     fastboot_executable: Path
     boot_image: Path
     argv: tuple[str, ...]
@@ -157,6 +166,7 @@ def prepare_temporary_boot_offer(
     capture: FastbootCaptureBundleEvidence,
     tool: FastbootToolEvidence,
     *,
+    boot_identity_binding: PhysicalBootIdentityBindingEvidence,
     fastboot_executable: Path,
     boot_image: Path,
 ) -> PreparedTemporaryBootOffer:
@@ -176,6 +186,15 @@ def prepare_temporary_boot_offer(
         or gate.beta_gate_credit is not False
     ):
         raise TemporaryBootOfferError("physical candidate gate contains an invalid host-only claim")
+
+    try:
+        binding_sha = require_temporary_boot_identity_binding(
+            profile,
+            gate,
+            boot_identity_binding,
+        )
+    except TemporaryBootBindingError as exc:
+        raise TemporaryBootOfferError(str(exc)) from exc
 
     if not isinstance(capture, FastbootCaptureBundleEvidence) or capture.schema_version != 1:
         raise TemporaryBootOfferError("Fastboot capture bundle must be schema-v1 typed evidence")
@@ -230,6 +249,11 @@ def prepare_temporary_boot_offer(
     )
     if image_sha != gate.boot_image_sha256 or image_size != gate.boot_image_size:
         raise TemporaryBootOfferError("candidate boot image bytes differ from physical candidate gate")
+    if (
+        image_sha != boot_identity_binding.candidate_boot_sha256
+        or image_size != boot_identity_binding.candidate_boot_size
+    ):
+        raise TemporaryBootOfferError("candidate boot image bytes differ from exact boot identity binding")
     try:
         boot_limit = profile.data["partition_limits"]["boot"]
     except (KeyError, TypeError) as exc:
@@ -242,6 +266,7 @@ def prepare_temporary_boot_offer(
     confirmation = _confirmation(profile)
     for value, label in (
         (gate.evidence_sha256(), "physical candidate gate SHA-256"),
+        (binding_sha, "physical boot identity binding SHA-256"),
         (capture.evidence_sha256(), "Fastboot capture bundle SHA-256"),
         (tool.evidence_sha256(), "Fastboot tool evidence SHA-256"),
         (tool.policy_sha256, "Fastboot tool policy SHA-256"),
@@ -253,10 +278,11 @@ def prepare_temporary_boot_offer(
     _positive(image_size, "candidate boot image size")
 
     evidence = TemporaryBootOfferEvidence(
-        schema_version=1,
+        schema_version=2,
         profile_id=profile_id,
         device_serial=serial,
         physical_candidate_gate_sha256=gate.evidence_sha256(),
+        physical_boot_identity_binding_sha256=binding_sha,
         fastboot_capture_bundle_sha256=capture.evidence_sha256(),
         fastboot_tool_evidence_sha256=tool.evidence_sha256(),
         fastboot_tool_policy_sha256=tool.policy_sha256,
@@ -276,6 +302,7 @@ def prepare_temporary_boot_offer(
     argv = (str(executable), "-s", serial, "boot", str(image))
     return PreparedTemporaryBootOffer(
         evidence=evidence,
+        boot_identity_binding=boot_identity_binding,
         fastboot_executable=executable,
         boot_image=image,
         argv=argv,
@@ -294,6 +321,7 @@ def verify_temporary_boot_offer(
         gate,
         capture,
         tool,
+        boot_identity_binding=offer.boot_identity_binding,
         fastboot_executable=offer.fastboot_executable,
         boot_image=offer.boot_image,
     )
@@ -307,8 +335,12 @@ def authorize_temporary_boot_offer(
     typed_confirmation: str,
 ) -> TemporaryBootUserAuthorizationEvidence:
     """Record explicit profile-specific user confirmation; still do not execute Fastboot."""
+    if offer.evidence.schema_version != 2:
+        raise TemporaryBootOfferError("temporary-boot offer must use schema-v2 exact-identity binding")
     if offer.evidence.profile_id != profile.profile_id:
         raise TemporaryBootOfferError("temporary-boot offer belongs to a different profile")
+    if offer.evidence.physical_boot_identity_binding_sha256 != offer.boot_identity_binding.evidence_sha256():
+        raise TemporaryBootOfferError("temporary-boot offer is detached from exact boot identity binding")
     confirmation = _confirmation(profile)
     confirmation_sha = sha256(confirmation.encode("utf-8")).hexdigest()
     if offer.evidence.confirmation_text_sha256 != confirmation_sha:
@@ -334,8 +366,12 @@ def authorize_temporary_boot_offer(
 
 
 def write_temporary_boot_offer(evidence: TemporaryBootOfferEvidence, destination: Path) -> str:
-    if not isinstance(evidence, TemporaryBootOfferEvidence) or evidence.schema_version != 1:
-        raise TemporaryBootOfferError("invalid temporary-boot offer evidence")
+    if not isinstance(evidence, TemporaryBootOfferEvidence) or evidence.schema_version != 2:
+        raise TemporaryBootOfferError("invalid schema-v2 temporary-boot offer evidence")
+    _sha(
+        evidence.physical_boot_identity_binding_sha256,
+        "physical boot identity binding SHA-256",
+    )
     if (
         evidence.persistent_write is not False
         or evidence.phone_storage_written is not False
