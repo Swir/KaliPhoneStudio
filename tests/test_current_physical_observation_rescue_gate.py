@@ -13,6 +13,10 @@ from kaliphonestudio.physical_rescue_diagnostics import (
     record_physical_rescue_diagnostics,
     require_current_physical_boot_observation_for_rescue,
 )
+from kaliphonestudio.physical_rescue_functional_probes import (
+    PhysicalRescueFunctionalProbeError,
+    record_physical_rescue_functional_probes,
+)
 
 
 D = "0" * 64
@@ -104,6 +108,24 @@ def test_recording_rejects_legacy_before_profile_or_transcript_access(tmp_path: 
     missing = tmp_path / "must-not-be-read.log"
     with pytest.raises(PhysicalRescueDiagnosticsError, match="requires schema-v2 physical boot observation"):
         record_physical_rescue_diagnostics(None, legacy, missing)  # type: ignore[arg-type]
+    assert not missing.exists()
+
+
+def test_functional_probe_recording_rejects_legacy_before_diagnostics_or_transcript_access(
+    tmp_path: Path,
+) -> None:
+    legacy = _legacy_observation()
+    missing = tmp_path / "functional-probe-must-not-be-read.log"
+    with pytest.raises(
+        PhysicalRescueFunctionalProbeError,
+        match="requires schema-v2 physical boot observation",
+    ):
+        record_physical_rescue_functional_probes(
+            None,  # type: ignore[arg-type]
+            legacy,
+            None,  # type: ignore[arg-type]
+            missing,
+        )
     assert not missing.exists()
 
 
