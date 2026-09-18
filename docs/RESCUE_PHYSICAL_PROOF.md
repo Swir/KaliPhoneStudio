@@ -21,25 +21,31 @@ Network and SSH remain disabled. Persistent storage is not mounted automatically
 
 ## Layer 1 — physical boot observation
 
-The offline observation recorder accepts only:
+New physical observations are schema-v2 and accept only:
 
-1. a successful schema-v1 `TemporaryBootExecutionEvidence` from the guarded one-command temporary-boot path;
-2. the exact schema-v2 `RescueCandidateEvidence` containing the expected probe ID;
-3. the selected device profile;
-4. a raw operator-captured console/log transcript.
+1. a successful schema-v1 `TemporaryBootExecutionEvidence` from the guarded one-command temporary-boot path using the current post-probe exact-material revalidation policy;
+2. the exact schema-v3 `TemporaryBootRuntimeProbeEvidence` referenced by that execution;
+3. the exact schema-v2 `RescueCandidateEvidence` containing the expected probe ID;
+4. the selected device profile;
+5. a raw operator-captured console/log transcript.
 
-It requires the exact stage marker and exact candidate probe ID, rejects conflicting marker values, hashes raw transcript bytes and emits `PhysicalBootObservationEvidence` bound to the prior execution and rescue candidate.
+The recorder verifies that `execution.runtime_probe_sha256` equals the exact supplied runtime-probe evidence digest, that execution and probe carry the same profile, serial, offer and authorization identities, and that the runtime probe is the current read-only recovery-gated schema-v3 contract. The resulting schema-v2 `PhysicalBootObservationEvidence` carries the exact physical-baseline, boot-identity-binding, recovery-readiness, matching stock-boot and fresh Fastboot transcript digests into the later rescue/session/dossier chain. It also records the captured active/expected inactive slot context when present.
+
+The runtime probe proves only the exact read-only pre-boot context that was checked. The execution-policy requirement proves that the host revalidated the exact boot/recovery material again after that probe and immediately before the permitted `fastboot boot` invocation. Neither fact proves that recovery was exercised or that the phone is Beta-ready.
+
+The transcript must contain the exact stage marker and exact rescue candidate probe ID. Conflicting marker values are rejected, raw transcript bytes are SHA-256-bound and the output remains an unreviewed physical observation.
 
 ```bash
 python scripts/record_physical_boot_observation.py \
   --profile-id oneplus/avicii \
   --execution-evidence evidence/temporary-boot-execution.json \
+  --runtime-probe-evidence evidence/temporary-boot-runtime-probe.json \
   --rescue-evidence evidence/rescue-candidate.json \
   --console-transcript evidence/physical-console.log \
   --out evidence/physical-boot-observation.json
 ```
 
-This command does **not** invoke Fastboot, ADB, serial tools or any phone operation.
+This command does **not** invoke Fastboot, ADB, serial tools or any phone operation. Existing schema-v1 observation evidence remains readable for historical/fixture compatibility, but new recordings use schema-v2 and cannot be created without the exact runtime-probe chain.
 
 ## Layer 2 — automatic read-only rescue hardware signals
 
@@ -137,16 +143,20 @@ hardware_verified=false
 beta_gate_credit=false
 ```
 
-A matching rescue observation plus automatic inventory plus a successful bounded read-only probe therefore does not by itself satisfy the Beta rescue/log, Kali rootfs, UFS/storage, display/touch, charging, suspend, modem, audio or recovery gates.
+A matching schema-v2 rescue observation plus automatic inventory plus a successful bounded read-only probe therefore does not by itself satisfy the Beta rescue/log, Kali rootfs, UFS/storage, display/touch, charging, suspend, modem, audio or recovery gates.
 
 ## Capture integrity rules
 
 - Keep the original raw transcript; do not edit or normalize it before recording.
 - Raw bytes are SHA-256-bound before newline normalization used for marker parsing.
 - The transcript must be a bounded regular non-symlink file and is re-statted after reading to detect TOCTOU changes.
+- New physical observations must include the exact schema-v3 runtime probe whose digest is recorded by the successful execution; detached or drifted runtime probes fail closed.
+- The runtime probe carries the exact physical-baseline, boot-identity, recovery-readiness, stock recovery boot and fresh Fastboot transcript identities; the schema-v2 observation freezes those digests into downstream evidence.
+- The successful execution must use the post-probe exact-material revalidation policy. Legacy execution records can remain readable but cannot create a new schema-v2 physical observation.
 - Conflicting rescue markers, duplicate diagnostics/probe blocks or machine-readable records outside the exact block cause fail-closed rejection.
 - Unrelated non-ASCII console noise is ignored; every machine-readable `KPS_DIAG_*` and `KPS_PROBE_*` record itself must be strict bounded ASCII.
 - Functional-probe evidence must bind the exact prior observation and exact prior read-only diagnostics digests, not merely matching profile strings.
+- The physical bring-up session and exact-file dossier bind the exact physical-observation bytes, so the runtime/recovery digests recorded there travel into the later audit chain without being interpreted as hardware verification.
 - Evidence files are write-once by default; existing output paths are not overwritten.
 
 ## Safety boundary

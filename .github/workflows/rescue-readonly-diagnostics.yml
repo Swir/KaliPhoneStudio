@@ -10,6 +10,7 @@ on:
       - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "kaliphonestudio/physical_hardware_survey.py"
       - "kaliphonestudio/physical_hardware_review.py"
+      - "scripts/record_physical_boot_observation.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "scripts/record_physical_rescue_functional_probes.py"
       - "scripts/record_physical_hardware_survey.py"
@@ -31,6 +32,7 @@ on:
       - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "kaliphonestudio/physical_hardware_survey.py"
       - "kaliphonestudio/physical_hardware_review.py"
+      - "scripts/record_physical_boot_observation.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "scripts/record_physical_rescue_functional_probes.py"
       - "scripts/record_physical_hardware_survey.py"
@@ -61,10 +63,12 @@ jobs:
       - name: Compile diagnostic and review sources
         run: >-
           python -m py_compile
+          kaliphonestudio/physical_boot_observation.py
           kaliphonestudio/physical_rescue_diagnostics.py
           kaliphonestudio/physical_rescue_functional_probes.py
           kaliphonestudio/physical_hardware_survey.py
           kaliphonestudio/physical_hardware_review.py
+          scripts/record_physical_boot_observation.py
           scripts/record_physical_rescue_diagnostics.py
           scripts/record_physical_rescue_functional_probes.py
           scripts/record_physical_hardware_survey.py

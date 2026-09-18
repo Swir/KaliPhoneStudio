@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from kaliphonestudio.physical_boot_observation import (  # noqa: E402
     load_temporary_boot_execution_evidence,
+    load_temporary_boot_runtime_probe_evidence,
     record_physical_boot_observation,
     write_physical_boot_observation_evidence,
 )
@@ -27,13 +28,15 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description=(
             "Verify that a raw physical console/log transcript contains the exact "
-            "deterministic rescue markers for one successful temporary-boot execution. "
-            "This does not connect to a phone and does not grant hardware/Beta credit."
+            "deterministic rescue markers for one successful temporary-boot execution "
+            "and bind it to the exact fresh runtime-probe/recovery chain. This does not "
+            "connect to a phone and does not grant hardware/Beta credit."
         )
     )
     result.add_argument("--profile-id", required=True)
     result.add_argument("--devices-root", type=Path, default=ROOT / "devices")
     result.add_argument("--execution-evidence", type=Path, required=True)
+    result.add_argument("--runtime-probe-evidence", type=Path, required=True)
     result.add_argument("--rescue-evidence", type=Path, required=True)
     result.add_argument("--console-transcript", type=Path, required=True)
     result.add_argument("--out", type=Path, required=True)
@@ -47,10 +50,12 @@ def main() -> int:
 
     profile = get_profile(args.devices_root, args.profile_id)
     execution = load_temporary_boot_execution_evidence(args.execution_evidence)
+    runtime_probe = load_temporary_boot_runtime_probe_evidence(args.runtime_probe_evidence)
     rescue = load_rescue_candidate_evidence(args.rescue_evidence)
     observation = record_physical_boot_observation(
         profile,
         execution,
+        runtime_probe,
         rescue,
         args.console_transcript,
     )
@@ -58,9 +63,16 @@ def main() -> int:
 
     print(f"profile_id={observation.profile_id}")
     print(f"device_serial={observation.device_serial}")
+    print(f"runtime_probe_evidence_sha256={observation.runtime_probe_evidence_sha256}")
+    print(f"boot_identity_binding_sha256={observation.boot_identity_binding_sha256}")
+    print(f"recovery_readiness_sha256={observation.recovery_readiness_sha256}")
     print(f"rescue_probe_id={observation.rescue_probe_id}")
     print(f"transcript_sha256={observation.transcript_sha256}")
     print(f"rescue_init_observed={str(observation.rescue_init_observed).lower()}")
+    print(
+        "post_probe_material_revalidation_required="
+        f"{str(observation.post_probe_material_revalidation_required).lower()}"
+    )
     print(f"manual_review_required={str(observation.manual_review_required).lower()}")
     print(f"kali_early_userspace_verified={str(observation.kali_early_userspace_verified).lower()}")
     print(f"hardware_verified={str(observation.hardware_verified).lower()}")
