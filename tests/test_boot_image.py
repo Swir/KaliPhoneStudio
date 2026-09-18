@@ -1,3 +1,4 @@
+from hashlib import sha256
 from pathlib import Path
 import copy
 import struct
@@ -5,6 +6,7 @@ import struct
 import pytest
 
 from kaliphonestudio.boot_image import (
+    AVB_FOOTER_SIZE,
     BootImageError,
     boot_build_contract,
     inspect_boot_image,
@@ -73,6 +75,36 @@ def image(
     return p
 
 
+def append_avb_footer(
+    path: Path,
+    *,
+    vbmeta_magic: bytes = b"AVB0",
+    auth_size: int = 0,
+    aux_size: int = 0,
+    footer_vbmeta_offset: int | None = None,
+    footer_vbmeta_size: int | None = None,
+    original_size: int | None = None,
+) -> Path:
+    original = path.read_bytes()
+    vbmeta = bytearray(256 + auth_size + aux_size)
+    struct.pack_into(">4sIIQQ", vbmeta, 0, vbmeta_magic, 1, 0, auth_size, aux_size)
+    actual_offset = len(original)
+    declared_offset = actual_offset if footer_vbmeta_offset is None else footer_vbmeta_offset
+    declared_size = len(vbmeta) if footer_vbmeta_size is None else footer_vbmeta_size
+    footer = struct.pack(
+        ">4sIIQQQ28x",
+        b"AVBf",
+        1,
+        0,
+        len(original) if original_size is None else original_size,
+        declared_offset,
+        declared_size,
+    )
+    assert len(footer) == AVB_FOOTER_SIZE
+    path.write_bytes(original + vbmeta + footer)
+    return path
+
+
 def mutated_profile(mutator) -> DeviceProfile:
     data = copy.deepcopy(PROFILE.data)
     mutator(data)
@@ -121,7 +153,25 @@ def test_accepts_structurally_valid_profile_v2_image(tmp_path):
     assert report.declared_header_size == 1660
     assert report.expected_payload_end == 16384
     assert report.structural_errors == ()
+    assert report.avb_footer_present is False
+    assert report.avb_structural_errors == ()
+    assert report.kernel_sha256 == sha256(b"\0" * 32).hexdigest()
+    assert report.ramdisk_sha256 == sha256(b"\0" * 24).hexdigest()
+    assert report.second_sha256 is None
+    assert report.dtb_sha256 == sha256(b"\0" * 16).hexdigest()
     assert len(report.sha256) == 64
+
+
+def test_component_hashes_are_exact_declared_payload_bytes(tmp_path):
+    path = image(tmp_path, "candidate.img")
+    baseline = inspect_boot_image(path, PROFILE)
+    payload = bytearray(path.read_bytes())
+    payload[4096] = 0xA5
+    path.write_bytes(payload)
+    changed = inspect_boot_image(path, PROFILE)
+    assert changed.kernel_sha256 != baseline.kernel_sha256
+    assert changed.ramdisk_sha256 == baseline.ramdisk_sha256
+    assert changed.dtb_sha256 == baseline.dtb_sha256
 
 
 def test_rejects_wrong_header_version(tmp_path):
@@ -171,6 +221,64 @@ def test_rejects_inconsistent_recovery_dtbo_offset(tmp_path):
         PROFILE,
     )
     with pytest.raises(BootImageError, match="recovery_dtbo_offset"):
+        require_candidate_compatible(report, PROFILE)
+
+
+def test_accepts_structurally_valid_optional_avb_footer(tmp_path):
+    path = append_avb_footer(image(tmp_path, "candidate.img"))
+    report = inspect_boot_image(path, PROFILE)
+    require_candidate_compatible(report, PROFILE)
+    assert report.avb_footer_present is True
+    assert report.avb_footer_version_major == 1
+    assert report.avb_footer_version_minor == 0
+    assert report.avb_original_image_size == 16384
+    assert report.avb_vbmeta_offset == 16384
+    assert report.avb_vbmeta_size == 256
+    assert report.avb_vbmeta_header_valid is True
+    assert report.avb_vbmeta_sha256 == sha256(path.read_bytes()[16384:16640]).hexdigest()
+    assert report.avb_structural_errors == ()
+
+
+def test_rejects_avb_vbmeta_range_that_escapes_before_footer(tmp_path):
+    path = image(tmp_path, "candidate.img")
+    original_size = path.stat().st_size
+    append_avb_footer(
+        path,
+        footer_vbmeta_offset=original_size + 128,
+        footer_vbmeta_size=256,
+    )
+    report = inspect_boot_image(path, PROFILE)
+    with pytest.raises(BootImageError, match="vbmeta range escapes"):
+        require_candidate_compatible(report, PROFILE)
+
+
+def test_rejects_avb_invalid_vbmeta_magic(tmp_path):
+    report = inspect_boot_image(
+        append_avb_footer(image(tmp_path, "candidate.img"), vbmeta_magic=b"BAD0"),
+        PROFILE,
+    )
+    assert report.avb_vbmeta_header_valid is False
+    with pytest.raises(BootImageError, match="vbmeta magic"):
+        require_candidate_compatible(report, PROFILE)
+
+
+def test_rejects_avb_vbmeta_block_size_drift(tmp_path):
+    path = append_avb_footer(image(tmp_path, "candidate.img"), auth_size=64)
+    payload = bytearray(path.read_bytes())
+    footer_offset = len(payload) - AVB_FOOTER_SIZE
+    struct.pack_into(">Q", payload, footer_offset + 32, 256)
+    path.write_bytes(payload)
+    report = inspect_boot_image(path, PROFILE)
+    with pytest.raises(BootImageError, match="block sizes"):
+        require_candidate_compatible(report, PROFILE)
+
+
+def test_rejects_avb_original_size_smaller_than_boot_payload(tmp_path):
+    report = inspect_boot_image(
+        append_avb_footer(image(tmp_path, "candidate.img"), original_size=8192),
+        PROFILE,
+    )
+    with pytest.raises(BootImageError, match="smaller than the declared boot payload"):
         require_candidate_compatible(report, PROFILE)
 
 
