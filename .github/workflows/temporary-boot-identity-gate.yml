@@ -7,8 +7,10 @@ on:
       - "kaliphonestudio/temporary_boot_execution.py"
       - "kaliphonestudio/physical_candidate_operator.py"
       - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
       - "tests/test_temporary_boot_execution.py"
       - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_recovery_readiness.py"
       - "tests/test_physical_candidate_operator.py"
       - ".github/workflows/temporary-boot-identity-gate.yml"
   pull_request:
@@ -16,8 +18,10 @@ on:
       - "kaliphonestudio/temporary_boot_execution.py"
       - "kaliphonestudio/physical_candidate_operator.py"
       - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
       - "tests/test_temporary_boot_execution.py"
       - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_recovery_readiness.py"
       - "tests/test_physical_candidate_operator.py"
       - ".github/workflows/temporary-boot-identity-gate.yml"
   workflow_dispatch:
@@ -26,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  exact-identity-before-device-io:
+  exact-identity-and-recovery-before-device-io:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -41,11 +45,29 @@ jobs:
           kaliphonestudio/temporary_boot_execution.py
           kaliphonestudio/physical_candidate_operator.py
           kaliphonestudio/physical_boot_identity_binding.py
-      - name: Run exact identity and execution safety tests
+          kaliphonestudio/physical_recovery_readiness.py
+      - name: Run exact identity, recovery and execution safety tests
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: >-
           python -m pytest -q
           tests/test_physical_boot_identity_binding.py
+          tests/test_physical_recovery_readiness.py
           tests/test_temporary_boot_execution.py
           tests/test_physical_candidate_operator.py
+      - name: Assert temporary boot surface exposes no persistent Fastboot verb
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("kaliphonestudio/temporary_boot_execution.py").read_text(encoding="utf-8")
+          operator = Path("kaliphonestudio/physical_candidate_operator.py").read_text(encoding="utf-8")
+          for forbidden in ('"flash"', '"erase"', '"set_active"'):
+              assert forbidden not in source.replace('("flash", "erase", "set_active", "reboot")', '')
+          assert "recovery_readiness" in source
+          assert "--recovery-readiness" in operator
+          assert "--stock-boot" in operator
+          assert "--physical-baseline" in operator
+          PY
