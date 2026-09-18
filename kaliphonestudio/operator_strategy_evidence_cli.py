@@ -49,6 +49,10 @@ def _build_parser() -> argparse.ArgumentParser:
     prepare = sub.add_parser(
         "prepare-rootfs-handoff-strategy-review",
         help="Create rejected-by-default strategy review record and notes templates.",
+        description=(
+            "Offline preparation of a rejected-by-default logical rootfs handoff strategy review. "
+            "No phone I/O, storage target selection, persistent write, hardware promotion or Beta credit."
+        ),
     )
     prepare.add_argument("--storage-discovery", type=Path, required=True)
     prepare.add_argument("--storage-review", type=Path, required=True)
@@ -62,6 +66,10 @@ def _build_parser() -> argparse.ArgumentParser:
     bind = sub.add_parser(
         "bind-rootfs-handoff-strategy-review",
         help="Bind one exact strategy review to the exact accepted physical evidence chain.",
+        description=(
+            "Offline exact-file binding of one strategy review to one accepted physical evidence chain. "
+            "No phone I/O, storage target selection, persistent write, hardware promotion or Beta credit."
+        ),
     )
     bind.add_argument("--storage-discovery", type=Path, required=True)
     bind.add_argument("--storage-review", type=Path, required=True)
