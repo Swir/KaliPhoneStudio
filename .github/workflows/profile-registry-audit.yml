@@ -7,7 +7,11 @@ on:
       - "main.py"
       - "kaliphonestudio/profiles.py"
       - "kaliphonestudio/profile_registry_audit.py"
+      - "devices/profile.schema.json"
       - "devices/**/profile.json"
+      - "scripts/validate_device_profiles_jsonschema.py"
+      - "build/profile-schema-requirements.txt"
+      - "tests/test_profile_schema.py"
       - "tests/test_multi_device_core.py"
       - "tests/test_profile_registry_audit.py"
       - "docs/MULTI_DEVICE_PROFILE_REGISTRY.md"
@@ -19,7 +23,11 @@ on:
       - "main.py"
       - "kaliphonestudio/profiles.py"
       - "kaliphonestudio/profile_registry_audit.py"
+      - "devices/profile.schema.json"
       - "devices/**/profile.json"
+      - "scripts/validate_device_profiles_jsonschema.py"
+      - "build/profile-schema-requirements.txt"
+      - "tests/test_profile_schema.py"
       - "tests/test_multi_device_core.py"
       - "tests/test_profile_registry_audit.py"
       - "docs/MULTI_DEVICE_PROFILE_REGISTRY.md"
@@ -39,14 +47,18 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      - name: Compile registry audit module
-        run: python -m compileall -q kaliphonestudio/profile_registry_audit.py main.py
+      - name: Install profile schema validator
+        run: python -m pip install -r build/profile-schema-requirements.txt
+      - name: Validate formal JSON Schema and runtime semantics
+        run: PYTHONPATH=. python scripts/validate_device_profiles_jsonschema.py
+      - name: Compile registry audit modules
+        run: python -m compileall -q kaliphonestudio/profile_registry_audit.py kaliphonestudio/profiles.py scripts/validate_device_profiles_jsonschema.py main.py
       - name: Audit bundled device registry
         run: PYTHONPATH=. python -m kaliphonestudio.profile_registry_audit --devices-root devices --json
       - name: Run registry and multi-device contract tests
         run: |
           python -m pip install pytest
-          PYTHONPATH=. pytest -q tests/test_profile_registry_audit.py tests/test_multi_device_core.py
+          PYTHONPATH=. pytest -q tests/test_profile_schema.py tests/test_profile_registry_audit.py tests/test_multi_device_core.py
 
   windows-frozen-registry:
     runs-on: windows-latest
@@ -77,10 +89,14 @@ jobs:
           from pathlib import Path
 
           payload = json.loads(Path("dist/profile-registry-audit.json").read_text(encoding="utf-8-sig"))
+          assert payload["schema_version"] == 2
           assert payload["status"] == "pass"
           assert payload["profile_count"] >= 1
           assert "oneplus/avicii" in payload["profile_ids"]
           assert payload["confirmation_tokens_unique"] is True
+          assert payload["strong_identity_probe_count"] >= 2
+          assert payload["weak_identity_probe_count"] >= 1
+          assert payload["weak_identity_alone_allowed"] is False
           assert payload["ambiguous_identity_allowed"] is False
           assert payload["physical_interaction_performed"] is False
           assert payload["external_device_command_executed"] is False

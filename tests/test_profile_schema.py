@@ -9,6 +9,7 @@ from kaliphonestudio.profiles import PROFILE_SCHEMA_VERSION, ProfileError, disco
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_PATH = ROOT / "devices" / "oneplus" / "avicii" / "profile.json"
+SCHEMA_PATH = ROOT / "devices" / "profile.schema.json"
 
 
 def _profile() -> dict:
@@ -18,7 +19,17 @@ def _profile() -> dict:
 def test_repository_profiles_satisfy_schema_contract():
     profiles = discover_profiles(ROOT / "devices")
     assert profiles
-    assert profiles[0].data["schema_version"] == PROFILE_SCHEMA_VERSION
+    assert profiles[0].data["schema_version"] == PROFILE_SCHEMA_VERSION == 3
+
+
+def test_formal_schema_declares_same_profile_version_and_typed_identity_contract():
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert schema["properties"]["schema_version"]["const"] == PROFILE_SCHEMA_VERSION
+    assert "identity_signals" in schema["required"]
+    identity = schema["$defs"]["identitySignals"]
+    assert set(identity["properties"]) == {"schema_version", "product", "model", "board"}
+    assert identity["properties"]["schema_version"]["const"] == 1
 
 
 def test_profile_requires_recovery_and_hardware_contract():
@@ -54,6 +65,57 @@ def test_profile_requires_firmware_hints():
     data = _profile()
     data["firmware_hints"] = []
     with pytest.raises(ProfileError, match="firmware_hints"):
+        validate_profile(data)
+
+
+def test_identity_contract_requires_strong_product_and_canonical_values():
+    data = deepcopy(_profile())
+    data["identity_signals"]["product"]["strength"] = "weak"
+    with pytest.raises(ProfileError, match="product must be declared as a strong"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["identity_signals"]["product"]["values"] = ["different"]
+    with pytest.raises(ProfileError, match="include profile codename"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["identity_signals"]["model"]["values"] = ["different"]
+    with pytest.raises(ProfileError, match="include profile model"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["identity_signals"]["board"]["values"] = ["different"]
+    with pytest.raises(ProfileError, match="include bootloader_board_name"):
+        validate_profile(data)
+
+
+def test_identity_values_and_aliases_are_normalization_safe():
+    data = deepcopy(_profile())
+    data["identity_signals"]["model"]["values"] = ["AC2003", " ac2003 "]
+    with pytest.raises(ProfileError, match="unique after normalization"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["aliases"] = ["OnePlus Nord", " oneplus nord "]
+    with pytest.raises(ProfileError, match="aliases must be unique"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["aliases"] = ["undeclared-display-alias"]
+    with pytest.raises(ProfileError, match="also be declared in identity_signals"):
+        validate_profile(data)
+
+
+def test_identity_contract_rejects_unknown_signals_and_fields():
+    data = deepcopy(_profile())
+    data["identity_signals"]["usb"] = {"strength": "strong", "values": ["x"]}
+    with pytest.raises(ProfileError, match="unsupported signals"):
+        validate_profile(data)
+
+    data = deepcopy(_profile())
+    data["identity_signals"]["product"]["comment"] = "not part of safety contract"
+    with pytest.raises(ProfileError, match="only strength and values"):
         validate_profile(data)
 
 

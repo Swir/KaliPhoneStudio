@@ -14,7 +14,10 @@ from .functional_hardware_contract import (
 )
 
 
-PROFILE_SCHEMA_VERSION = 2
+PROFILE_SCHEMA_VERSION = 3
+IDENTITY_SCHEMA_VERSION = 1
+_IDENTITY_SIGNAL_NAMES = frozenset({"product", "model", "board"})
+_IDENTITY_STRENGTHS = frozenset({"strong", "weak"})
 _SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SAFE_PARTITION_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SAFE_FASTBOOT_VAR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
@@ -35,6 +38,10 @@ class ProfileError(ValueError):
     pass
 
 
+def _normalize_identity_value(value: object) -> str:
+    return str(value).strip().casefold()
+
+
 @dataclass(frozen=True)
 class DeviceProfile:
     path: Path
@@ -48,23 +55,49 @@ class DeviceProfile:
     def confirmation_text(self) -> str:
         return self.data["confirmation_text"]
 
+    def identity_signal(self, signal: str) -> dict[str, Any]:
+        if signal not in _IDENTITY_SIGNAL_NAMES:
+            raise ProfileError(f"unsupported identity signal: {signal}")
+        return self.data["identity_signals"][signal]
+
+    def matching_identity_strengths(
+        self,
+        *,
+        product: str = "",
+        model: str = "",
+        board: str = "",
+    ) -> dict[str, str]:
+        provided = {"product": product, "model": model, "board": board}
+        matched: dict[str, str] = {}
+        for signal, raw_value in provided.items():
+            value = _normalize_identity_value(raw_value)
+            if not value:
+                continue
+            contract = self.identity_signal(signal)
+            accepted = {_normalize_identity_value(item) for item in contract["values"]}
+            if value in accepted:
+                matched[signal] = str(contract["strength"])
+        return matched
+
     def matches(self, product: str = "", model: str = "", board: str = "") -> bool:
-        values = {x.strip().lower() for x in (product, model, board) if x and x.strip()}
-        accepted = {
-            str(self.data.get("codename", "")).lower(),
-            str(self.data.get("model", "")).lower(),
-            str(self.data.get("bootloader_board_name", "")).lower(),
-        }
-        accepted.update(str(x).lower() for x in self.data.get("aliases", []))
-        accepted.discard("")
-        return bool(values & accepted)
+        """Return true only when at least one profile-declared *strong* signal matches.
+
+        Weak signals such as a shared SoC/bootloader board are context only. They can
+        accompany a strong product/model match but can never identify a device by
+        themselves.
+        """
+        return "strong" in self.matching_identity_strengths(
+            product=product,
+            model=model,
+            board=board,
+        ).values()
 
 
 REQUIRED = {
     "schema_version", "profile_id", "vendor", "display_name", "codename", "model",
-    "confirmation_text", "arch", "soc", "board", "boot", "partition_limits",
-    "ab_device", "avb_enabled", "firmware_hints", "sources", "recovery_notes",
-    "test_contract", "fastboot_probe", "kernel",
+    "identity_signals", "confirmation_text", "arch", "soc", "board", "boot",
+    "partition_limits", "ab_device", "avb_enabled", "firmware_hints", "sources",
+    "recovery_notes", "test_contract", "fastboot_probe", "kernel",
 }
 
 
@@ -104,6 +137,89 @@ def _validate_profile_id(data: dict[str, Any]) -> None:
     codename = data.get("codename")
     if not isinstance(codename, str) or codename.strip().lower() != codename_id:
         raise ProfileError("profile_id codename must match the profile codename")
+
+
+def _validate_identity_contract(data: dict[str, Any]) -> None:
+    contract = data["identity_signals"]
+    if not isinstance(contract, dict):
+        raise ProfileError("identity_signals must be an object")
+    if contract.get("schema_version") != IDENTITY_SCHEMA_VERSION:
+        raise ProfileError(
+            f"identity_signals.schema_version must be {IDENTITY_SCHEMA_VERSION}"
+        )
+    signal_names = set(contract) - {"schema_version"}
+    unknown = sorted(signal_names - _IDENTITY_SIGNAL_NAMES)
+    if unknown:
+        raise ProfileError(f"identity_signals contains unsupported signals: {', '.join(unknown)}")
+    if not signal_names:
+        raise ProfileError("identity_signals must declare at least one signal")
+
+    strong_count = 0
+    all_values: set[str] = set()
+    for signal in sorted(signal_names):
+        item = contract[signal]
+        if not isinstance(item, dict):
+            raise ProfileError(f"identity_signals.{signal} must be an object")
+        if set(item) != {"strength", "values"}:
+            raise ProfileError(
+                f"identity_signals.{signal} must contain only strength and values"
+            )
+        strength = item["strength"]
+        if strength not in _IDENTITY_STRENGTHS:
+            raise ProfileError(
+                f"identity_signals.{signal}.strength must be strong or weak"
+            )
+        values = _nonempty_strings(item["values"], f"identity_signals.{signal}.values")
+        normalized = [_normalize_identity_value(value) for value in values]
+        if len(normalized) != len(set(normalized)):
+            raise ProfileError(
+                f"identity_signals.{signal}.values must be unique after normalization"
+            )
+        all_values.update(normalized)
+        if strength == "strong":
+            strong_count += 1
+
+    if strong_count == 0:
+        raise ProfileError("identity_signals must declare at least one strong signal")
+
+    product = contract.get("product")
+    if not isinstance(product, dict) or product.get("strength") != "strong":
+        raise ProfileError("identity_signals.product must be declared as a strong signal")
+    if _normalize_identity_value(data["codename"]) not in {
+        _normalize_identity_value(value) for value in product["values"]
+    }:
+        raise ProfileError("identity_signals.product.values must include profile codename")
+
+    model = contract.get("model")
+    if model is not None and _normalize_identity_value(data["model"]) not in {
+        _normalize_identity_value(value) for value in model["values"]
+    }:
+        raise ProfileError("identity_signals.model.values must include profile model")
+
+    board_name = data.get("bootloader_board_name")
+    if board_name is not None:
+        board = contract.get("board")
+        if not isinstance(board, dict) or _normalize_identity_value(board_name) not in {
+            _normalize_identity_value(value) for value in board["values"]
+        }:
+            raise ProfileError(
+                "identity_signals.board.values must include bootloader_board_name"
+            )
+
+    aliases = data.get("aliases", [])
+    if aliases is not None:
+        if not isinstance(aliases, list) or any(
+            not isinstance(value, str) or not value.strip() for value in aliases
+        ):
+            raise ProfileError("aliases must be a list of non-empty strings")
+        normalized_aliases = [_normalize_identity_value(value) for value in aliases]
+        if len(normalized_aliases) != len(set(normalized_aliases)):
+            raise ProfileError("aliases must be unique after normalization")
+        missing_aliases = sorted(set(normalized_aliases) - all_values)
+        if missing_aliases:
+            raise ProfileError(
+                "aliases are display/compatibility labels and must also be declared in identity_signals"
+            )
 
 
 def _validate_boot_contract(boot: Any) -> None:
@@ -303,6 +419,7 @@ def validate_profile(data: dict[str, Any]) -> None:
         if not isinstance(data[field], str) or not data[field].strip():
             raise ProfileError(f"{field} must be a non-empty string")
 
+    _validate_identity_contract(data)
     _validate_boot_contract(data["boot"])
     _validate_partition_contract(data)
     _validate_fastboot_probe(data)
@@ -380,6 +497,13 @@ def get_profile(root: Path, profile_id: str) -> DeviceProfile:
 
 
 def identify_profile(profiles: Iterable[DeviceProfile], *, product: str = "", model: str = "", board: str = "") -> DeviceProfile:
+    """Resolve exactly one profile from one or more typed identity signals.
+
+    At least one *strong* signal must match. Weak signals are deliberately ignored
+    for candidate selection so a shared SoC/board identifier cannot identify a
+    phone by itself. If supplied strong signals point at different profiles, the
+    result is ambiguous and fails closed.
+    """
     matches = [p for p in profiles if p.matches(product=product, model=model, board=board)]
     if len(matches) != 1:
         raise ProfileError(f"device identification must resolve exactly one profile; got {len(matches)}")

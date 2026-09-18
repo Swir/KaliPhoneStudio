@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from kaliphonestudio.profile_registry_audit import (
     audit_profile_registry,
     main as audit_main,
 )
+from kaliphonestudio.profiles import ProfileError, discover_profiles, identify_profile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,8 +36,13 @@ def _real_registry_copy(root: Path) -> dict[str, object]:
     return original
 
 
-def _second_profile(*, confirmation: str = "EX100", aliases: list[str] | None = None, board: str = "billie-board") -> dict[str, object]:
-    data = _load_source()
+def _second_profile(
+    *,
+    confirmation: str = "EX100",
+    board: str = "billie-board",
+    product_values: list[str] | None = None,
+) -> dict[str, object]:
+    data = deepcopy(_load_source())
     data.update(
         {
             "profile_id": "example/billie",
@@ -44,22 +51,35 @@ def _second_profile(*, confirmation: str = "EX100", aliases: list[str] | None = 
             "codename": "billie",
             "model": "EX100",
             "confirmation_text": confirmation,
-            "aliases": aliases if aliases is not None else ["Billie Phone", "BilliePhone"],
+            "aliases": ["Billie Phone", "BilliePhone", board],
             "bootloader_board_name": board,
             "firmware_hints": ["billie", "EX100"],
         }
     )
+    data["identity_signals"] = {
+        "schema_version": 1,
+        "product": {
+            "strength": "strong",
+            "values": product_values if product_values is not None else ["billie"],
+        },
+        "model": {"strength": "strong", "values": ["EX100", "Billie Phone", "BilliePhone"]},
+        "board": {"strength": "weak", "values": [board]},
+    }
     return data
 
 
 def test_real_registry_passes_fail_closed_audit():
     result = audit_profile_registry(DEVICES)
+    assert result.schema_version == 2
     assert result.status == "pass"
     assert result.profile_count >= 1
     assert "oneplus/avicii" in result.profile_ids
-    assert result.identity_probe_count >= result.profile_count * 2
+    assert result.identity_probe_count >= result.profile_count * 3
+    assert result.strong_identity_probe_count >= result.profile_count * 2
+    assert result.weak_identity_probe_count >= result.profile_count
     assert result.canonical_identity_bundle_count == result.profile_count
     assert result.confirmation_tokens_unique is True
+    assert result.weak_identity_alone_allowed is False
     assert result.ambiguous_identity_allowed is False
     assert result.physical_interaction_performed is False
     assert result.external_device_command_executed is False
@@ -98,38 +118,52 @@ def test_generic_confirmation_token_is_rejected(tmp_path: Path):
         audit_profile_registry(root)
 
 
-def test_cross_profile_alias_collision_is_rejected(tmp_path: Path):
+def test_cross_profile_strong_product_collision_is_rejected(tmp_path: Path):
     root = tmp_path / "devices"
     _real_registry_copy(root)
-    _write_profile(root, _second_profile(aliases=["avicii"]))
+    second = _second_profile(product_values=["billie", "avicii"])
+    _write_profile(root, second)
 
-    with pytest.raises(ProfileRegistryAuditError, match="ambiguous or unresolved"):
+    with pytest.raises(ProfileRegistryAuditError, match="strong identity probe"):
         audit_profile_registry(root)
 
 
-def test_shared_bootloader_board_is_rejected_under_current_matching_semantics(tmp_path: Path):
+def test_shared_weak_bootloader_board_is_allowed_but_cannot_identify(tmp_path: Path):
     root = tmp_path / "devices"
     _real_registry_copy(root)
     _write_profile(root, _second_profile(board="lito"))
 
-    with pytest.raises(ProfileRegistryAuditError, match="ambiguous or unresolved"):
-        audit_profile_registry(root)
+    result = audit_profile_registry(root)
+    assert result.status == "pass"
+    assert result.shared_weak_identity_value_count == 1
+    assert result.weak_identity_alone_allowed is False
+
+    profiles = discover_profiles(root)
+    with pytest.raises(ProfileError, match="got 0"):
+        identify_profile(profiles, board="lito")
+    assert identify_profile(profiles, product="avicii", board="lito").profile_id == "oneplus/avicii"
+    assert identify_profile(profiles, product="billie", board="lito").profile_id == "example/billie"
 
 
-def test_duplicate_alias_after_normalization_is_rejected(tmp_path: Path):
+def test_weak_value_cannot_shadow_a_strong_value_for_same_signal(tmp_path: Path):
     root = tmp_path / "devices"
     original = _real_registry_copy(root)
-    original["aliases"] = ["OnePlus Nord", " oneplus nord "]
+    original["identity_signals"]["board"]["strength"] = "strong"
     _write_profile(root, original)
+    second = _second_profile(board="lito")
+    _write_profile(root, second)
 
-    with pytest.raises(ProfileRegistryAuditError, match="aliases contain a duplicate"):
+    with pytest.raises(ProfileRegistryAuditError, match="weak identity probe"):
         audit_profile_registry(root)
 
 
-def test_cli_json_reports_safety_boundaries(capsys: pytest.CaptureFixture[str]):
+def test_cli_json_reports_typed_identity_and_safety_boundaries(capsys: pytest.CaptureFixture[str]):
     assert audit_main(["--devices-root", str(DEVICES), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "pass"
+    assert payload["strong_identity_probe_count"] >= 2
+    assert payload["weak_identity_probe_count"] >= 1
+    assert payload["weak_identity_alone_allowed"] is False
     assert payload["ambiguous_identity_allowed"] is False
     assert payload["physical_interaction_performed"] is False
     assert payload["external_device_command_executed"] is False

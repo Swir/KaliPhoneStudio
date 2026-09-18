@@ -1,11 +1,17 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "profile_id": "oneplus/avicii",
   "vendor": "OnePlus",
   "display_name": "OnePlus Nord AC2003",
   "codename": "avicii",
   "model": "AC2003",
   "aliases": ["OnePlus Nord", "OnePlusNord", "lito"],
+  "identity_signals": {
+    "schema_version": 1,
+    "product": {"strength": "strong", "values": ["avicii"]},
+    "model": {"strength": "strong", "values": ["AC2003", "OnePlus Nord", "OnePlusNord"]},
+    "board": {"strength": "weak", "values": ["lito"]}
+  },
   "confirmation_text": "AC2003",
   "arch": "arm64",
   "soc": "sm7250",
@@ -81,6 +87,8 @@
   "test_contract": {
     "host": [
       "profile schema validation",
+      "formal JSON Schema validation plus runtime cross-field validation",
+      "typed strong/weak identity resolution with weak-only identification forbidden",
       "unique identity resolution",
       "boot layout and partition limit checks",
       "manifest and SHA-256 checks",

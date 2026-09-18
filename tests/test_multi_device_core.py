@@ -15,11 +15,15 @@ def test_all_profiles_validate_and_ids_are_unique():
     assert len({p.profile_id for p in profiles}) == len(profiles)
 
 
-def test_avicii_identification_is_profile_driven():
+def test_avicii_identification_is_profile_driven_and_requires_strong_signal():
     profiles = discover_profiles(DEVICES)
     assert identify_profile(profiles, product="avicii").profile_id == "oneplus/avicii"
     assert identify_profile(profiles, model="AC2003").profile_id == "oneplus/avicii"
-    assert identify_profile(profiles, board="lito").profile_id == "oneplus/avicii"
+    assert identify_profile(profiles, model="OnePlus Nord").profile_id == "oneplus/avicii"
+    assert identify_profile(profiles, product="avicii", board="lito").profile_id == "oneplus/avicii"
+
+    with pytest.raises(ProfileError, match="got 0"):
+        identify_profile(profiles, board="lito")
 
 
 def test_unknown_device_fails_closed():
@@ -53,4 +57,9 @@ def test_schema_rejects_missing_fields():
     data = json.loads((DEVICES / "oneplus" / "avicii" / "profile.json").read_text(encoding="utf-8"))
     data.pop("confirmation_text")
     with pytest.raises(ProfileError):
+        validate_profile(data)
+
+    data = json.loads((DEVICES / "oneplus" / "avicii" / "profile.json").read_text(encoding="utf-8"))
+    data.pop("identity_signals")
+    with pytest.raises(ProfileError, match="identity_signals"):
         validate_profile(data)
