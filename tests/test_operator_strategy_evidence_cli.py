@@ -49,6 +49,7 @@ def test_unified_workspace_exposes_strategy_review_commands(capsys) -> None:
         "bind-rootfs-handoff-strategy-review",
         "prepare-rootfs-handoff-target-binding-review",
         "bind-rootfs-handoff-target-binding-review",
+        "build-rootfs-handoff-fresh-revalidation",
     )
     assert operator_strategy_evidence_cli.STRATEGY_EVIDENCE_COMMANDS == expected
     assert len(operator_evidence_workspace.ALL_EVIDENCE_COMMANDS) == len(
@@ -200,6 +201,63 @@ def test_missing_target_binding_bind_inputs_fail_closed_without_output(tmp_path:
     )
     assert rc == 2
     assert not destination.exists()
+
+
+def test_missing_fresh_revalidation_inputs_fail_closed_without_output(tmp_path: Path) -> None:
+    destination = tmp_path / "fresh-revalidation.json"
+    rc = operator_evidence_workspace.main(
+        [
+            "build-rootfs-handoff-fresh-revalidation",
+            "--target-binding", str(tmp_path / "missing-target-binding.json"),
+            "--fresh-storage-discovery", str(tmp_path / "missing-discovery.json"),
+            "--fresh-storage-report", str(tmp_path / "missing-report.json"),
+            "--out", str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_fresh_revalidation_command_preserves_non_authorizing_boundary(monkeypatch, tmp_path: Path) -> None:
+    evidence = SimpleNamespace(
+        profile_id="oneplus/avicii",
+        device_serial="SERIAL-CI",
+        fresh_device_revalidated=True,
+        ready_for_separate_manual_trial_authorization=True,
+        manual_trial_authorization_required=True,
+        physical_gate_still_incomplete=True,
+    )
+    monkeypatch.setattr(
+        operator_strategy_evidence_cli,
+        "build_rootfs_handoff_fresh_revalidation",
+        lambda *args: evidence,
+    )
+    monkeypatch.setattr(
+        operator_strategy_evidence_cli,
+        "write_rootfs_handoff_fresh_revalidation_evidence",
+        lambda evidence, path: "7" * 64,
+    )
+    destination = tmp_path / "fresh-revalidation.json"
+    result = operator_strategy_evidence_cli._run(
+        operator_strategy_evidence_cli._build_parser().parse_args(
+            [
+                "build-rootfs-handoff-fresh-revalidation",
+                "--target-binding", str(tmp_path / "target-binding.json"),
+                "--fresh-storage-discovery", str(tmp_path / "discovery.json"),
+                "--fresh-storage-report", str(tmp_path / "report.json"),
+                "--out", str(destination),
+            ]
+        )
+    )
+    assert result["fresh_device_revalidated"] is True
+    assert result["ready_for_separate_manual_trial_authorization"] is True
+    assert result["trial_execution_allowed"] is False
+    assert result["raw_device_path_bound"] is False
+    assert result["mount_target_bound"] is False
+    assert result["persistent_write_authorized"] is False
+    assert result["hardware_verified"] is False
+    assert result["beta_release_authorized"] is False
+    assert result["beta_gate_credit"] is False
 
 
 def test_bind_recomputes_canonical_record_identity_before_upstream_load(monkeypatch, tmp_path: Path) -> None:

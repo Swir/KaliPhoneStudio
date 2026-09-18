@@ -4,7 +4,7 @@
 </div>
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.6.66--dev-62E5FF?style=for-the-badge&labelColor=02050A" alt="Version 0.6.66-dev" />
+  <img src="https://img.shields.io/badge/version-0.6.67--dev-62E5FF?style=for-the-badge&labelColor=02050A" alt="Version 0.6.67-dev" />
   <img src="https://img.shields.io/badge/project%20progress-58%25-0088FF?style=for-the-badge&labelColor=02050A" alt="Project progress 58 percent" />
   <img src="https://img.shields.io/badge/beta-BLOCKED-ffb347?style=for-the-badge&labelColor=02050A" alt="Beta blocked" />
   <img src="https://img.shields.io/badge/hardware-unverified-ff6b6b?style=for-the-badge&labelColor=02050A" alt="Hardware unverified" />
@@ -33,7 +33,7 @@
 
 ## Project status
 
-Current development line: `0.6.66-dev`
+Current development line: `0.6.67-dev`
 
 **58% complete**
 
@@ -75,6 +75,7 @@ The progress SVG is generated deterministically from [`BUILD_STATUS.json`](BUILD
 - **Exact functional-result bundle** — the exact plan, accepted plan review, schema-v2 observations, independent result reviews and freshly recomputed summary are frozen into one canonical audit artifact before release-gate review.
 - **Cross-campaign release-gate audit** — the accepted bring-up dossier/review and exact functional-result bundle must resolve to the same profile, serial, boot observation, rescue diagnostics, transcript and probe before they can be presented together for manual gate review.
 - **Fail-closed logical target binding** — after an accepted reversible rootfs strategy review, KaliPhoneStudio can bind the exact logical partition role/kernel/filesystem/unlock/free-space/staging identity from the original reviewed storage report while deliberately carrying no raw `/dev` path, mount target, trial execution or write authorization.
+- **Distinct-capture fresh target revalidation** — an accepted logical target must be checked again against a new read-only storage discovery/report from the same phone and firmware; reuse, identity drift, filesystem/encryption drift, removable storage or insufficient free capacity fail closed, and success still does not authorize a raw path, mount, rootfs trial or write.
 - **Source locking** — host builds bind exact upstream commits, tool versions and relevant source/blob identities instead of floating branches.
 - **SWIR Progress SVG PRO** — deterministic card/mini assets derive geometry from the same authoritative status source while showing project progress and Beta readiness separately.
 
@@ -183,7 +184,9 @@ manual release-gate review + reversible rootfs handoff strategy review
                 ↓
 exact logical target-binding review (no raw path / mount / write)
                 ↓
-fresh-device revalidation + separately gated manual trial
+distinct-capture fresh-device target revalidation (still no execution/write)
+                ↓
+separately gated explicit manual rootfs trial
                 ↓
 Kali early-userspace proof + subsystem validation
                 ↓
@@ -245,6 +248,7 @@ Detailed operator contracts live in:
 - [`docs/PHYSICAL_RELEASE_GATE_AUDIT.md`](docs/PHYSICAL_RELEASE_GATE_AUDIT.md)
 - [`docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md`](docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md)
 - [`docs/ROOTFS_HANDOFF_TARGET_BINDING.md`](docs/ROOTFS_HANDOFF_TARGET_BINDING.md)
+- [`docs/ROOTFS_HANDOFF_FRESH_REVALIDATION.md`](docs/ROOTFS_HANDOFF_FRESH_REVALIDATION.md)
 - [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md)
 
 ## Build and reproducibility model
@@ -269,7 +273,7 @@ These authority records intentionally keep `hardware_verified=false` and `beta_g
 
 The detailed roadmap is in [`ROADMAP.md`](ROADMAP.md). The release checklist is [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
-A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker, a synthetic evidence record, a complete host-side functional result bundle, a cross-campaign audit packet or a logical target-binding review is not enough.
+A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker, a synthetic evidence record, a complete host-side functional result bundle, a cross-campaign audit packet, a logical target-binding review or a host-side fresh-device revalidation contract is not enough.
 
 The first Beta must include real candidate binaries/images, exact commit identity, installation/test instructions, compatibility matrix, known issues and SHA-256 checksums. Stable will require a later, higher threshold.
 
@@ -282,7 +286,7 @@ The first Beta must include real candidate binaries/images, exact commit identit
 - Prefer a non-persistent temporary boot and recovery-first validation.
 - Keep firmware, stock `boot.img`, candidate, serial and profile identities tied together.
 - Never guess a UFS/block-device path from a host-side layout hint.
-- A logical target-binding review is evidence only: it must not be translated into a raw `/dev` path, mount or write until a later fresh-device/manual execution gate revalidates the exact phone and context.
+- A logical target-binding review is evidence only. The fresh-device stage may only revalidate that logical identity against a distinct read-only capture; neither stage may be translated into a raw `/dev` path, mount, rootfs trial or write authorization. A later explicit manual execution gate is still required.
 - Do not promote bounded sysfs presence, a 4 KiB read, battery telemetry, a host-side result bundle or an audit packet into a functional-hardware claim.
 - Keep project progress distinct from release readiness; `58%` does not mean Beta is 58% ready.
 - Real recovery/rollback must be exercised before public Beta publication.

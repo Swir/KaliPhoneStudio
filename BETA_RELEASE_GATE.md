@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, progress SVG, Fastboot return code, recovery-readiness record, rescue marker, bounded hardware-presence signal, accepted contextual hardware-survey review, generated or accepted host-side functional-test plan/review, complete host-side functional-result bundle, cross-campaign release-gate audit packet, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle, exact-file dossier, accepted reversible strategy design or accepted logical target-binding review does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, progress SVG, Fastboot return code, recovery-readiness record, rescue marker, bounded hardware-presence signal, accepted contextual hardware-survey review, generated or accepted host-side functional-test plan/review, complete host-side functional-result bundle, cross-campaign release-gate audit packet, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle, exact-file dossier, accepted reversible strategy design, accepted logical target-binding review or successful host-side fresh target revalidation does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -38,6 +38,7 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Physical bring-up exact-file dossier can verify the canonical session plus every bound original evidence/raw transcript/report/recovery/review file by exact SHA-256/size, with optional exact rootfs verification, while granting no physical/Beta credit.
 - [x] Reversible rootfs handoff strategy review can bind one exact accepted storage/dossier/audit chain to a logical partition role, relative staging subpath, capacity requirement, rootfs and recovery-plan identity while rejecting forbidden/raw paths and forcing target/path/trial/write/hardware/Beta authorization false.
 - [x] Logical target-binding review can re-bind the exact original storage-report SHA-256/size plus the accepted strategy and only accept a non-removable logical role/kernel/filesystem identity with observed unlocked-or-unencrypted state and sufficient free capacity; it carries no raw `/dev` path or mount target and forces trial execution, writes, hardware and Beta authorization false while requiring fresh-device revalidation later.
+- [x] Fresh-device target revalidation requires that accepted target binding plus a **distinct newly captured read-only** storage discovery/report from the same profile, serial and firmware; it rejects discovery reuse, report detachment, rootfs/recovery identity drift, role/kernel/filesystem/encryption drift, removable targets and insufficient current capacity. Success still keeps raw path, mount, trial execution, writes, storage/recovery verification, hardware verification and Beta authorization/credit false and requires a separate explicit manual trial-authorization/execution boundary.
 - [x] SWIR Progress SVG PRO reads the existing authoritative project ledger deterministically and shows Beta readiness separately; it is presentation-only and grants no release credit.
 - [ ] Capture and manually review the real storage/encryption/free-space/recovery evidence required by those contracts and produce one accepted review record for the exact physical device.
 - [ ] Produce and review one cross-bound bring-up session from the exact real candidate/rescue/storage evidence before later storage-strategy approval.
@@ -45,6 +46,7 @@ The first public Beta may be published only when the exact release candidate pas
 - [ ] Produce the cross-campaign release-gate audit from that accepted real dossier/review and the exact real functional-result bundle/accepted plan review before final manual release review.
 - [ ] Select and separately review the actual reversible rootfs staging/handoff strategy only after that exact physical review and dossier audit are accepted.
 - [ ] Bind the exact logical target identity from the real accepted storage report only after that accepted strategy review; this remains non-executing and non-authorizing.
+- [ ] Capture a distinct fresh read-only storage discovery/report from the same real phone/firmware after target binding and pass the fresh-device revalidation immediately before any later write-capable trial; this remains non-executing and non-authorizing.
 - [ ] Final release manifest/compatibility matrix/known issues and SHA-256 set are generated from the exact reviewed physical candidate.
 
 ## Physical AC2003 mandatory gate
@@ -68,6 +70,7 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] The accepted exact dossier/review and exact functional-result bundle/accepted test-plan review are cross-bound into one release-gate audit packet for the same profile, serial, boot observation, rescue diagnostics, transcript and rescue probe; the packet itself grants no Beta credit.
 - [ ] A reversible rootfs handoff strategy is explicitly reviewed after accepted discovery review and dossier audit; no guessed UFS/userdata path is accepted.
 - [ ] The exact logical staging-target identity is bound from the same reviewed physical storage report after strategy acceptance, with an observed unlocked/unencrypted state and enough free capacity; this still grants no permission to mount or write.
+- [ ] After that accepted logical binding, a distinct fresh read-only storage discovery/report from the same real phone/firmware passes fresh-device target revalidation and confirms the same role/kernel/filesystem/encryption/capacity identity immediately before any manual trial; this still grants no permission to mount, execute a trial or write.
 - [ ] Recovery-gated `fastboot boot` succeeds on the exact phone after explicit user confirmation, with the fresh slot context matching the reviewed recovery-readiness evidence.
 - [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
 - [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
@@ -106,9 +109,10 @@ The following remain useful diagnostics but **cannot** satisfy a physical functi
 - `accepted_for_strategy_design=true` before a separate reversible target/strategy review;
 - an accepted strategy-design review before exact logical target binding and later real trial execution;
 - `logical_target_identity_bound=true` before fresh-device revalidation and a separately authorized/reviewed manual trial; target binding is evidence, not permission to mount or write;
+- `fresh_device_revalidated=true` without a later separately reviewed explicit manual trial authorization/execution step; fresh revalidation is evidence that the logical target stayed stable, not permission to mount or write;
 - a valid host-side physical bring-up session bundle without the underlying real reviewed physical evidence;
 - a valid exact-file dossier without accepted underlying real physical evidence and later strategy/hardware review;
-- synthetic/mock hardware surveys/reviews, test plans/plan reviews, schema-v2 functional observations/result reviews/bundles, storage reports/reviews, sessions, dossiers, cross-campaign audits, target-binding reviews or transcripts.
+- synthetic/mock hardware surveys/reviews, test plans/plan reviews, schema-v2 functional observations/result reviews/bundles, storage reports/reviews, sessions, dossiers, cross-campaign audits, target-binding reviews, fresh-revalidation records or transcripts.
 
 ## Release publication rule
 

@@ -1,10 +1,11 @@
-"""Offline rootfs-strategy and logical target-binding commands for the shared operator workspace.
+"""Offline rootfs-strategy, target-binding and fresh-revalidation commands.
 
 These commands consume already captured physical evidence only. They never invoke
 ADB/Fastboot, never communicate with a phone, never bind a raw block-device path
 or mount target, never authorize a persistent write and never grant hardware/Beta
-credit. An accepted target-binding review binds only a logical identity and still
-requires a later fresh-device/manual execution gate.
+credit. An accepted target-binding review binds only a logical identity; a later
+fresh revalidation can confirm that identity against a distinct read-only storage
+capture, but a separate explicit manual trial authorization is still mandatory.
 """
 from __future__ import annotations
 
@@ -21,6 +22,10 @@ from .physical_bringup_dossier_review import load_physical_bringup_dossier_revie
 from .physical_release_gate_audit import load_physical_release_gate_audit_evidence
 from .physical_storage_discovery import load_physical_storage_discovery_evidence
 from .physical_storage_review import load_physical_storage_review_evidence
+from .rootfs_handoff_fresh_revalidation import (
+    build_rootfs_handoff_fresh_revalidation,
+    write_rootfs_handoff_fresh_revalidation_evidence,
+)
 from .rootfs_handoff_strategy_review import (
     RootfsHandoffStrategyReviewRecord,
     bind_rootfs_handoff_strategy_review,
@@ -41,6 +46,7 @@ STRATEGY_EVIDENCE_COMMANDS = (
     "bind-rootfs-handoff-strategy-review",
     "prepare-rootfs-handoff-target-binding-review",
     "bind-rootfs-handoff-target-binding-review",
+    "build-rootfs-handoff-fresh-revalidation",
 )
 
 
@@ -49,7 +55,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="KaliPhoneStudio evidence",
         description=(
             "Offline reversible rootfs strategy/target review workspace. No phone I/O, raw target binding, "
-            "mounting, persistent write authorization, hardware promotion or Beta credit is possible here."
+            "mounting, trial execution, persistent write authorization, hardware promotion or Beta credit is possible here."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Emit a machine-readable safety/result summary.")
@@ -93,7 +99,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "prepare-rootfs-handoff-target-binding-review",
         help="Create a rejected-by-default logical target-binding review record and notes.",
         description=(
-            "Prepare an exact logical target-binding review from the accepted strategy and bound physical "
+            "Offline preparation of an exact logical target-binding review from the accepted strategy and bound physical "
             "storage report. No raw /dev path, mount target, trial execution or write authorization is emitted."
         ),
     )
@@ -108,7 +114,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "bind-rootfs-handoff-target-binding-review",
         help="Bind an independently edited logical target review to the exact physical evidence chain.",
         description=(
-            "Bind one review to exact physical storage report bytes and accepted strategy evidence. "
+            "Offline exact-file binding of one review to exact physical storage report bytes and accepted strategy evidence. "
             "Acceptance binds only the logical target identity; a fresh-device/manual trial gate remains mandatory."
         ),
     )
@@ -118,6 +124,19 @@ def _build_parser() -> argparse.ArgumentParser:
     bind_target.add_argument("--review-record", type=Path, required=True)
     bind_target.add_argument("--review-notes", type=Path, required=True)
     bind_target.add_argument("--out", type=Path, required=True)
+
+    revalidate = sub.add_parser(
+        "build-rootfs-handoff-fresh-revalidation",
+        help="Cross-check an accepted target binding against a distinct fresh read-only storage capture.",
+        description=(
+            "Offline fail-closed revalidation of the accepted logical target identity against new physical "
+            "storage discovery/report evidence. It grants no raw path, mount, trial execution, write, hardware or Beta authorization."
+        ),
+    )
+    revalidate.add_argument("--target-binding", type=Path, required=True)
+    revalidate.add_argument("--fresh-storage-discovery", type=Path, required=True)
+    revalidate.add_argument("--fresh-storage-report", type=Path, required=True)
+    revalidate.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -319,6 +338,26 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             logical_target_identity_bound=evidence.logical_target_identity_bound,
             fresh_device_revalidation_required=evidence.fresh_device_revalidation_required,
             manual_trial_execution_required=evidence.manual_trial_execution_required,
+            physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
+            trial_execution_allowed=False,
+        )
+
+    if args.evidence_command == "build-rootfs-handoff-fresh-revalidation":
+        evidence = build_rootfs_handoff_fresh_revalidation(
+            args.target_binding,
+            args.fresh_storage_discovery,
+            args.fresh_storage_report,
+        )
+        digest = write_rootfs_handoff_fresh_revalidation_evidence(evidence, args.out)
+        return _safe_result(
+            args.evidence_command,
+            args.out,
+            digest,
+            profile_id=evidence.profile_id,
+            device_serial=evidence.device_serial,
+            fresh_device_revalidated=evidence.fresh_device_revalidated,
+            ready_for_separate_manual_trial_authorization=evidence.ready_for_separate_manual_trial_authorization,
+            manual_trial_authorization_required=evidence.manual_trial_authorization_required,
             physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
             trial_execution_allowed=False,
         )

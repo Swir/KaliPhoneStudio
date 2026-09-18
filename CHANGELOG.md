@@ -2,6 +2,15 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
+## 0.6.67-dev — distinct-capture fresh-device rootfs target revalidation
+
+- Added `kaliphonestudio.rootfs_handoff_fresh_revalidation` as a schema-v1 fail-closed boundary after an accepted logical target-binding review. It requires a **distinct new read-only** physical-storage discovery/report chain instead of reusing the original reviewed discovery.
+- Fresh revalidation cross-checks the exact profile, serial, firmware build/fingerprint, rootfs artifact SHA-256/size, recovery-plan SHA-256 and reviewed logical partition role/kernel/filesystem/encryption/capacity identity. Reuse, report detachment, firmware/identity drift, removable storage, filesystem/encryption drift or insufficient current free space fail closed.
+- Successful evidence only records `fresh_device_revalidated=true` and `ready_for_separate_manual_trial_authorization=true`; raw `/dev` path binding, mount targets, trial execution, persistent writes, storage/recovery verification, hardware verification and Beta authorization/credit remain forced false.
+- Added canonical create-only evidence load/write validation, the standalone `scripts/build_rootfs_handoff_fresh_revalidation.py` wrapper and the shared `python main.py evidence build-rootfs-handoff-fresh-revalidation ...` command.
+- Added focused Python 3.11/3.14 fail-closed CI and extended the frozen Windows late-evidence CLI workflow to compile/test and smoke-test logical target binding plus fresh revalidation refusals without device I/O.
+- Added `docs/ROOTFS_HANDOFF_FRESH_REVALIDATION.md` and synchronized README, ROADMAP, BUILD_STATUS and Beta-gate wording. The authoritative project ledger remains **58%** and Beta remains **BLOCKED** because no real AC2003 baseline, accepted storage/strategy/target chain, real fresh revalidation, temporary boot, required subsystem validation or exercised recovery/rollback has passed the physical gate.
+
 ## 0.6.66-dev — cross-campaign release audit and multi-device identity hardening
 
 - Added `kaliphonestudio.rootfs_handoff_target_binding` as a schema-v1 fail-closed logical target-binding boundary after an accepted reversible rootfs strategy review. It revalidates the exact physical-storage discovery evidence plus the exact original storage-report SHA-256/size and binds only logical role/kernel/filesystem/encryption/free-space/staging/rootfs/recovery identities.
