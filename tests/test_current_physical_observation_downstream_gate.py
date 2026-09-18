@@ -25,6 +25,11 @@ from kaliphonestudio.physical_hardware_test_plan_review import (
     PhysicalHardwareTestPlanReviewError,
     bind_current_physical_hardware_test_plan_review_from_files,
 )
+from kaliphonestudio.physical_hardware_test_observation import (
+    PhysicalHardwareTestObservationError,
+    bind_current_physical_hardware_test_observation_from_files,
+    make_current_inconclusive_physical_hardware_test_observation_record,
+)
 from kaliphonestudio.physical_storage_discovery import (
     PhysicalStorageDiscoveryError,
     record_current_physical_storage_discovery,
@@ -138,6 +143,26 @@ def test_plan_review_rejects_legacy_before_reading_plan_or_review_files(tmp_path
     with pytest.raises(PhysicalHardwareTestPlanReviewError, match="requires schema-v2"):
         bind_current_physical_hardware_test_plan_review_from_files(
             _legacy(), missing, missing, missing
+        )
+    assert not missing.exists()
+
+
+def test_observation_template_rejects_legacy_before_plan_validation() -> None:
+    with pytest.raises(PhysicalHardwareTestObservationError, match="requires schema-v2"):
+        make_current_inconclusive_physical_hardware_test_observation_record(
+            _legacy(),
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            "display",
+            "operator-ci",
+        )
+
+
+def test_observation_binding_rejects_legacy_before_reading_campaign_files(tmp_path: Path) -> None:
+    missing = tmp_path / "must-not-be-read.json"
+    with pytest.raises(PhysicalHardwareTestObservationError, match="requires schema-v2"):
+        bind_current_physical_hardware_test_observation_from_files(
+            _legacy(), missing, missing, "display", missing, missing
         )
     assert not missing.exists()
 
