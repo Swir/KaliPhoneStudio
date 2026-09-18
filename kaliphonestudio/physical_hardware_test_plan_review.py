@@ -15,6 +15,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_hardware_test_plan import (
     PhysicalHardwareTestPlanError,
     PhysicalHardwareTestPlanEvidence,
@@ -454,3 +459,36 @@ def bind_physical_hardware_test_plan_review_from_files(
         review_notes_sha256=notes_sha,
         review_notes_size=notes_size,
     )
+
+def bind_current_physical_hardware_test_plan_review_from_files(
+    observation: PhysicalBootObservationEvidence,
+    plan_path: Path,
+    review_record_path: Path,
+    review_notes_path: Path,
+) -> PhysicalHardwareTestPlanReviewEvidence:
+    """Bind an accepted-plan review only to a plan from the current physical campaign."""
+    try:
+        require_current_physical_campaign_observation(observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestPlanReviewError(str(exc)) from exc
+    try:
+        plan = load_physical_hardware_test_plan(plan_path)
+    except PhysicalHardwareTestPlanError as exc:
+        raise PhysicalHardwareTestPlanReviewError(str(exc)) from exc
+    try:
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=plan.profile_id,
+            expected_device_serial=plan.device_serial,
+            expected_observation_sha256=plan.physical_boot_observation_sha256,
+            expected_transcript_sha256=plan.transcript_sha256,
+            expected_rescue_probe_id=plan.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestPlanReviewError(str(exc)) from exc
+    return bind_physical_hardware_test_plan_review_from_files(
+        plan_path,
+        review_record_path,
+        review_notes_path,
+    )
+

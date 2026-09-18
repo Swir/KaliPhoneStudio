@@ -16,6 +16,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_hardware_test_plan import (
     PhysicalHardwareTestPlanError,
     PhysicalHardwareTestPlanEvidence,
@@ -572,3 +577,77 @@ def bind_physical_hardware_test_observation_from_files(
         observation_notes_sha256=notes_sha,
         observation_notes_size=notes_size,
     )
+
+def make_current_inconclusive_physical_hardware_test_observation_record(
+    observation: PhysicalBootObservationEvidence,
+    plan: PhysicalHardwareTestPlanEvidence,
+    plan_review: PhysicalHardwareTestPlanReviewEvidence,
+    test_id: str,
+    operator: str,
+) -> PhysicalHardwareTestObservationRecord:
+    """Create a safe template only for a plan rooted in the current physical campaign."""
+    try:
+        # Reject stale/legacy provenance before dereferencing downstream evidence.
+        require_current_physical_campaign_observation(observation)
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=plan.profile_id,
+            expected_device_serial=plan.device_serial,
+            expected_observation_sha256=plan.physical_boot_observation_sha256,
+            expected_transcript_sha256=plan.transcript_sha256,
+            expected_rescue_probe_id=plan.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    _validate_exact_plan_review(plan, plan_review)
+    if plan_review.physical_boot_observation_sha256 != observation.evidence_sha256():
+        raise PhysicalHardwareTestObservationError(
+            "accepted test-plan review is detached from the current physical boot observation"
+        )
+    return make_inconclusive_physical_hardware_test_observation_record(
+        plan, plan_review, test_id, operator
+    )
+
+
+def bind_current_physical_hardware_test_observation_from_files(
+    observation: PhysicalBootObservationEvidence,
+    plan_path: Path,
+    plan_review_path: Path,
+    test_id: str,
+    record_path: Path,
+    notes_path: Path,
+) -> PhysicalHardwareTestObservationEvidence:
+    """Bind a new per-test observation only to the exact current physical campaign."""
+    try:
+        require_current_physical_campaign_observation(observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    try:
+        plan = load_physical_hardware_test_plan(plan_path)
+        plan_review = load_physical_hardware_test_plan_review_evidence(plan_review_path)
+    except (PhysicalHardwareTestPlanError, PhysicalHardwareTestPlanReviewError) as exc:
+        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    try:
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=plan.profile_id,
+            expected_device_serial=plan.device_serial,
+            expected_observation_sha256=plan.physical_boot_observation_sha256,
+            expected_transcript_sha256=plan.transcript_sha256,
+            expected_rescue_probe_id=plan.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestObservationError(str(exc)) from exc
+    _validate_exact_plan_review(plan, plan_review)
+    if plan_review.physical_boot_observation_sha256 != observation.evidence_sha256():
+        raise PhysicalHardwareTestObservationError(
+            "accepted test-plan review is detached from the current physical boot observation"
+        )
+    return bind_physical_hardware_test_observation_from_files(
+        plan_path,
+        plan_review_path,
+        test_id,
+        record_path,
+        notes_path,
+    )
+

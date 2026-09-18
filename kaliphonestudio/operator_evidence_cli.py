@@ -18,12 +18,13 @@ import sys
 from typing import Sequence
 
 from .physical_hardware_result_bundle import (
-    build_physical_hardware_result_bundle_from_files,
+    build_current_physical_hardware_result_bundle_from_files,
     write_physical_hardware_result_bundle_evidence,
 )
+from .physical_campaign_admission import load_current_physical_campaign_observation
 from .physical_hardware_review import (
     make_rejected_hardware_review_record,
-    review_physical_hardware_survey_files,
+    review_current_physical_hardware_survey_files,
     write_physical_hardware_review_evidence,
 )
 from .physical_hardware_survey import (
@@ -32,25 +33,25 @@ from .physical_hardware_survey import (
     write_physical_hardware_survey_evidence,
 )
 from .physical_hardware_test_observation import (
-    bind_physical_hardware_test_observation_from_files,
+    bind_current_physical_hardware_test_observation_from_files,
     load_physical_hardware_test_observation_evidence,
-    make_inconclusive_physical_hardware_test_observation_record,
+    make_current_inconclusive_physical_hardware_test_observation_record,
     write_physical_hardware_test_observation_evidence,
 )
 from .physical_hardware_test_plan import (
-    build_physical_hardware_test_plan_from_file,
+    build_current_physical_hardware_test_plan_from_files,
     load_physical_hardware_test_plan,
     write_physical_hardware_test_plan,
 )
 from .physical_hardware_test_plan_review import (
-    bind_physical_hardware_test_plan_review_from_files,
+    bind_current_physical_hardware_test_plan_review_from_files,
     load_physical_hardware_test_plan_review_evidence,
     make_rejected_physical_hardware_test_plan_review_record,
     write_physical_hardware_test_plan_review_evidence,
 )
 from .physical_hardware_test_review import (
-    bind_physical_hardware_test_review_from_files,
-    make_rejected_physical_hardware_test_review_record,
+    bind_current_physical_hardware_test_review_from_files,
+    make_current_rejected_physical_hardware_test_review_record,
     write_physical_hardware_test_review_evidence,
 )
 from .physical_hardware_test_summary import (
@@ -155,6 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "bind-hardware-survey-review",
         help="Bind an exact manual survey review to exact survey/notes bytes.",
     )
+    survey_review.add_argument("--boot-observation", type=Path, required=True)
     survey_review.add_argument("--survey-evidence", type=Path, required=True)
     survey_review.add_argument("--review-record", type=Path, required=True)
     survey_review.add_argument("--review-notes", type=Path, required=True)
@@ -192,6 +194,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     plan.add_argument("--profile-id", required=True)
+    plan.add_argument("--boot-observation", type=Path, required=True)
     plan.add_argument("--hardware-review-evidence", type=Path, required=True)
     _add_output(plan)
 
@@ -207,6 +210,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "bind-functional-test-plan-review",
         help="Bind canonical test-plan bytes, manual review record and notes into immutable review evidence.",
     )
+    plan_review.add_argument("--boot-observation", type=Path, required=True)
     plan_review.add_argument("--test-plan", type=Path, required=True)
     plan_review.add_argument("--review-record", type=Path, required=True)
     plan_review.add_argument("--review-notes", type=Path, required=True)
@@ -220,6 +224,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "The template starts not executed/inconclusive and grants no hardware/Beta credit."
         ),
     )
+    observation_template.add_argument("--boot-observation", type=Path, required=True)
     observation_template.add_argument("--test-plan", type=Path, required=True)
     observation_template.add_argument("--test-plan-review-evidence", type=Path, required=True)
     observation_template.add_argument("--test-id", required=True)
@@ -234,6 +239,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "this command itself performs no phone I/O and cannot promote hardware/Beta status."
         ),
     )
+    observation_bind.add_argument("--boot-observation", type=Path, required=True)
     observation_bind.add_argument("--test-plan", type=Path, required=True)
     observation_bind.add_argument("--test-plan-review-evidence", type=Path, required=True)
     observation_bind.add_argument("--test-id", required=True)
@@ -249,6 +255,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "and never authorizes project support or Beta release."
         ),
     )
+    result_review_template.add_argument("--boot-observation", type=Path, required=True)
     result_review_template.add_argument("--observation-evidence", type=Path, required=True)
     result_review_template.add_argument("--reviewer", required=True)
     _add_output(result_review_template)
@@ -261,6 +268,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Project support/hardware/Beta promotion remains forbidden."
         ),
     )
+    result_review_bind.add_argument("--boot-observation", type=Path, required=True)
     result_review_bind.add_argument("--observation-evidence", type=Path, required=True)
     result_review_bind.add_argument("--review-record", type=Path, required=True)
     result_review_bind.add_argument("--review-notes", type=Path, required=True)
@@ -286,6 +294,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "reviewed-pass coverage remains manual release-gate input and grants no hardware/Beta credit."
         ),
     )
+    result_bundle.add_argument("--boot-observation", type=Path, required=True)
     result_bundle.add_argument("--test-plan", type=Path, required=True)
     result_bundle.add_argument("--test-plan-review-evidence", type=Path, required=True)
     result_bundle.add_argument("--observation-evidence", type=Path, action="append", default=[])
@@ -424,7 +433,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-hardware-survey-review":
-        evidence = review_physical_hardware_survey_files(
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = review_current_physical_hardware_survey_files(
+            observation,
             args.survey_evidence,
             args.review_record,
             args.review_notes,
@@ -468,7 +479,10 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
 
     if command == "build-functional-test-plan":
         profile = get_profile(args.devices_root, args.profile_id)
-        plan = build_physical_hardware_test_plan_from_file(profile, args.hardware_review_evidence)
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        plan = build_current_physical_hardware_test_plan_from_files(
+            profile, observation, args.hardware_review_evidence
+        )
         digest = write_physical_hardware_test_plan(plan, args.out)
         return _safe_result(
             command,
@@ -497,7 +511,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-functional-test-plan-review":
-        evidence = bind_physical_hardware_test_plan_review_from_files(
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = bind_current_physical_hardware_test_plan_review_from_files(
+            observation,
             args.test_plan,
             args.review_record,
             args.review_notes,
@@ -514,9 +530,11 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "prepare-functional-test-observation":
+        observation = load_current_physical_campaign_observation(args.boot_observation)
         plan = load_physical_hardware_test_plan(args.test_plan)
         plan_review = load_physical_hardware_test_plan_review_evidence(args.test_plan_review_evidence)
-        record = make_inconclusive_physical_hardware_test_observation_record(
+        record = make_current_inconclusive_physical_hardware_test_observation_record(
+            observation,
             plan,
             plan_review,
             args.test_id,
@@ -536,7 +554,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-functional-test-observation":
-        evidence = bind_physical_hardware_test_observation_from_files(
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = bind_current_physical_hardware_test_observation_from_files(
+            observation,
             args.test_plan,
             args.test_plan_review_evidence,
             args.test_id,
@@ -557,8 +577,11 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "prepare-functional-test-result-review":
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
         observation = load_physical_hardware_test_observation_evidence(args.observation_evidence)
-        record = make_rejected_physical_hardware_test_review_record(observation, args.reviewer)
+        record = make_current_rejected_physical_hardware_test_review_record(
+            boot_observation, observation, args.reviewer
+        )
         digest = _write_text_exclusive(args.out, record.canonical_json())
         return _safe_result(
             command,
@@ -572,7 +595,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-functional-test-result-review":
-        evidence = bind_physical_hardware_test_review_from_files(
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = bind_current_physical_hardware_test_review_from_files(
+            boot_observation,
             args.observation_evidence,
             args.review_record,
             args.review_notes,
@@ -612,7 +637,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "build-functional-result-bundle":
-        bundle = build_physical_hardware_result_bundle_from_files(
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
+        bundle = build_current_physical_hardware_result_bundle_from_files(
+            boot_observation,
             args.test_plan,
             args.test_plan_review_evidence,
             args.observation_evidence,

@@ -8,6 +8,8 @@ on:
       - "kaliphonestudio/rootfs_handoff.py"
       - "kaliphonestudio/physical_candidate_gate.py"
       - "kaliphonestudio/physical_boot_observation.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
+      - "tests/test_current_physical_observation_downstream_gate.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "kaliphonestudio/physical_kali_early_userspace.py"
@@ -33,6 +35,8 @@ on:
       - "kaliphonestudio/rootfs_handoff.py"
       - "kaliphonestudio/physical_candidate_gate.py"
       - "kaliphonestudio/physical_boot_observation.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
+      - "tests/test_current_physical_observation_downstream_gate.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "kaliphonestudio/physical_kali_early_userspace.py"
@@ -73,6 +77,7 @@ jobs:
           kaliphonestudio/rootfs_handoff.py
           kaliphonestudio/physical_candidate_gate.py
           kaliphonestudio/physical_boot_observation.py
+          kaliphonestudio/physical_campaign_admission.py
           kaliphonestudio/physical_rescue_diagnostics.py
           kaliphonestudio/physical_rescue_functional_probes.py
           kaliphonestudio/physical_kali_early_userspace.py
@@ -90,6 +95,7 @@ jobs:
           tests/test_physical_storage_discovery.py
           tests/test_physical_storage_review.py
           tests/test_physical_bringup_session.py
+          tests/test_current_physical_observation_downstream_gate.py
           tests/test_physical_bringup_dossier.py
       - name: Run focused fail-closed contract tests
         env:
@@ -101,6 +107,7 @@ jobs:
           tests/test_physical_storage_review.py
           tests/test_physical_bringup_session.py
           tests/test_physical_bringup_dossier.py
+          tests/test_current_physical_observation_downstream_gate.py
           tests/test_profile_schema.py
           tests/test_repository_contract.py
 

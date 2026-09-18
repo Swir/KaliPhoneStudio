@@ -18,6 +18,11 @@ from .functional_hardware_contract import (
     functional_hardware_contract_sha256,
     validate_functional_hardware_contract,
 )
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_hardware_review import (
     PhysicalHardwareReviewError,
     PhysicalHardwareReviewEvidence,
@@ -268,3 +273,40 @@ def build_physical_hardware_test_plan_from_file(profile: DeviceProfile, review_p
     except PhysicalHardwareReviewError as exc:
         raise PhysicalHardwareTestPlanError(str(exc)) from exc
     return build_physical_hardware_test_plan(profile, review)
+
+def build_current_physical_hardware_test_plan(
+    profile: DeviceProfile,
+    observation: PhysicalBootObservationEvidence,
+    review: PhysicalHardwareReviewEvidence,
+) -> PhysicalHardwareTestPlanEvidence:
+    """Build a new plan only from review evidence rooted in the current physical campaign."""
+    try:
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=review.profile_id,
+            expected_device_serial=review.device_serial,
+            expected_observation_sha256=review.physical_boot_observation_sha256,
+            expected_transcript_sha256=review.transcript_sha256,
+            expected_rescue_probe_id=review.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestPlanError(str(exc)) from exc
+    return build_physical_hardware_test_plan(profile, review)
+
+
+def build_current_physical_hardware_test_plan_from_files(
+    profile: DeviceProfile,
+    observation: PhysicalBootObservationEvidence,
+    review_path: Path,
+) -> PhysicalHardwareTestPlanEvidence:
+    """Current-only file boundary for operator-created functional test plans."""
+    try:
+        require_current_physical_campaign_observation(observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestPlanError(str(exc)) from exc
+    try:
+        review = load_physical_hardware_review_evidence(review_path)
+    except PhysicalHardwareReviewError as exc:
+        raise PhysicalHardwareTestPlanError(str(exc)) from exc
+    return build_current_physical_hardware_test_plan(profile, observation, review)
+

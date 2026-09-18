@@ -152,6 +152,8 @@ build-release-gate-audit
 
 Examples:
 
+New downstream campaign creation is current-observation-gated. Survey review, functional plan/review, per-test observation, result-review and final functional-result-bundle operator commands require the exact schema-v2 physical boot observation that carries the runtime/recovery chain. Historical schema-v1 observations remain readable for audit but cannot seed these new operator outputs.
+
 ```bash
 python main.py evidence record-rescue-diagnostics \
   --profile-id oneplus/avicii \
@@ -170,6 +172,7 @@ python main.py evidence prepare-storage-review \
 ```bash
 python main.py evidence build-functional-test-plan \
   --profile-id oneplus/avicii \
+  --boot-observation physical-boot-observation.json \
   --hardware-review-evidence physical-hardware-review.json \
   --out physical-functional-test-plan.json
 ```
@@ -178,6 +181,7 @@ After the exact plan has a separate accepted review, create the safe observation
 
 ```bash
 python main.py evidence prepare-functional-test-observation \
+  --boot-observation physical-boot-observation.json \
   --test-plan physical-functional-test-plan.json \
   --test-plan-review-evidence physical-functional-test-plan-review.json \
   --test-id display \

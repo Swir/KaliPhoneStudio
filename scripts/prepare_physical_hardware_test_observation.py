@@ -4,9 +4,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from kaliphonestudio.physical_campaign_admission import load_current_physical_campaign_observation
 from kaliphonestudio.physical_hardware_test_observation import (
     PhysicalHardwareTestObservationError,
-    make_inconclusive_physical_hardware_test_observation_record,
+    make_current_inconclusive_physical_hardware_test_observation_record,
 )
 from kaliphonestudio.physical_hardware_test_plan import load_physical_hardware_test_plan
 from kaliphonestudio.physical_hardware_test_plan_review import (
@@ -18,6 +19,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create an inconclusive, not-executed-by-default physical functional-test observation template"
     )
+    parser.add_argument("--boot-observation", type=Path, required=True)
     parser.add_argument("--test-plan", type=Path, required=True)
     parser.add_argument("--test-plan-review-evidence", type=Path, required=True)
     parser.add_argument("--test-id", required=True)
@@ -25,10 +27,11 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     try:
+        observation = load_current_physical_campaign_observation(args.boot_observation)
         plan = load_physical_hardware_test_plan(args.test_plan)
         plan_review = load_physical_hardware_test_plan_review_evidence(args.test_plan_review_evidence)
-        record = make_inconclusive_physical_hardware_test_observation_record(
-            plan, plan_review, args.test_id, args.operator
+        record = make_current_inconclusive_physical_hardware_test_observation_record(
+            observation, plan, plan_review, args.test_id, args.operator
         )
         if args.out.exists() or args.out.is_symlink():
             raise PhysicalHardwareTestObservationError("refusing to overwrite existing observation template")

@@ -15,6 +15,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_rescue_diagnostics import (
     PhysicalRescueDiagnosticsEvidence,
     PhysicalRescueDiagnosticsError,
@@ -709,3 +714,79 @@ def write_physical_storage_discovery_evidence(evidence: PhysicalStorageDiscovery
     finally:
         temporary.unlink(missing_ok=True)
     return evidence.evidence_sha256()
+
+def bind_current_physical_storage_discovery(
+    profile: DeviceProfile,
+    observation: PhysicalBootObservationEvidence,
+    assessment: RootfsHandoffAssessmentEvidence,
+    diagnostics: PhysicalRescueDiagnosticsEvidence,
+    functional_probe: PhysicalRescueFunctionalProbeEvidence,
+    report: PhysicalStorageDiscoveryReport,
+    *,
+    discovery_report_sha256: str,
+    discovery_report_size: int,
+    recovery_plan_sha256: str,
+    recovery_plan_size: int,
+) -> PhysicalStorageDiscoveryEvidence:
+    """Bind new storage discovery only to the exact current physical observation."""
+    try:
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=diagnostics.profile_id,
+            expected_device_serial=diagnostics.device_serial,
+            expected_observation_sha256=diagnostics.physical_boot_observation_sha256,
+            expected_transcript_sha256=diagnostics.transcript_sha256,
+            expected_rescue_probe_id=diagnostics.rescue_probe_id,
+        )
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=functional_probe.profile_id,
+            expected_device_serial=functional_probe.device_serial,
+            expected_observation_sha256=functional_probe.physical_boot_observation_sha256,
+            expected_transcript_sha256=functional_probe.transcript_sha256,
+            expected_rescue_probe_id=functional_probe.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalStorageDiscoveryError(str(exc)) from exc
+    return bind_physical_storage_discovery(
+        profile,
+        assessment,
+        diagnostics,
+        functional_probe,
+        report,
+        discovery_report_sha256=discovery_report_sha256,
+        discovery_report_size=discovery_report_size,
+        recovery_plan_sha256=recovery_plan_sha256,
+        recovery_plan_size=recovery_plan_size,
+    )
+
+
+def record_current_physical_storage_discovery(
+    profile: DeviceProfile,
+    observation: PhysicalBootObservationEvidence,
+    assessment: RootfsHandoffAssessmentEvidence,
+    diagnostics: PhysicalRescueDiagnosticsEvidence,
+    functional_probe: PhysicalRescueFunctionalProbeEvidence,
+    discovery_report_path: Path,
+    recovery_plan_path: Path,
+) -> PhysicalStorageDiscoveryEvidence:
+    """Current-only operator boundary; reject legacy observation before reading reports."""
+    try:
+        require_current_physical_campaign_observation(observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalStorageDiscoveryError(str(exc)) from exc
+    report, report_sha, report_size = load_physical_storage_discovery_report(discovery_report_path)
+    recovery_sha, recovery_size = _read_recovery_plan(recovery_plan_path)
+    return bind_current_physical_storage_discovery(
+        profile,
+        observation,
+        assessment,
+        diagnostics,
+        functional_probe,
+        report,
+        discovery_report_sha256=report_sha,
+        discovery_report_size=report_size,
+        recovery_plan_sha256=recovery_sha,
+        recovery_plan_size=recovery_size,
+    )
+

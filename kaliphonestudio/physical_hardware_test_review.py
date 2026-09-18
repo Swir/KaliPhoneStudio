@@ -14,6 +14,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_hardware_test_observation import (
     PhysicalHardwareTestObservationError,
     PhysicalHardwareTestObservationEvidence,
@@ -440,3 +445,58 @@ def bind_physical_hardware_test_review_from_files(
         review_notes_sha256=notes_sha,
         review_notes_size=notes_size,
     )
+
+def make_current_rejected_physical_hardware_test_review_record(
+    boot_observation: PhysicalBootObservationEvidence,
+    observation: PhysicalHardwareTestObservationEvidence,
+    reviewer: str,
+) -> PhysicalHardwareTestReviewRecord:
+    """Prepare result review only for an observation rooted in the current campaign."""
+    try:
+        # Reject stale/legacy provenance before dereferencing downstream evidence.
+        require_current_physical_campaign_observation(boot_observation)
+        require_current_physical_campaign_observation(
+            boot_observation,
+            expected_profile_id=observation.profile_id,
+            expected_device_serial=observation.device_serial,
+            expected_observation_sha256=observation.physical_boot_observation_sha256,
+            expected_transcript_sha256=observation.transcript_sha256,
+            expected_rescue_probe_id=observation.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestReviewError(str(exc)) from exc
+    return make_rejected_physical_hardware_test_review_record(observation, reviewer)
+
+
+def bind_current_physical_hardware_test_review_from_files(
+    boot_observation: PhysicalBootObservationEvidence,
+    observation_path: Path,
+    review_record_path: Path,
+    review_notes_path: Path,
+) -> PhysicalHardwareTestReviewEvidence:
+    """Bind result review only when the exact observation belongs to the current campaign."""
+    try:
+        require_current_physical_campaign_observation(boot_observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestReviewError(str(exc)) from exc
+    try:
+        observation = load_physical_hardware_test_observation_evidence(observation_path)
+    except PhysicalHardwareTestObservationError as exc:
+        raise PhysicalHardwareTestReviewError(str(exc)) from exc
+    try:
+        require_current_physical_campaign_observation(
+            boot_observation,
+            expected_profile_id=observation.profile_id,
+            expected_device_serial=observation.device_serial,
+            expected_observation_sha256=observation.physical_boot_observation_sha256,
+            expected_transcript_sha256=observation.transcript_sha256,
+            expected_rescue_probe_id=observation.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareTestReviewError(str(exc)) from exc
+    return bind_physical_hardware_test_review_from_files(
+        observation_path,
+        review_record_path,
+        review_notes_path,
+    )
+

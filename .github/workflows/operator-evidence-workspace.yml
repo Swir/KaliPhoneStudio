@@ -6,6 +6,7 @@ on:
     paths:
       - "main.py"
       - "kaliphonestudio/operator_evidence_cli.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_hardware_survey.py"
       - "kaliphonestudio/physical_hardware_review.py"
@@ -28,6 +29,7 @@ on:
     paths:
       - "main.py"
       - "kaliphonestudio/operator_evidence_cli.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_hardware_survey.py"
       - "kaliphonestudio/physical_hardware_review.py"
@@ -78,6 +80,7 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_operator_evidence_cli.py
+          tests/test_current_physical_observation_downstream_gate.py
           tests/test_physical_rescue_diagnostics.py
           tests/test_physical_hardware_survey.py
           tests/test_physical_hardware_review.py
@@ -104,10 +107,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen storage-review help failed: $LASTEXITCODE" }
           & $Cli evidence build-functional-test-plan --help | Set-Content -Encoding utf8 "dist/evidence-functional-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-functional-test-plan-review --help | Set-Content -Encoding utf8 "dist/evidence-plan-review-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan-review help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-observation --help | Set-Content -Encoding utf8 "dist/evidence-observation-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-functional-test-observation --help | Set-Content -Encoding utf8 "dist/evidence-observation-bind-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation-bind help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-review help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-bind-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-review-bind help failed: $LASTEXITCODE" }
           & $Cli evidence build-functional-result-bundle --help | Set-Content -Encoding utf8 "dist/evidence-result-bundle-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-bundle help failed: $LASTEXITCODE" }
 
@@ -119,19 +128,31 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen storage review did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-storage.json") { throw "Refused storage review created output" }
 
-          & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
+          & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --boot-observation "dist/missing-boot-observation.json" --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-plan.json") { throw "Refused functional plan created output" }
 
-          & $Cli evidence prepare-functional-test-observation --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --operator operator-ci --out "dist/should-not-observation.json" 2> "dist/evidence-observation-refusal.txt"
+          & $Cli evidence bind-functional-test-plan-review --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --review-record "dist/missing-plan-review-record.json" --review-notes "dist/missing-plan-review-notes.txt" --out "dist/should-not-plan-review.json" 2> "dist/evidence-plan-review-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan review did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-plan-review.json") { throw "Refused functional plan review created output" }
+
+          & $Cli evidence prepare-functional-test-observation --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --operator operator-ci --out "dist/should-not-observation.json" 2> "dist/evidence-observation-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen observation template did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-observation.json") { throw "Refused observation template created output" }
 
-          & $Cli evidence prepare-functional-test-result-review --observation-evidence "dist/missing-functional-observation.json" --reviewer reviewer-ci --out "dist/should-not-result-review.json" 2> "dist/evidence-result-review-refusal.txt"
+          & $Cli evidence bind-functional-test-observation --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --observation-record "dist/missing-observation-record.json" --observation-notes "dist/missing-observation-notes.txt" --out "dist/should-not-observation-bind.json" 2> "dist/evidence-observation-bind-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional observation bind did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-observation-bind.json") { throw "Refused functional observation bind created output" }
+
+          & $Cli evidence prepare-functional-test-result-review --boot-observation "dist/missing-boot-observation.json" --observation-evidence "dist/missing-functional-observation.json" --reviewer reviewer-ci --out "dist/should-not-result-review.json" 2> "dist/evidence-result-review-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen result review template did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-result-review.json") { throw "Refused result review template created output" }
 
-          & $Cli evidence build-functional-result-bundle --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --summary-evidence "dist/missing-summary.json" --out "dist/should-not-result-bundle.json" 2> "dist/evidence-result-bundle-refusal.txt"
+          & $Cli evidence bind-functional-test-result-review --boot-observation "dist/missing-boot-observation.json" --observation-evidence "dist/missing-functional-observation.json" --review-record "dist/missing-result-review-record.json" --review-notes "dist/missing-result-review-notes.txt" --out "dist/should-not-result-review-bind.json" 2> "dist/evidence-result-review-bind-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional result review bind did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-result-review-bind.json") { throw "Refused functional result review bind created output" }
+
+          & $Cli evidence build-functional-result-bundle --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --summary-evidence "dist/missing-summary.json" --out "dist/should-not-result-bundle.json" 2> "dist/evidence-result-bundle-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen result bundle did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-result-bundle.json") { throw "Refused result bundle created output" }
 
@@ -174,12 +195,21 @@ jobs:
           assert "cannot select a /dev path or authorize writes" in storage
           functional = text("evidence-functional-help.txt")
           assert "checklist, not hardware verification" in functional
+          plan_review = text("evidence-plan-review-help.txt")
+          assert "--boot-observation" in plan_review
           observation = text("evidence-observation-help.txt")
           assert "starts not executed/inconclusive" in observation
           assert "no hardware/beta credit" in observation
+          assert "--boot-observation" in observation
+          observation_bind = text("evidence-observation-bind-help.txt")
+          assert "--boot-observation" in observation_bind
           result_review = text("evidence-result-review-help.txt")
           assert "never authorizes project support or beta release" in result_review
+          assert "--boot-observation" in result_review
+          result_review_bind = text("evidence-result-review-bind-help.txt")
+          assert "--boot-observation" in result_review_bind
           result_bundle = text("evidence-result-bundle-help.txt")
+          assert "--boot-observation" in result_bundle
           assert "manual release-gate input" in result_bundle
           assert "no hardware/beta credit" in result_bundle
 
@@ -187,8 +217,11 @@ jobs:
               "evidence-rescue-refusal.txt",
               "evidence-storage-refusal.txt",
               "evidence-functional-refusal.txt",
+              "evidence-plan-review-refusal.txt",
               "evidence-observation-refusal.txt",
+              "evidence-observation-bind-refusal.txt",
               "evidence-result-review-refusal.txt",
+              "evidence-result-review-bind-refusal.txt",
               "evidence-result-bundle-refusal.txt",
           ):
               assert "evidence workflow error" in text(refusal)

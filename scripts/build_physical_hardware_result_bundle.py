@@ -5,14 +5,16 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from kaliphonestudio.physical_campaign_admission import load_current_physical_campaign_observation
 from kaliphonestudio.physical_hardware_result_bundle import (
-    build_physical_hardware_result_bundle_from_files,
+    build_current_physical_hardware_result_bundle_from_files,
     write_physical_hardware_result_bundle_evidence,
 )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--boot-observation", type=Path, required=True)
     parser.add_argument("--test-plan", type=Path, required=True)
     parser.add_argument("--test-plan-review-evidence", type=Path, required=True)
     parser.add_argument("--observation-evidence", type=Path, action="append", default=[])
@@ -21,7 +23,9 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     try:
-        bundle = build_physical_hardware_result_bundle_from_files(
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
+        bundle = build_current_physical_hardware_result_bundle_from_files(
+            boot_observation,
             args.test_plan,
             args.test_plan_review_evidence,
             args.observation_evidence,

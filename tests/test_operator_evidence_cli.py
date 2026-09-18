@@ -70,6 +70,27 @@ def test_missing_rescue_inputs_fail_closed_without_output(tmp_path: Path) -> Non
     assert not destination.exists()
 
 
+def test_missing_boot_observation_fails_closed_without_hardware_review(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-hardware-review.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-hardware-survey-review",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--survey-evidence",
+            str(tmp_path / "missing-survey.json"),
+            "--review-record",
+            str(tmp_path / "missing-review-record.json"),
+            "--review-notes",
+            str(tmp_path / "missing-review-notes.txt"),
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
 def test_missing_storage_discovery_fails_closed_without_template(tmp_path: Path) -> None:
     destination = tmp_path / "should-not-storage-review.json"
     rc = operator_evidence_cli.main(
@@ -94,8 +115,31 @@ def test_missing_hardware_review_fails_closed_without_functional_plan(tmp_path: 
             "build-functional-test-plan",
             "--profile-id",
             "oneplus/avicii",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
             "--hardware-review-evidence",
             str(tmp_path / "missing-review.json"),
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_current_observation_fails_closed_without_plan_review_binding(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-plan-review.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-functional-test-plan-review",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--test-plan",
+            str(tmp_path / "missing-plan.json"),
+            "--review-record",
+            str(tmp_path / "missing-review-record.json"),
+            "--review-notes",
+            str(tmp_path / "missing-review-notes.txt"),
             "--out",
             str(destination),
         ]
@@ -109,6 +153,8 @@ def test_missing_exact_plan_review_fails_closed_without_observation_template(tmp
     rc = operator_evidence_cli.main(
         [
             "prepare-functional-test-observation",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
             "--test-plan",
             str(tmp_path / "missing-plan.json"),
             "--test-plan-review-evidence",
@@ -125,15 +171,63 @@ def test_missing_exact_plan_review_fails_closed_without_observation_template(tmp
     assert not destination.exists()
 
 
+def test_missing_current_observation_fails_closed_without_observation_binding(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-functional-observation.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-functional-test-observation",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--test-plan",
+            str(tmp_path / "missing-plan.json"),
+            "--test-plan-review-evidence",
+            str(tmp_path / "missing-plan-review.json"),
+            "--test-id",
+            "display",
+            "--observation-record",
+            str(tmp_path / "missing-record.json"),
+            "--observation-notes",
+            str(tmp_path / "missing-notes.txt"),
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
 def test_missing_observation_fails_closed_without_result_review_template(tmp_path: Path) -> None:
     destination = tmp_path / "should-not-result-review-template.json"
     rc = operator_evidence_cli.main(
         [
             "prepare-functional-test-result-review",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
             "--observation-evidence",
             str(tmp_path / "missing-observation.json"),
             "--reviewer",
             "reviewer-ci",
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_current_observation_fails_closed_without_result_review_binding(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-result-review.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-functional-test-result-review",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--observation-evidence",
+            str(tmp_path / "missing-observation.json"),
+            "--review-record",
+            str(tmp_path / "missing-review-record.json"),
+            "--review-notes",
+            str(tmp_path / "missing-review-notes.txt"),
             "--out",
             str(destination),
         ]
@@ -147,6 +241,8 @@ def test_missing_exact_campaign_files_fail_closed_without_result_bundle(tmp_path
     rc = operator_evidence_cli.main(
         [
             "build-functional-result-bundle",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
             "--test-plan",
             str(tmp_path / "missing-plan.json"),
             "--test-plan-review-evidence",

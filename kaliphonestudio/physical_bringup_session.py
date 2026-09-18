@@ -26,6 +26,10 @@ from .physical_boot_observation import (
     PhysicalBootObservationError,
     validate_physical_boot_observation_evidence,
 )
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_candidate_gate import PhysicalCandidateGateEvidence
 from .physical_kali_early_userspace import (
     PhysicalKaliEarlyUserspaceEvidence,
@@ -197,6 +201,10 @@ def _validate_inputs(
     review: PhysicalStorageReviewEvidence,
     early_userspace: PhysicalKaliEarlyUserspaceEvidence | None,
 ) -> None:
+    try:
+        require_current_physical_campaign_observation(observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalBringupSessionError(str(exc)) from exc
     _validate_candidate_gate(gate)
     try:
         validate_physical_boot_observation_evidence(observation)
