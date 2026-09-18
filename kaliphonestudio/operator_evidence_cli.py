@@ -44,7 +44,7 @@ from .physical_hardware_test_plan import (
     write_physical_hardware_test_plan,
 )
 from .physical_hardware_test_plan_review import (
-    bind_physical_hardware_test_plan_review_from_files,
+    bind_current_physical_hardware_test_plan_review_from_files,
     load_physical_hardware_test_plan_review_evidence,
     make_rejected_physical_hardware_test_plan_review_record,
     write_physical_hardware_test_plan_review_evidence,
@@ -210,6 +210,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "bind-functional-test-plan-review",
         help="Bind canonical test-plan bytes, manual review record and notes into immutable review evidence.",
     )
+    plan_review.add_argument("--boot-observation", type=Path, required=True)
     plan_review.add_argument("--test-plan", type=Path, required=True)
     plan_review.add_argument("--review-record", type=Path, required=True)
     plan_review.add_argument("--review-notes", type=Path, required=True)
@@ -505,7 +506,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-functional-test-plan-review":
-        evidence = bind_physical_hardware_test_plan_review_from_files(
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = bind_current_physical_hardware_test_plan_review_from_files(
+            observation,
             args.test_plan,
             args.review_record,
             args.review_notes,
