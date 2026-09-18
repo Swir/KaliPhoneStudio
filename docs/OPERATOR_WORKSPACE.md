@@ -21,7 +21,11 @@ The operator workspace may:
 - build a pending-only profile-driven functional test plan from accepted contextual survey review;
 - prepare a not-executed/inconclusive observation template only after the exact plan has an accepted independent review;
 - bind an operator-authored record from an already performed physical functional test to that exact plan/review chain;
-- summarize independently reviewed functional results and freeze the exact plan/review/observation/result-review/summary files into a functional-result bundle.
+- summarize independently reviewed functional results and freeze the exact plan/review/observation/result-review/summary files into a functional-result bundle;
+- cross-bind exact candidate/rescue/storage evidence into a non-release physical bring-up session;
+- build and independently reverify an exact-file bring-up dossier;
+- prepare rejected-by-default dossier review record/notes and bind the completed manual review to the exact dossier/reverification;
+- cross-bind the accepted exact dossier/review and exact functional-result campaign into a release-gate audit packet for later manual review.
 
 It may **not**:
 
@@ -31,7 +35,7 @@ It may **not**:
 - select a rootfs storage target;
 - authorize a persistent write;
 - claim that a hardware subsystem works;
-- grant Beta release credit.
+- authorize or grant Beta release credit.
 
 Every offline workspace/evidence result therefore keeps the same non-promotion boundary:
 
@@ -114,7 +118,7 @@ Absolute executable paths are intentionally not exported because they can reveal
 
 ## Shared exact-file evidence CLI
 
-The same entry point shipped as `KaliPhoneStudioCLI.exe` exposes an offline evidence group:
+The same entry point shipped as `KaliPhoneStudioCLI.exe` exposes one offline evidence namespace:
 
 ```bash
 python main.py evidence --help
@@ -138,6 +142,12 @@ prepare-functional-test-result-review
 bind-functional-test-result-review
 summarize-functional-test-results
 build-functional-result-bundle
+bind-bringup-session
+build-bringup-dossier
+verify-bringup-dossier
+prepare-bringup-dossier-review
+bind-bringup-dossier-review
+build-release-gate-audit
 ```
 
 Examples:
@@ -211,7 +221,7 @@ python main.py evidence summarize-functional-test-results \
   --out physical-functional-test-summary.json
 ```
 
-Finally, freeze the exact campaign into one non-promoting result bundle. Repeat `--observation-evidence` and `--review-evidence` for every included test:
+Freeze the exact functional campaign into one non-promoting result bundle. Repeat `--observation-evidence` and `--review-evidence` for every included test:
 
 ```bash
 python main.py evidence build-functional-result-bundle \
@@ -222,6 +232,78 @@ python main.py evidence build-functional-result-bundle \
   --summary-evidence physical-functional-test-summary.json \
   --out physical-functional-result-bundle.json
 ```
+
+Once the separately gated physical storage discovery/review evidence exists, the same namespace continues through the late audit stages:
+
+```bash
+python main.py evidence bind-bringup-session \
+  --candidate-gate physical-candidate-gate.json \
+  --boot-observation physical-boot-observation.json \
+  --rescue-diagnostics physical-rescue-diagnostics.json \
+  --functional-probes physical-rescue-functional-probes.json \
+  --storage-discovery physical-storage-discovery.json \
+  --storage-review physical-storage-review.json \
+  --kali-early-userspace physical-kali-early-userspace.json \
+  --out physical-bringup-session.json
+```
+
+Build the exact dossier by supplying the session-bound evidence plus the original raw transcript/report/recovery/review files. Use `python main.py evidence build-bringup-dossier --help` for the full explicit file list. After copying/archiving the dossier, independently reverify every role:
+
+```bash
+python main.py evidence verify-bringup-dossier \
+  --dossier physical-bringup-dossier.json \
+  --file physical_candidate_gate=physical-candidate-gate.json \
+  --file physical_boot_observation=physical-boot-observation.json \
+  --file rescue_diagnostics=physical-rescue-diagnostics.json \
+  --file rescue_functional_probe=physical-rescue-functional-probes.json \
+  --file physical_storage_discovery=physical-storage-discovery.json \
+  --file physical_storage_review=physical-storage-review.json \
+  --file physical_bringup_session=physical-bringup-session.json \
+  --file rescue_transcript=rescue-console.txt \
+  --file storage_discovery_report=storage-discovery-report.txt \
+  --file recovery_plan=recovery-plan.txt \
+  --file storage_review_record=physical-storage-review-record.json \
+  --file storage_review_notes=physical-storage-review-notes.txt \
+  --out physical-bringup-dossier-verification.json
+```
+
+The exact role set must match the dossier; optional early-userspace/rootfs roles must also be supplied when present. Missing, duplicate, extra or changed files fail closed.
+
+Dossier review begins rejected-by-default and emits the record plus separate notes together:
+
+```bash
+python main.py evidence prepare-bringup-dossier-review \
+  --dossier physical-bringup-dossier.json \
+  --reviewer reviewer-3 \
+  --record-out physical-bringup-dossier-review-record.json \
+  --notes-out physical-bringup-dossier-review-notes.txt
+```
+
+After independent review of the exact identity/firmware/candidate/rescue/storage/file-set/recovery chain, bind those exact files:
+
+```bash
+python main.py evidence bind-bringup-dossier-review \
+  --dossier physical-bringup-dossier.json \
+  --verification physical-bringup-dossier-verification.json \
+  --review-record physical-bringup-dossier-review-record.json \
+  --review-notes physical-bringup-dossier-review-notes.txt \
+  --out physical-bringup-dossier-review.json
+```
+
+Finally, cross-bind the accepted exact dossier campaign to the exact functional campaign:
+
+```bash
+python main.py evidence build-release-gate-audit \
+  --dossier physical-bringup-dossier.json \
+  --dossier-verification physical-bringup-dossier-verification.json \
+  --dossier-review physical-bringup-dossier-review.json \
+  --functional-result-bundle physical-functional-result-bundle.json \
+  --test-plan physical-functional-test-plan.json \
+  --test-plan-review physical-functional-test-plan-review.json \
+  --out physical-release-gate-audit.json
+```
+
+This audit packet is still **manual release-gate input only**. It always leaves physical gate completion, hardware verification and Beta authorization false in the current contract.
 
 All output paths are create-only. Missing, detached, non-canonical or invalid upstream evidence fails closed before a new evidence file is written. Review templates start rejected with checks false. A generated functional plan contains pending tests only. These commands do not capture the phone themselves and cannot transform host-side processing into hardware/Beta verification.
 
@@ -238,16 +320,16 @@ Physical capture and the explicitly authorized temporary-boot command remain sep
 - **Export diagnostics…** action;
 - project-local KaliPhoneStudio icon and SWIR dark/electric-cyan styling.
 
-The GUI imports PySide6 lazily so CLI and CI remain usable on minimal hosts without Qt installed. Exact-file evidence stages currently live in the shared CLI so explicit filenames/review records remain visible and auditable; a future GUI front-end must preserve the same confirmation and review boundaries rather than hide them.
+The GUI imports PySide6 lazily so CLI and CI remain usable on minimal hosts without Qt installed. Exact-file evidence stages live in the shared CLI so explicit filenames/review records remain visible and auditable; any future GUI front-end for those stages must preserve the same confirmation, create-only and independent-review boundaries rather than hide them.
 
 ## Windows verification
 
-The Windows host package continues to build both GUI and console `onedir` artifacts. The dedicated `operator-evidence-workspace` workflow additionally builds the frozen CLI on Windows and verifies that the evidence command group is present, the rescue/storage/functional help surfaces carry their safety wording, and representative missing-input cases across plan/observation/result/bundle stages exit fail-closed without creating output files.
+The Windows host package continues to build both GUI and console `onedir` artifacts. The dedicated `operator-evidence-workspace` workflow builds the frozen CLI and verifies the rescue/storage/functional stages. The `operator-late-evidence` workflow separately freezes the same `KaliPhoneStudioCLI.exe`, runs the session/dossier/review/release-audit contract tests, verifies all late command help surfaces and proves representative missing-input cases fail closed without creating outputs.
 
 This is host-package verification only. It does not count as a physical AC2003 test or a Beta gate pass.
 
 ## Relationship to physical bring-up
 
-This workspace is preparation/support tooling. A successful doctor report, clean diagnostics export, valid offline evidence transform, complete functional result bundle or green frozen-Windows test does **not** advance physical support. The first AC2003 Beta still requires the real chain documented in [`../BETA_RELEASE_GATE.md`](../BETA_RELEASE_GATE.md): exact phone/firmware identification, matching stock `boot.img`, temporary boot, rescue/log evidence, Kali early userspace, required storage/power/hardware checks, exercised recovery and the final reviewed release manifest/checksums.
+This workspace is preparation/support tooling. A successful doctor report, clean diagnostics export, valid offline evidence transform, complete functional result bundle, complete dossier/audit packet or green frozen-Windows test does **not** advance physical support. The first AC2003 Beta still requires the real chain documented in [`../BETA_RELEASE_GATE.md`](../BETA_RELEASE_GATE.md): exact phone/firmware identification, matching stock `boot.img`, temporary boot, rescue/log evidence, Kali early userspace, required storage/power/hardware checks, exercised recovery and the final reviewed release manifest/checksums.
 
 The dedicated physical capture/execution commands keep their existing confirmation boundaries. The shared evidence workspace consolidates only offline exact-file transformations and does not bypass or replace any physical review gate.
