@@ -23,6 +23,7 @@ from .fastboot_baseline import FastbootBaselineEvidence
 from .fastboot_capture_bundle import FastbootCaptureBundleEvidence
 from .fastboot_tool import FastbootToolEvidence
 from .physical_baseline_bundle import PhysicalBaselineBundleEvidence
+from .physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from .physical_candidate_gate import (
     PhysicalCandidateGateError,
     PhysicalCandidateGateEvidence,
@@ -346,14 +347,15 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
         prog="execute-temporary-boot-once",
         description=(
             "Perform one serial-bound Fastboot temporary boot only after exact evidence/file "
-            "revalidation, a fresh read-only device probe, the profile-specific confirmation "
-            "text and explicit --execute-temporary-boot opt-in. No persistent write verb is "
-            "available."
+            "revalidation including the exact stock/candidate boot identity binding, a fresh "
+            "read-only device probe, the profile-specific confirmation text and explicit "
+            "--execute-temporary-boot opt-in. No persistent write verb is available."
         ),
     )
     parser.add_argument("--profile-id", required=True)
     parser.add_argument("--devices-root", type=Path, default=Path("devices"))
     parser.add_argument("--physical-candidate-gate", type=Path, required=True)
+    parser.add_argument("--boot-identity-binding", type=Path, required=True)
     parser.add_argument("--capture-bundle", type=Path, required=True)
     parser.add_argument("--baseline-evidence", type=Path, required=True)
     parser.add_argument("--fastboot-tool-evidence", type=Path, required=True)
@@ -390,6 +392,11 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
             args.physical_candidate_gate,
             "physical candidate gate",
         )
+        binding = _load_typed(
+            PhysicalBootIdentityBindingEvidence,
+            args.boot_identity_binding,
+            "physical boot identity binding",
+        )
         capture = _load_typed(
             FastbootCaptureBundleEvidence,
             args.capture_bundle,
@@ -423,6 +430,7 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
             offer,
             authorization,
             gate,
+            binding,
             capture,
             tool,
             baseline,
