@@ -1,0 +1,83 @@
+name: exact-bound-temporary-boot
+on:
+  push:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/temporary_boot_binding.py"
+      - "kaliphonestudio/temporary_boot_offer.py"
+      - "kaliphonestudio/temporary_boot_execution.py"
+      - "kaliphonestudio/exact_bound_temporary_boot_operator.py"
+      - "scripts/prepare_temporary_boot_offer.py"
+      - "scripts/execute_temporary_boot_once.py"
+      - "tests/test_temporary_boot_offer.py"
+      - "tests/test_temporary_boot_execution.py"
+      - "tests/test_exact_bound_temporary_boot_operator.py"
+      - ".github/workflows/exact-bound-temporary-boot.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/temporary_boot_binding.py"
+      - "kaliphonestudio/temporary_boot_offer.py"
+      - "kaliphonestudio/temporary_boot_execution.py"
+      - "kaliphonestudio/exact_bound_temporary_boot_operator.py"
+      - "scripts/prepare_temporary_boot_offer.py"
+      - "scripts/execute_temporary_boot_once.py"
+      - "tests/test_temporary_boot_offer.py"
+      - "tests/test_temporary_boot_execution.py"
+      - "tests/test_exact_bound_temporary_boot_operator.py"
+      - ".github/workflows/exact-bound-temporary-boot.yml"
+
+jobs:
+  safety-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install pytest
+      - name: Run exact-bound offer and one-shot execution contracts
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_physical_boot_identity_binding.py
+          tests/test_temporary_boot_offer.py
+          tests/test_temporary_boot_execution.py
+          tests/test_exact_bound_temporary_boot_operator.py
+          tests/test_physical_candidate_operator.py
+      - name: Compile exact-bound temporary-boot surface
+        run: >-
+          python -m compileall -q
+          main.py
+          kaliphonestudio/physical_boot_identity_binding.py
+          kaliphonestudio/temporary_boot_binding.py
+          kaliphonestudio/temporary_boot_offer.py
+          kaliphonestudio/temporary_boot_execution.py
+          kaliphonestudio/exact_bound_temporary_boot_operator.py
+          scripts/prepare_temporary_boot_offer.py
+          scripts/execute_temporary_boot_once.py
+      - name: Keep offer preparation host-only
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          for path in (
+              Path("kaliphonestudio/temporary_boot_binding.py"),
+              Path("kaliphonestudio/temporary_boot_offer.py"),
+          ):
+              tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+              imports = set()
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      imports.update(alias.name.split(".")[0] for alias in node.names)
+                  elif isinstance(node, ast.ImportFrom) and node.module:
+                      imports.add(node.module.split(".")[0])
+              forbidden = sorted(imports & {"subprocess", "adb", "fastboot"})
+              if forbidden:
+                  raise SystemExit(f"{path}: forbidden device-I/O imports: {forbidden}")
+          PY
