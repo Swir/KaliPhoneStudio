@@ -1,0 +1,53 @@
+name: beta-release-review-manifest
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/beta_release_review_manifest.py"
+      - "scripts/build_beta_release_review_manifest.py"
+      - "tests/test_beta_release_review_manifest.py"
+      - ".github/workflows/beta-release-review-manifest.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/beta_release_review_manifest.py"
+      - "scripts/build_beta_release_review_manifest.py"
+      - "tests/test_beta_release_review_manifest.py"
+      - ".github/workflows/beta-release-review-manifest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile manifest contract and CLI
+        run: |
+          python -m py_compile \
+            kaliphonestudio/beta_release_review_manifest.py \
+            scripts/build_beta_release_review_manifest.py \
+            tests/test_beta_release_review_manifest.py
+      - name: Run focused fail-closed tests
+        run: python -m unittest -v tests.test_beta_release_review_manifest
+      - name: Verify manifest layer remains offline and non-publishing
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          python scripts/build_beta_release_review_manifest.py --help >/dev/null
+          if grep -Ein '\b(adb|fastboot|subprocess|requests|urllib|gh[[:space:]]+release|create_release|upload_asset)\b' \
+            kaliphonestudio/beta_release_review_manifest.py \
+            scripts/build_beta_release_review_manifest.py; then
+            echo "Forbidden device/network/release-publication surface detected" >&2
+            exit 1
+          fi
