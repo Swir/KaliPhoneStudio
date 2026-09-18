@@ -21,9 +21,10 @@ from .physical_hardware_result_bundle import (
     build_physical_hardware_result_bundle_from_files,
     write_physical_hardware_result_bundle_evidence,
 )
+from .physical_campaign_admission import load_current_physical_campaign_observation
 from .physical_hardware_review import (
     make_rejected_hardware_review_record,
-    review_physical_hardware_survey_files,
+    review_current_physical_hardware_survey_files,
     write_physical_hardware_review_evidence,
 )
 from .physical_hardware_survey import (
@@ -38,7 +39,7 @@ from .physical_hardware_test_observation import (
     write_physical_hardware_test_observation_evidence,
 )
 from .physical_hardware_test_plan import (
-    build_physical_hardware_test_plan_from_file,
+    build_current_physical_hardware_test_plan_from_files,
     load_physical_hardware_test_plan,
     write_physical_hardware_test_plan,
 )
@@ -155,6 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "bind-hardware-survey-review",
         help="Bind an exact manual survey review to exact survey/notes bytes.",
     )
+    survey_review.add_argument("--boot-observation", type=Path, required=True)
     survey_review.add_argument("--survey-evidence", type=Path, required=True)
     survey_review.add_argument("--review-record", type=Path, required=True)
     survey_review.add_argument("--review-notes", type=Path, required=True)
@@ -192,6 +194,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     plan.add_argument("--profile-id", required=True)
+    plan.add_argument("--boot-observation", type=Path, required=True)
     plan.add_argument("--hardware-review-evidence", type=Path, required=True)
     _add_output(plan)
 
@@ -424,7 +427,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-hardware-survey-review":
-        evidence = review_physical_hardware_survey_files(
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = review_current_physical_hardware_survey_files(
+            observation,
             args.survey_evidence,
             args.review_record,
             args.review_notes,
@@ -468,7 +473,10 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
 
     if command == "build-functional-test-plan":
         profile = get_profile(args.devices_root, args.profile_id)
-        plan = build_physical_hardware_test_plan_from_file(profile, args.hardware_review_evidence)
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        plan = build_current_physical_hardware_test_plan_from_files(
+            profile, observation, args.hardware_review_evidence
+        )
         digest = write_physical_hardware_test_plan(plan, args.out)
         return _safe_result(
             command,
