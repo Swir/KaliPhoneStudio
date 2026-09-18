@@ -60,6 +60,7 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [x] Manual physical-storage review contract.
 - [x] Cross-bound physical bring-up session evidence contract.
 - [x] Exact-file physical bring-up dossier + independent dossier review.
+- [x] Fail-closed logical rootfs target-binding review contract requires the exact accepted strategy plus exact original storage-report bytes, binds only role/kernel/filesystem/unlock/free-space/staging identities, rejects removable/locked/undersized targets and keeps raw path, mount, execution, write, hardware and Beta authorization false.
 - [ ] Capture a real AC2003 Fastboot/OxygenOS baseline and exact firmware fingerprint.
 - [ ] Extract/validate matching stock `boot.img` from the exact OTA.
 - [ ] Review/instantiate the exact physical candidate for that real baseline.
@@ -73,6 +74,7 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [ ] Review the exact physical bring-up session and source-file dossier.
 - [ ] Cross-bind the accepted real dossier/review and exact real functional-result bundle into one physical release-gate audit packet.
 - [ ] Select/review an actual reversible rootfs staging/handoff strategy only after accepted physical storage evidence and dossier review.
+- [ ] Bind the exact logical target identity from the real accepted storage report only after that strategy review; this still must not authorize a raw path, mount or write.
 - [ ] Confirm intended Kali early userspace/rootfs on the physical run.
 - [ ] Validate required UFS/storage behavior beyond bounded diagnostic reads.
 - [ ] Validate safe charging/battery behavior for the supported scope.
@@ -85,6 +87,7 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [x] Deterministic Kali early-userspace proof overlay exists host-side.
 - [x] Exact rootfs authority/candidate identities are available for physical proof.
 - [x] Profile-driven discovery expectations exist without selecting a guessed `/dev/...` path.
+- [x] A fail-closed offline logical target-binding review exists host-side and requires exact accepted physical strategy/report evidence while keeping raw-device, mount, trial and write authorization false.
 - [ ] Choose the real reversible staging/handoff target only after reviewed physical storage evidence.
 - [ ] Make the exact reviewed Kali rootfs available through that approved strategy.
 - [ ] Confirm systemd early userspace on the physical phone.
@@ -116,7 +119,7 @@ Each subsystem requires real physical evidence before it can be called working.
 - [x] Guarded physical Fastboot baseline capture is routed through the shared host/Windows CLI, requires the exact profile confirmation token before external commands, re-verifies the exact Fastboot tool identity after capture and performs no persistent phone write.
 - [x] Candidate-gate binding, exact temporary-boot offer preparation and explicitly opted-in one-shot temporary boot are routed through the shared source/frozen Windows CLI. Execution now additionally requires the exact physical baseline, exact recovery-readiness evidence and exact local stock `boot.img`; source and frozen Windows CI prove missing/detached recovery inputs fail closed before the physical boot command.
 - [x] Shared offline `evidence` CLI consolidates rescue diagnostics, hardware survey/review, storage review, exact functional test plan/review, schema-v2 observation preparation/binding, independent result review, exact-plan summary and exact functional-result bundling; dedicated Windows CI freezes the same CLI and checks representative fail-closed refusals without granting physical/Beta credit.
-- [x] Shared source/frozen Windows `evidence` namespace now also covers physical bring-up session binding, exact dossier construction/reverification, fail-closed dossier review templates/binding and the cross-campaign release-gate audit. These late stages remain offline, create-only/exact-file bound, and cannot select storage, authorize writes, claim hardware support or authorize Beta.
+- [x] Shared source/frozen Windows `evidence` namespace now also covers physical bring-up session binding, exact dossier construction/reverification, fail-closed dossier review templates/binding, cross-campaign release-gate audit, reversible rootfs-strategy review and exact logical target-binding review. These late stages remain offline, create-only/exact-file bound, and cannot bind raw storage paths, mount, authorize writes, claim hardware support or authorize Beta.
 
 ## Milestone G — Beta release
 
@@ -147,4 +150,4 @@ KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual
 
 ## Immediate next work
 
-The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, use the guarded profile-token capture CLI for the exact baseline, then continue through exact stock baseline → candidate gate → boot-identity binding → physical recovery-readiness from the matching stock `boot.img` → temporary-boot offer → explicitly opted-in recovery-gated one-shot temporary rescue boot. The unified offline `evidence` namespace can then carry the exact campaign through rescue diagnostics → survey/review → functional plan/review → schema-v2 observations/result reviews → exact-plan summary → functional result bundle → bring-up session → exact dossier/reverification/review → cross-campaign release-gate audit, while keeping filenames and manual-review boundaries visible. Only after the real physical storage/dossier evidence is accepted should a reversible rootfs handoff target be designed and reviewed for that exact device state.
+The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, use the guarded profile-token capture CLI for the exact baseline, then continue through exact stock baseline → candidate gate → boot-identity binding → physical recovery-readiness from the matching stock `boot.img` → temporary-boot offer → explicitly opted-in recovery-gated one-shot temporary rescue boot. The unified offline `evidence` namespace can then carry the exact campaign through rescue diagnostics → survey/review → functional plan/review → schema-v2 observations/result reviews → exact-plan summary → functional result bundle → bring-up session → exact dossier/reverification/review → cross-campaign release-gate audit → reversible strategy review → logical target-binding review, while keeping filenames and manual-review boundaries visible. Only after that exact real chain is accepted may a separate fresh-device/manual trial-execution gate be designed to revalidate the phone immediately before any write-capable rootfs staging action.
