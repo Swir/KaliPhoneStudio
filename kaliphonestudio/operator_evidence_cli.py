@@ -50,8 +50,8 @@ from .physical_hardware_test_plan_review import (
     write_physical_hardware_test_plan_review_evidence,
 )
 from .physical_hardware_test_review import (
-    bind_physical_hardware_test_review_from_files,
-    make_rejected_physical_hardware_test_review_record,
+    bind_current_physical_hardware_test_review_from_files,
+    make_current_rejected_physical_hardware_test_review_record,
     write_physical_hardware_test_review_evidence,
 )
 from .physical_hardware_test_summary import (
