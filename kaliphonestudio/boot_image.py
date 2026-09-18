@@ -13,6 +13,9 @@ import struct
 from .profiles import DeviceProfile
 
 ANDROID_MAGIC = b"ANDROID!"
+LEGACY_V0_HEADER_SIZE = 1632
+LEGACY_V1_HEADER_SIZE = 1648
+LEGACY_V2_HEADER_SIZE = 1660
 
 
 class BootImageError(ValueError):
@@ -27,6 +30,16 @@ class BootImageReport:
     android_magic: bool
     header_version: int | None
     within_partition_limit: bool
+    page_size: int | None = None
+    kernel_size: int | None = None
+    ramdisk_size: int | None = None
+    second_size: int | None = None
+    recovery_dtbo_size: int | None = None
+    recovery_dtbo_offset: int | None = None
+    declared_header_size: int | None = None
+    dtb_size: int | None = None
+    expected_payload_end: int | None = None
+    structural_errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -76,6 +89,118 @@ def _read_header_version(header: bytes) -> int | None:
     return struct.unpack_from("<I", header, 40)[0]
 
 
+def _u32(data: bytes, offset: int) -> int:
+    return struct.unpack_from("<I", data, offset)[0]
+
+
+def _u64(data: bytes, offset: int) -> int:
+    return struct.unpack_from("<Q", data, offset)[0]
+
+
+def _align(value: int, page_size: int) -> int:
+    if value == 0:
+        return 0
+    return ((value + page_size - 1) // page_size) * page_size
+
+
+def _legacy_layout_report(
+    header: bytes,
+    *,
+    image_size: int,
+    header_version: int,
+    contract: BootBuildContract,
+) -> dict[str, object]:
+    """Parse and validate Android legacy boot header v0/v1/v2 layout fields.
+
+    AOSP defines each legacy component as page-aligned. v2 additionally requires
+    a non-empty DTB. This parser deliberately validates only the legacy family;
+    a profile requesting a newer header cannot silently inherit v2 assumptions.
+    """
+    errors: list[str] = []
+    minimum_header = {
+        0: LEGACY_V0_HEADER_SIZE,
+        1: LEGACY_V1_HEADER_SIZE,
+        2: LEGACY_V2_HEADER_SIZE,
+    }[header_version]
+    if len(header) < minimum_header:
+        return {
+            "page_size": None,
+            "kernel_size": None,
+            "ramdisk_size": None,
+            "second_size": None,
+            "recovery_dtbo_size": None,
+            "recovery_dtbo_offset": None,
+            "declared_header_size": None,
+            "dtb_size": None,
+            "expected_payload_end": None,
+            "structural_errors": (f"boot header is truncated before v{header_version} header end",),
+        }
+
+    kernel_size = _u32(header, 8)
+    ramdisk_size = _u32(header, 16)
+    second_size = _u32(header, 24)
+    page_size = _u32(header, 36)
+    recovery_dtbo_size = _u32(header, 1632) if header_version >= 1 else 0
+    recovery_dtbo_offset = _u64(header, 1636) if header_version >= 1 else 0
+    declared_header_size = _u32(header, 1644) if header_version >= 1 else LEGACY_V0_HEADER_SIZE
+    dtb_size = _u32(header, 1648) if header_version >= 2 else 0
+
+    if page_size <= 0 or page_size & (page_size - 1):
+        errors.append("boot header page_size is not a positive power of two")
+    elif page_size != contract.page_size:
+        errors.append(
+            f"boot header page_size mismatch: candidate={page_size}, expected={contract.page_size}"
+        )
+
+    if kernel_size == 0:
+        errors.append("boot header declares an empty kernel")
+    if ramdisk_size == 0:
+        errors.append("boot header declares an empty ramdisk")
+    if header_version >= 2 and dtb_size == 0:
+        errors.append("boot header v2 declares an empty DTB")
+
+    if header_version >= 1 and declared_header_size != minimum_header:
+        errors.append(
+            f"boot header_size mismatch: candidate={declared_header_size}, expected={minimum_header}"
+        )
+
+    expected_end: int | None = None
+    if page_size > 0 and not (page_size & (page_size - 1)):
+        if page_size < minimum_header:
+            errors.append("boot page is smaller than the declared header structure")
+        cursor = page_size
+        cursor += _align(kernel_size, page_size)
+        cursor += _align(ramdisk_size, page_size)
+        cursor += _align(second_size, page_size)
+        expected_recovery_offset = cursor
+        if recovery_dtbo_size:
+            if recovery_dtbo_offset != expected_recovery_offset:
+                errors.append(
+                    "recovery_dtbo_offset does not match the page-aligned legacy boot layout"
+                )
+            cursor += _align(recovery_dtbo_size, page_size)
+        if header_version >= 2:
+            cursor += _align(dtb_size, page_size)
+        expected_end = cursor
+        if image_size < expected_end:
+            errors.append(
+                f"boot image is truncated: size={image_size}, expected_payload_end={expected_end}"
+            )
+
+    return {
+        "page_size": page_size,
+        "kernel_size": kernel_size,
+        "ramdisk_size": ramdisk_size,
+        "second_size": second_size,
+        "recovery_dtbo_size": recovery_dtbo_size,
+        "recovery_dtbo_offset": recovery_dtbo_offset,
+        "declared_header_size": declared_header_size,
+        "dtb_size": dtb_size,
+        "expected_payload_end": expected_end,
+        "structural_errors": tuple(errors),
+    }
+
+
 def inspect_boot_image(path: Path, profile: DeviceProfile) -> BootImageReport:
     if not path.is_file():
         raise BootImageError(f"boot image does not exist: {path}")
@@ -89,13 +214,46 @@ def inspect_boot_image(path: Path, profile: DeviceProfile) -> BootImageReport:
         digest.update(header)
         while chunk := fh.read(1024 * 1024):
             digest.update(chunk)
+
+    android_magic = header.startswith(ANDROID_MAGIC)
+    header_version = _read_header_version(header)
+    layout: dict[str, object] = {
+        "page_size": None,
+        "kernel_size": None,
+        "ramdisk_size": None,
+        "second_size": None,
+        "recovery_dtbo_size": None,
+        "recovery_dtbo_offset": None,
+        "declared_header_size": None,
+        "dtb_size": None,
+        "expected_payload_end": None,
+        "structural_errors": (),
+    }
+    if android_magic and header_version in {0, 1, 2}:
+        layout = _legacy_layout_report(
+            header,
+            image_size=size,
+            header_version=header_version,
+            contract=contract,
+        )
+
     return BootImageReport(
         path=path,
         size=size,
         sha256=digest.hexdigest(),
-        android_magic=header.startswith(ANDROID_MAGIC),
-        header_version=_read_header_version(header),
+        android_magic=android_magic,
+        header_version=header_version,
         within_partition_limit=size <= contract.boot_partition_limit,
+        page_size=layout["page_size"],
+        kernel_size=layout["kernel_size"],
+        ramdisk_size=layout["ramdisk_size"],
+        second_size=layout["second_size"],
+        recovery_dtbo_size=layout["recovery_dtbo_size"],
+        recovery_dtbo_offset=layout["recovery_dtbo_offset"],
+        declared_header_size=layout["declared_header_size"],
+        dtb_size=layout["dtb_size"],
+        expected_payload_end=layout["expected_payload_end"],
+        structural_errors=layout["structural_errors"],
     )
 
 
@@ -107,6 +265,8 @@ def require_candidate_compatible(report: BootImageReport, profile: DeviceProfile
         raise BootImageError(
             f"boot header mismatch: candidate={report.header_version}, expected={contract.header_version}"
         )
+    if report.header_version in {0, 1, 2} and report.structural_errors:
+        raise BootImageError("invalid boot image layout: " + "; ".join(report.structural_errors))
     if not report.within_partition_limit:
         raise BootImageError("candidate exceeds profile boot partition limit")
 
