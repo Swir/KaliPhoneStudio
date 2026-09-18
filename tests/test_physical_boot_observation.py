@@ -10,6 +10,7 @@ import pytest
 from kaliphonestudio.physical_boot_observation import (
     PhysicalBootObservationError,
     load_temporary_boot_execution_evidence,
+    load_temporary_boot_runtime_probe_evidence,
     record_physical_boot_observation,
     write_physical_boot_observation_evidence,
 )
@@ -21,7 +22,10 @@ from kaliphonestudio.rescue_candidate import (
     write_rescue_candidate_evidence,
 )
 from kaliphonestudio.rescue_payload import RescuePayloadError
-from kaliphonestudio.temporary_boot_execution import TemporaryBootExecutionEvidence
+from kaliphonestudio.temporary_boot_execution import (
+    TemporaryBootExecutionEvidence,
+    TemporaryBootRuntimeProbeEvidence,
+)
 
 
 def _digest(char: str) -> str:
@@ -61,19 +65,66 @@ def _rescue(profile_id: str = "vendor/test") -> RescueCandidateEvidence:
     )
 
 
-def _execution(profile_id: str = "vendor/test", serial: str = "SERIAL-001") -> TemporaryBootExecutionEvidence:
+def _runtime_probe(
+    profile_id: str = "vendor/test",
+    serial: str = "SERIAL-001",
+) -> TemporaryBootRuntimeProbeEvidence:
+    return TemporaryBootRuntimeProbeEvidence(
+        schema_version=3,
+        profile_id=profile_id,
+        device_serial=serial,
+        offer_sha256=_digest("1"),
+        authorization_sha256=_digest("2"),
+        baseline_evidence_sha256=_digest("3"),
+        capture_bundle_sha256=_digest("4"),
+        physical_baseline_bundle_sha256=_digest("5"),
+        boot_identity_binding_sha256=_digest("6"),
+        recovery_readiness_sha256=_digest("7"),
+        recovery_stock_boot_sha256=_digest("8"),
+        fresh_transcript_sha256=_digest("9"),
+        fresh_transcript_size=512,
+        product="test-device",
+        current_slot="a",
+        slot_count=2,
+        captured_active_slot="a",
+        expected_inactive_slot="b",
+        unlocked=True,
+        secure=True,
+        bootloader_version="bootloader-test",
+        baseband_version="baseband-test",
+        critical_variables_sha256=_digest("f"),
+        probe_policy=(
+            "fresh-fastboot-devices+serial-getvar-all+exact-boot-identity+"
+            "recovery-readiness-before-boot-v3"
+        ),
+        read_only=True,
+        phone_storage_written=False,
+        hardware_verified=False,
+        beta_gate_credit=False,
+    )
+
+
+def _execution(
+    profile_id: str = "vendor/test",
+    serial: str = "SERIAL-001",
+    runtime_probe: TemporaryBootRuntimeProbeEvidence | None = None,
+) -> TemporaryBootExecutionEvidence:
+    runtime = runtime_probe or _runtime_probe(profile_id, serial)
     return TemporaryBootExecutionEvidence(
         schema_version=1,
         profile_id=profile_id,
         device_serial=serial,
         offer_sha256=_digest("1"),
         authorization_sha256=_digest("2"),
-        runtime_probe_sha256=_digest("3"),
+        runtime_probe_sha256=runtime.evidence_sha256(),
         argv_sha256=_digest("4"),
         returncode=0,
         output_sha256=_digest("5"),
         output_size=37,
-        execution_policy="single-serial-fastboot-boot-no-persistent-write-v1",
+        execution_policy=(
+            "single-serial-fastboot-boot+post-probe-exact-material-revalidation+"
+            "no-persistent-write-v4"
+        ),
         command_invoked=True,
         temporary_boot_executed=True,
         temporary_boot_command_succeeded=True,
@@ -104,16 +155,28 @@ def _transcript(path: Path, probe_id: str, *, crlf: bool = True) -> bytes:
     return payload
 
 
-def test_exact_markers_bind_physical_observation_without_beta_credit(tmp_path: Path) -> None:
+def test_exact_runtime_probe_and_markers_bind_schema_v2_observation_without_beta_credit(tmp_path: Path) -> None:
     profile = _profile(tmp_path)
     rescue = _rescue()
-    execution = _execution()
+    runtime = _runtime_probe()
+    execution = _execution(runtime_probe=runtime)
     transcript = tmp_path / "console.log"
     raw = _transcript(transcript, rescue.rescue_probe_id)
 
-    evidence = record_physical_boot_observation(profile, execution, rescue, transcript)
+    evidence = record_physical_boot_observation(profile, execution, runtime, rescue, transcript)
 
+    assert evidence.schema_version == 2
     assert evidence.execution_evidence_sha256 == execution.evidence_sha256()
+    assert evidence.runtime_probe_evidence_sha256 == runtime.evidence_sha256()
+    assert evidence.authorization_sha256 == execution.authorization_sha256
+    assert evidence.physical_baseline_bundle_sha256 == runtime.physical_baseline_bundle_sha256
+    assert evidence.boot_identity_binding_sha256 == runtime.boot_identity_binding_sha256
+    assert evidence.recovery_readiness_sha256 == runtime.recovery_readiness_sha256
+    assert evidence.recovery_stock_boot_sha256 == runtime.recovery_stock_boot_sha256
+    assert evidence.fresh_fastboot_transcript_sha256 == runtime.fresh_transcript_sha256
+    assert evidence.captured_active_slot == "a"
+    assert evidence.expected_inactive_slot == "b"
+    assert evidence.post_probe_material_revalidation_required is True
     assert evidence.rescue_candidate_evidence_sha256 == rescue.evidence_sha256()
     assert evidence.rescue_probe_id == rescue.rescue_probe_id
     assert evidence.transcript_sha256 == sha256(raw).hexdigest()
@@ -128,43 +191,78 @@ def test_exact_markers_bind_physical_observation_without_beta_credit(tmp_path: P
     assert evidence.beta_gate_credit is False
 
 
+def test_detached_runtime_probe_is_rejected(tmp_path: Path) -> None:
+    rescue = _rescue()
+    runtime = _runtime_probe()
+    execution = replace(_execution(runtime_probe=runtime), runtime_probe_sha256=_digest("0"))
+    transcript = tmp_path / "console.log"
+    _transcript(transcript, rescue.rescue_probe_id)
+    with pytest.raises(PhysicalBootObservationError, match="detached from the exact runtime probe"):
+        record_physical_boot_observation(_profile(tmp_path), execution, runtime, rescue, transcript)
+
+
+def test_runtime_probe_offer_drift_is_rejected(tmp_path: Path) -> None:
+    rescue = _rescue()
+    runtime = replace(_runtime_probe(), offer_sha256=_digest("a"))
+    execution = _execution(runtime_probe=runtime)
+    transcript = tmp_path / "console.log"
+    _transcript(transcript, rescue.rescue_probe_id)
+    with pytest.raises(PhysicalBootObservationError, match="offer differs from execution"):
+        record_physical_boot_observation(_profile(tmp_path), execution, runtime, rescue, transcript)
+
+
+def test_execution_without_post_probe_revalidation_policy_is_rejected(tmp_path: Path) -> None:
+    rescue = _rescue()
+    runtime = _runtime_probe()
+    execution = replace(_execution(runtime_probe=runtime), execution_policy="single-serial-fastboot-boot-no-persistent-write-v1")
+    transcript = tmp_path / "console.log"
+    _transcript(transcript, rescue.rescue_probe_id)
+    with pytest.raises(PhysicalBootObservationError, match="post-probe material revalidation"):
+        record_physical_boot_observation(_profile(tmp_path), execution, runtime, rescue, transcript)
+
+
 def test_wrong_probe_id_is_rejected(tmp_path: Path) -> None:
     rescue = _rescue()
+    runtime = _runtime_probe()
     transcript = tmp_path / "console.log"
     _transcript(transcript, _digest("f"))
     with pytest.raises(PhysicalBootObservationError, match="conflicting rescue probe id"):
-        record_physical_boot_observation(_profile(tmp_path), _execution(), rescue, transcript)
+        record_physical_boot_observation(_profile(tmp_path), _execution(runtime_probe=runtime), runtime, rescue, transcript)
 
 
 def test_missing_stage_marker_is_rejected(tmp_path: Path) -> None:
     rescue = _rescue()
+    runtime = _runtime_probe()
     transcript = tmp_path / "console.log"
     transcript.write_bytes(b"KPS_RESCUE_PROBE_ID=" + rescue.rescue_probe_id.encode("ascii") + b"\n")
     with pytest.raises(PhysicalBootObservationError, match="exact rescue proof markers"):
-        record_physical_boot_observation(_profile(tmp_path), _execution(), rescue, transcript)
+        record_physical_boot_observation(_profile(tmp_path), _execution(runtime_probe=runtime), runtime, rescue, transcript)
 
 
 def test_failed_fastboot_execution_cannot_be_promoted(tmp_path: Path) -> None:
     rescue = _rescue()
+    runtime = _runtime_probe()
     transcript = tmp_path / "console.log"
     _transcript(transcript, rescue.rescue_probe_id)
     failed = replace(
-        _execution(),
+        _execution(runtime_probe=runtime),
         returncode=1,
         temporary_boot_command_succeeded=False,
     )
     with pytest.raises(PhysicalBootObservationError, match="successful Fastboot boot command"):
-        record_physical_boot_observation(_profile(tmp_path), failed, rescue, transcript)
+        record_physical_boot_observation(_profile(tmp_path), failed, runtime, rescue, transcript)
 
 
 def test_profile_mismatch_is_rejected(tmp_path: Path) -> None:
     rescue = _rescue("vendor/a")
+    runtime = _runtime_probe("vendor/b")
     transcript = tmp_path / "console.log"
     _transcript(transcript, rescue.rescue_probe_id)
     with pytest.raises(PhysicalBootObservationError, match="do not match"):
         record_physical_boot_observation(
             _profile(tmp_path, "vendor/b"),
-            _execution("vendor/b"),
+            _execution("vendor/b", runtime_probe=runtime),
+            runtime,
             rescue,
             transcript,
         )
@@ -186,16 +284,21 @@ def test_rescue_probe_is_fail_closed_and_round_trips(tmp_path: Path) -> None:
         write_rescue_candidate_evidence(rescue, out)
 
 
-def test_execution_and_observation_writers_are_immutable(tmp_path: Path) -> None:
-    execution = _execution()
+def test_execution_runtime_probe_and_observation_writers_are_immutable(tmp_path: Path) -> None:
+    runtime = _runtime_probe()
+    execution = _execution(runtime_probe=runtime)
     execution_path = tmp_path / "execution.json"
     execution_path.write_text(execution.canonical_json(), encoding="utf-8", newline="\n")
     assert load_temporary_boot_execution_evidence(execution_path) == execution
 
+    runtime_path = tmp_path / "runtime-probe.json"
+    runtime_path.write_text(runtime.canonical_json(), encoding="utf-8", newline="\n")
+    assert load_temporary_boot_runtime_probe_evidence(runtime_path) == runtime
+
     rescue = _rescue()
     transcript = tmp_path / "console.log"
     _transcript(transcript, rescue.rescue_probe_id, crlf=False)
-    observation = record_physical_boot_observation(_profile(tmp_path), execution, rescue, transcript)
+    observation = record_physical_boot_observation(_profile(tmp_path), execution, runtime, rescue, transcript)
     out = tmp_path / "observation.json"
     first = write_physical_boot_observation_evidence(observation, out)
     assert first == observation.evidence_sha256()
