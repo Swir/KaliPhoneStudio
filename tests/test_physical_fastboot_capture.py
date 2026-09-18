@@ -31,17 +31,17 @@ def _profile():
     return get_profile(DEVICES, "oneplus/avicii")
 
 
-def _tool_evidence() -> FastbootToolEvidence:
+def _tool_evidence(*, executable_sha256: str = "2" * 64) -> FastbootToolEvidence:
     return FastbootToolEvidence(
         schema_version=1,
         tool="fastboot",
         policy_sha256="1" * 64,
-        required_platform_tools_version="36.0.2",
-        observed_platform_tools_version="36.0.2",
+        required_platform_tools_version="37.0.1",
+        observed_platform_tools_version="37.0.1",
         executable_filename="fastboot.exe",
-        executable_sha256="2" * 64,
+        executable_sha256=executable_sha256,
         executable_size=123456,
-        version_line="fastboot version 36.0.2",
+        version_line="fastboot version 37.0.1",
         version_output_sha256="3" * 64,
     )
 
@@ -116,8 +116,9 @@ def test_guarded_capture_publishes_exact_read_only_evidence_set(monkeypatch, tmp
         capture_timeout_seconds=29,
     )
 
-    assert [item[0] for item in calls] == ["inspect", "capture"]
+    assert [item[0] for item in calls] == ["inspect", "capture", "inspect"]
     assert calls[1][1:] == ("SERIAL123", str(tmp_path / "fastboot.exe"), 29)
+    assert calls[2][1] == str(tmp_path / "fastboot.exe")
     assert result.profile_id == "oneplus/avicii"
     assert result.serialno == "SERIAL123"
     assert result.confirmation_token_verified is True
@@ -144,6 +145,38 @@ def test_guarded_capture_publishes_exact_read_only_evidence_set(monkeypatch, tmp
     assert bundle["beta_gate_credit"] is False
     assert not list(output.glob("*.capturing"))
     assert not list(output.glob("*.tmp"))
+
+
+def test_fastboot_tool_drift_after_capture_fails_before_publishing(monkeypatch, tmp_path: Path):
+    resolved = tmp_path / "fastboot.exe"
+    calls = 0
+
+    def inspect(fastboot, *, policy_path, timeout_seconds):
+        nonlocal calls
+        calls += 1
+        digest = "2" * 64 if calls == 1 else "4" * 64
+        return _tool_evidence(executable_sha256=digest), resolved
+
+    monkeypatch.setattr(capture, "inspect_fastboot_tool", inspect)
+    monkeypatch.setattr(
+        capture,
+        "capture_fastboot_getvar_all",
+        lambda serial, *, fastboot, timeout_seconds: TRANSCRIPT,
+    )
+    output = tmp_path / "capture"
+
+    with pytest.raises(capture.PhysicalFastbootCaptureError, match="identity changed"):
+        capture.capture_physical_fastboot_baseline(
+            _profile(),
+            confirmation_token="AC2003",
+            serial="SERIAL123",
+            firmware_build="AC2003_11_F.22",
+            firmware_fingerprint="OnePlus/avicii/avicii:13/test/F.22:user/release-keys",
+            destinations=capture.default_destinations(output),
+        )
+
+    assert output.is_dir()
+    assert list(output.iterdir()) == []
 
 
 def test_serial_drift_rolls_back_every_final_file(monkeypatch, tmp_path: Path):
