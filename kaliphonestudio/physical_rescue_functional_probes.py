@@ -6,6 +6,11 @@ argument. Its bounded raw block reads go only to ``/dev/null`` and its power
 checks only read sysfs. This module is offline: it parses one transcript already
 bound by PhysicalBootObservationEvidence and PhysicalRescueDiagnosticsEvidence.
 
+New functional-probe records require the current schema-v2 physical boot
+observation. Historical schema-v1 observations and their already-recorded
+artifacts remain readable for audit, but cannot seed new functional-probe
+evidence after the runtime/recovery-bound observation contract became current.
+
 Successful probe records are still signals, not automatic hardware verification.
 Storage, charging/battery, recovery, hardware and Beta flags remain false until a
 separate manual physical review completes the corresponding release gate.
@@ -22,12 +27,11 @@ from typing import Any
 from .physical_boot_observation import (
     MAX_TRANSCRIPT_BYTES,
     PhysicalBootObservationEvidence,
-    PhysicalBootObservationError,
-    validate_physical_boot_observation_evidence,
 )
 from .physical_rescue_diagnostics import (
     PhysicalRescueDiagnosticsEvidence,
     PhysicalRescueDiagnosticsError,
+    require_current_physical_boot_observation_for_rescue,
     validate_physical_rescue_diagnostics_evidence,
 )
 from .profiles import DeviceProfile
@@ -224,8 +228,8 @@ def record_physical_rescue_functional_probes(
 ) -> PhysicalRescueFunctionalProbeEvidence:
     """Bind explicitly invoked read-only functional probes to exact prior evidence."""
     try:
-        validate_physical_boot_observation_evidence(observation)
-    except PhysicalBootObservationError as exc:
+        require_current_physical_boot_observation_for_rescue(observation)
+    except PhysicalRescueDiagnosticsError as exc:
         raise PhysicalRescueFunctionalProbeError(str(exc)) from exc
     try:
         validate_physical_rescue_diagnostics_evidence(diagnostics)
