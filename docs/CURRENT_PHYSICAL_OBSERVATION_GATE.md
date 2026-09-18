@@ -12,6 +12,12 @@ A schema-v2 observation is already required to bind the successful one-shot temp
 
 This prevents a historical schema-v1 observation from being reused as the root of newly recorded rescue diagnostics, functional probes or hardware surveys while preserving read-only historical inspection of existing evidence.
 
+## Downstream campaign boundary
+
+The same provenance rule now has a reusable `physical_campaign_admission` boundary for later campaign creation. New hardware-review, functional-test-plan and storage-discovery operator paths must carry the exact current schema-v2 observation and cross-check its profile, serial, observation digest, rescue transcript and rescue probe id against the downstream evidence they consume. Physical bring-up session binding also rejects legacy observations before validating later campaign artifacts.
+
+Historical review/plan/storage evidence remains loadable for audit. The stricter rule applies when creating a **new** downstream campaign artifact; it does not rewrite old evidence.
+
 ## Safety properties
 
 The admission gate is offline. It does not invoke ADB, Fastboot, serial I/O, slot switching, flashing, erasing, mounting, decryption or any persistent write. Passing it only permits the existing bounded rescue transcript parsers to continue.
