@@ -21,6 +21,10 @@ from kaliphonestudio.physical_hardware_test_plan import (
     PhysicalHardwareTestPlanError,
     build_current_physical_hardware_test_plan_from_files,
 )
+from kaliphonestudio.physical_hardware_test_plan_review import (
+    PhysicalHardwareTestPlanReviewError,
+    bind_current_physical_hardware_test_plan_review_from_files,
+)
 from kaliphonestudio.physical_storage_discovery import (
     PhysicalStorageDiscoveryError,
     record_current_physical_storage_discovery,
@@ -125,6 +129,15 @@ def test_test_plan_rejects_legacy_before_reading_review_file(tmp_path: Path) -> 
             None,  # type: ignore[arg-type]
             _legacy(),
             missing,
+        )
+    assert not missing.exists()
+
+
+def test_plan_review_rejects_legacy_before_reading_plan_or_review_files(tmp_path: Path) -> None:
+    missing = tmp_path / "must-not-be-read.json"
+    with pytest.raises(PhysicalHardwareTestPlanReviewError, match="requires schema-v2"):
+        bind_current_physical_hardware_test_plan_review_from_files(
+            _legacy(), missing, missing, missing
         )
     assert not missing.exists()
 
