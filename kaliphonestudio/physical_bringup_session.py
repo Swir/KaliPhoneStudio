@@ -201,11 +201,11 @@ def _validate_inputs(
     review: PhysicalStorageReviewEvidence,
     early_userspace: PhysicalKaliEarlyUserspaceEvidence | None,
 ) -> None:
-    _validate_candidate_gate(gate)
     try:
         require_current_physical_campaign_observation(observation)
     except PhysicalCampaignAdmissionError as exc:
         raise PhysicalBringupSessionError(str(exc)) from exc
+    _validate_candidate_gate(gate)
     try:
         validate_physical_boot_observation_evidence(observation)
         validate_physical_rescue_diagnostics_evidence(diagnostics)
