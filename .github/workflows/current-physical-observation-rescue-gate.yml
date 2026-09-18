@@ -9,6 +9,11 @@ on:
       - "kaliphonestudio/physical_hardware_review.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_test_observation.py"
+      - "kaliphonestudio/physical_hardware_test_review.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
+      - "scripts/prepare_physical_hardware_test_review.py"
+      - "scripts/review_physical_hardware_test_observation.py"
+      - "scripts/build_physical_hardware_result_bundle.py"
       - "scripts/prepare_physical_hardware_test_observation.py"
       - "scripts/record_physical_hardware_test_observation.py"
       - "kaliphonestudio/physical_storage_discovery.py"
@@ -33,6 +38,11 @@ on:
       - "kaliphonestudio/physical_hardware_review.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_test_observation.py"
+      - "kaliphonestudio/physical_hardware_test_review.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
+      - "scripts/prepare_physical_hardware_test_review.py"
+      - "scripts/review_physical_hardware_test_observation.py"
+      - "scripts/build_physical_hardware_result_bundle.py"
       - "scripts/prepare_physical_hardware_test_observation.py"
       - "scripts/record_physical_hardware_test_observation.py"
       - "kaliphonestudio/physical_storage_discovery.py"
@@ -86,6 +96,11 @@ jobs:
           kaliphonestudio/physical_hardware_review.py
           kaliphonestudio/physical_hardware_test_plan.py
           kaliphonestudio/physical_hardware_test_observation.py
+          kaliphonestudio/physical_hardware_test_review.py
+          kaliphonestudio/physical_hardware_result_bundle.py
+          scripts/prepare_physical_hardware_test_review.py
+          scripts/review_physical_hardware_test_observation.py
+          scripts/build_physical_hardware_result_bundle.py
           scripts/prepare_physical_hardware_test_observation.py
           scripts/record_physical_hardware_test_observation.py
           kaliphonestudio/physical_storage_discovery.py
@@ -107,6 +122,8 @@ jobs:
               "hardware review": Path("kaliphonestudio/physical_hardware_review.py").read_text(encoding="utf-8"),
               "functional test plan": Path("kaliphonestudio/physical_hardware_test_plan.py").read_text(encoding="utf-8"),
               "functional test observation": Path("kaliphonestudio/physical_hardware_test_observation.py").read_text(encoding="utf-8"),
+              "functional test review": Path("kaliphonestudio/physical_hardware_test_review.py").read_text(encoding="utf-8"),
+              "functional result bundle": Path("kaliphonestudio/physical_hardware_result_bundle.py").read_text(encoding="utf-8"),
               "storage discovery": Path("kaliphonestudio/physical_storage_discovery.py").read_text(encoding="utf-8"),
               "bring-up session": Path("kaliphonestudio/physical_bringup_session.py").read_text(encoding="utf-8"),
               "functional probes": Path("kaliphonestudio/physical_rescue_functional_probes.py").read_text(encoding="utf-8"),
@@ -122,7 +139,7 @@ jobs:
           for label in ("functional probes", "hardware survey"):
               if "require_current_physical_boot_observation_for_rescue" not in sources[label]:
                   raise SystemExit(f"{label} is not gated by the current physical observation contract")
-          for label in ("hardware review", "functional test plan", "functional test observation", "storage discovery", "bring-up session"):
+          for label in ("hardware review", "functional test plan", "functional test observation", "functional test review", "functional result bundle", "storage discovery", "bring-up session"):
               if "current_physical" not in sources[label]:
                   raise SystemExit(f"{label} is not gated by current physical campaign provenance")
           forbidden = ("subprocess.", " fastboot ", " adb ", "set_active", "erase ", "flash ")
