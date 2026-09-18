@@ -1,7 +1,9 @@
 """Fail-closed, profile-driven boot image preflight helpers.
 
 Host-side structural checks only. This module never flashes or boots a device
-and does not claim hardware compatibility.
+and does not claim hardware compatibility. Optional AVB footer inspection is
+structural/provenance evidence only; cryptographic AVB verification remains a
+separate release requirement.
 """
 from __future__ import annotations
 
@@ -16,6 +18,10 @@ ANDROID_MAGIC = b"ANDROID!"
 LEGACY_V0_HEADER_SIZE = 1632
 LEGACY_V1_HEADER_SIZE = 1648
 LEGACY_V2_HEADER_SIZE = 1660
+AVB_FOOTER_MAGIC = b"AVBf"
+AVB_FOOTER_SIZE = 64
+AVB_VBMETA_MAGIC = b"AVB0"
+AVB_VBMETA_HEADER_SIZE = 256
 
 
 class BootImageError(ValueError):
@@ -39,6 +45,20 @@ class BootImageReport:
     declared_header_size: int | None = None
     dtb_size: int | None = None
     expected_payload_end: int | None = None
+    kernel_sha256: str | None = None
+    ramdisk_sha256: str | None = None
+    second_sha256: str | None = None
+    recovery_dtbo_sha256: str | None = None
+    dtb_sha256: str | None = None
+    avb_footer_present: bool = False
+    avb_footer_version_major: int | None = None
+    avb_footer_version_minor: int | None = None
+    avb_original_image_size: int | None = None
+    avb_vbmeta_offset: int | None = None
+    avb_vbmeta_size: int | None = None
+    avb_vbmeta_sha256: str | None = None
+    avb_vbmeta_header_valid: bool | None = None
+    avb_structural_errors: tuple[str, ...] = ()
     structural_errors: tuple[str, ...] = ()
 
 
@@ -103,6 +123,22 @@ def _align(value: int, page_size: int) -> int:
     return ((value + page_size - 1) // page_size) * page_size
 
 
+def _hash_file_range(path: Path, offset: int, size: int) -> str | None:
+    if size == 0:
+        return None
+    digest = sha256()
+    remaining = size
+    with path.open("rb") as fh:
+        fh.seek(offset)
+        while remaining:
+            chunk = fh.read(min(1024 * 1024, remaining))
+            if not chunk:
+                raise BootImageError("boot image changed or truncated while hashing a component")
+            digest.update(chunk)
+            remaining -= len(chunk)
+    return digest.hexdigest()
+
+
 def _legacy_layout_report(
     header: bytes,
     *,
@@ -133,6 +169,7 @@ def _legacy_layout_report(
             "declared_header_size": None,
             "dtb_size": None,
             "expected_payload_end": None,
+            "component_ranges": (),
             "structural_errors": (f"boot header is truncated before v{header_version} header end",),
         }
 
@@ -165,12 +202,16 @@ def _legacy_layout_report(
         )
 
     expected_end: int | None = None
+    component_ranges: list[tuple[str, int, int]] = []
     if page_size > 0 and not (page_size & (page_size - 1)):
         if page_size < minimum_header:
             errors.append("boot page is smaller than the declared header structure")
         cursor = page_size
+        component_ranges.append(("kernel", cursor, kernel_size))
         cursor += _align(kernel_size, page_size)
+        component_ranges.append(("ramdisk", cursor, ramdisk_size))
         cursor += _align(ramdisk_size, page_size)
+        component_ranges.append(("second", cursor, second_size))
         cursor += _align(second_size, page_size)
         expected_recovery_offset = cursor
         if recovery_dtbo_size:
@@ -178,8 +219,10 @@ def _legacy_layout_report(
                 errors.append(
                     "recovery_dtbo_offset does not match the page-aligned legacy boot layout"
                 )
+            component_ranges.append(("recovery_dtbo", cursor, recovery_dtbo_size))
             cursor += _align(recovery_dtbo_size, page_size)
         if header_version >= 2:
+            component_ranges.append(("dtb", cursor, dtb_size))
             cursor += _align(dtb_size, page_size)
         expected_end = cursor
         if image_size < expected_end:
@@ -197,7 +240,87 @@ def _legacy_layout_report(
         "declared_header_size": declared_header_size,
         "dtb_size": dtb_size,
         "expected_payload_end": expected_end,
+        "component_ranges": tuple(component_ranges),
         "structural_errors": tuple(errors),
+    }
+
+
+def _inspect_avb_footer(path: Path, *, image_size: int, expected_payload_end: int | None) -> dict[str, object]:
+    """Inspect an optional AOSP AVB footer and its embedded vbmeta blob.
+
+    This validates only byte layout and bounds. It deliberately does not verify
+    signatures, hashes, rollback indexes or trust roots.
+    """
+    empty = {
+        "avb_footer_present": False,
+        "avb_footer_version_major": None,
+        "avb_footer_version_minor": None,
+        "avb_original_image_size": None,
+        "avb_vbmeta_offset": None,
+        "avb_vbmeta_size": None,
+        "avb_vbmeta_sha256": None,
+        "avb_vbmeta_header_valid": None,
+        "avb_structural_errors": (),
+    }
+    if image_size < AVB_FOOTER_SIZE:
+        return empty
+
+    with path.open("rb") as fh:
+        fh.seek(image_size - AVB_FOOTER_SIZE)
+        footer = fh.read(AVB_FOOTER_SIZE)
+    if len(footer) != AVB_FOOTER_SIZE or not footer.startswith(AVB_FOOTER_MAGIC):
+        return empty
+
+    errors: list[str] = []
+    _, version_major, version_minor, original_size, vbmeta_offset, vbmeta_size = struct.unpack(
+        ">4sIIQQQ28x", footer
+    )
+    footer_offset = image_size - AVB_FOOTER_SIZE
+
+    if original_size <= 0:
+        errors.append("AVB footer original_image_size must be positive")
+    if expected_payload_end is not None and original_size < expected_payload_end:
+        errors.append("AVB original image is smaller than the declared boot payload")
+    if vbmeta_size < AVB_VBMETA_HEADER_SIZE:
+        errors.append("AVB footer vbmeta_size is smaller than the vbmeta header")
+    if vbmeta_offset < original_size:
+        errors.append("AVB vbmeta_offset precedes original_image_size")
+    if vbmeta_offset > footer_offset or vbmeta_size > footer_offset - min(vbmeta_offset, footer_offset):
+        errors.append("AVB vbmeta range escapes the image before the footer")
+
+    vbmeta_digest: str | None = None
+    vbmeta_header_valid: bool | None = None
+    if not errors:
+        with path.open("rb") as fh:
+            fh.seek(vbmeta_offset)
+            vbmeta = fh.read(vbmeta_size)
+        if len(vbmeta) != vbmeta_size:
+            errors.append("AVB vbmeta blob is truncated")
+        else:
+            vbmeta_digest = sha256(vbmeta).hexdigest()
+            vbmeta_header_valid = vbmeta.startswith(AVB_VBMETA_MAGIC)
+            if not vbmeta_header_valid:
+                errors.append("AVB vbmeta magic is invalid")
+            elif len(vbmeta) >= AVB_VBMETA_HEADER_SIZE:
+                _, _required_major, _required_minor, auth_size, aux_size = struct.unpack_from(
+                    ">4sIIQQ", vbmeta, 0
+                )
+                declared_vbmeta_size = AVB_VBMETA_HEADER_SIZE + auth_size + aux_size
+                if declared_vbmeta_size != vbmeta_size:
+                    errors.append(
+                        "AVB vbmeta block sizes do not match footer-declared vbmeta_size"
+                    )
+
+    return {
+        "avb_footer_present": True,
+        "avb_footer_version_major": version_major,
+        "avb_footer_version_minor": version_minor,
+        "avb_original_image_size": original_size,
+        "avb_vbmeta_offset": vbmeta_offset,
+        "avb_vbmeta_size": vbmeta_size,
+        "avb_vbmeta_sha256": vbmeta_digest,
+        "avb_vbmeta_header_valid": vbmeta_header_valid,
+        "avb_structural_errors": tuple(errors),
     }
 
 
@@ -227,6 +350,7 @@ def inspect_boot_image(path: Path, profile: DeviceProfile) -> BootImageReport:
         "declared_header_size": None,
         "dtb_size": None,
         "expected_payload_end": None,
+        "component_ranges": (),
         "structural_errors": (),
     }
     if android_magic and header_version in {0, 1, 2}:
@@ -236,6 +360,24 @@ def inspect_boot_image(path: Path, profile: DeviceProfile) -> BootImageReport:
             header_version=header_version,
             contract=contract,
         )
+
+    component_hashes: dict[str, str | None] = {
+        "kernel": None,
+        "ramdisk": None,
+        "second": None,
+        "recovery_dtbo": None,
+        "dtb": None,
+    }
+    if not layout["structural_errors"]:
+        for name, offset, component_size in layout["component_ranges"]:
+            if offset + component_size <= size:
+                component_hashes[name] = _hash_file_range(path, offset, component_size)
+
+    avb = _inspect_avb_footer(
+        path,
+        image_size=size,
+        expected_payload_end=layout["expected_payload_end"],
+    )
 
     return BootImageReport(
         path=path,
@@ -253,6 +395,20 @@ def inspect_boot_image(path: Path, profile: DeviceProfile) -> BootImageReport:
         declared_header_size=layout["declared_header_size"],
         dtb_size=layout["dtb_size"],
         expected_payload_end=layout["expected_payload_end"],
+        kernel_sha256=component_hashes["kernel"],
+        ramdisk_sha256=component_hashes["ramdisk"],
+        second_sha256=component_hashes["second"],
+        recovery_dtbo_sha256=component_hashes["recovery_dtbo"],
+        dtb_sha256=component_hashes["dtb"],
+        avb_footer_present=avb["avb_footer_present"],
+        avb_footer_version_major=avb["avb_footer_version_major"],
+        avb_footer_version_minor=avb["avb_footer_version_minor"],
+        avb_original_image_size=avb["avb_original_image_size"],
+        avb_vbmeta_offset=avb["avb_vbmeta_offset"],
+        avb_vbmeta_size=avb["avb_vbmeta_size"],
+        avb_vbmeta_sha256=avb["avb_vbmeta_sha256"],
+        avb_vbmeta_header_valid=avb["avb_vbmeta_header_valid"],
+        avb_structural_errors=avb["avb_structural_errors"],
         structural_errors=layout["structural_errors"],
     )
 
@@ -267,6 +423,8 @@ def require_candidate_compatible(report: BootImageReport, profile: DeviceProfile
         )
     if report.header_version in {0, 1, 2} and report.structural_errors:
         raise BootImageError("invalid boot image layout: " + "; ".join(report.structural_errors))
+    if report.avb_footer_present and report.avb_structural_errors:
+        raise BootImageError("invalid AVB footer/vbmeta layout: " + "; ".join(report.avb_structural_errors))
     if not report.within_partition_limit:
         raise BootImageError("candidate exceeds profile boot partition limit")
 
