@@ -1,0 +1,76 @@
+name: phosh-source-contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/phosh.py"
+      - "tools/phosh-source-lock.json"
+      - "scripts/verify_phosh_source_lock.py"
+      - "tests/test_phosh.py"
+      - ".github/workflows/phosh-source-contract.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/phosh.py"
+      - "tools/phosh-source-lock.json"
+      - "scripts/verify_phosh_source_lock.py"
+      - "tests/test_phosh.py"
+      - ".github/workflows/phosh-source-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run focused fail-closed tests
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q tests/test_phosh.py
+          python -m compileall -q kaliphonestudio/phosh.py scripts/verify_phosh_source_lock.py
+
+      - name: Materialize exact immutable NetHunter Pro source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="8460a1faca1a00c2faf61d30c0f8354ea55cb518"
+          base="https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-pro/-/raw/${commit}"
+          mkdir -p upstream/include upstream/devices/qcom
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "${base}/rootfs.yaml" -o upstream/rootfs.yaml
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "${base}/include/packages-phosh.yaml" -o upstream/include/packages-phosh.yaml
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            "${base}/devices/qcom/packages-phosh.yaml" -o upstream/devices/qcom/packages-phosh.yaml
+
+      - name: Verify immutable upstream bytes and package contract
+        run: |
+          python scripts/verify_phosh_source_lock.py --source-root upstream | tee phosh-source-verification.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("phosh-source-verification.json").read_text(encoding="utf-8"))
+          assert data["source_verified"] is True
+          assert data["hardware_verified"] is False
+          assert data["beta_gate_credit"] is False
+          assert data["architecture"] == "arm64"
+          assert data["environment"] == "phosh"
+          assert len(data["verified_files"]) == 3
+          PY
+
+      - name: Upload host-side verification record
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-source-verification
+          path: phosh-source-verification.json
+          if-no-files-found: error
+          retention-days: 14
