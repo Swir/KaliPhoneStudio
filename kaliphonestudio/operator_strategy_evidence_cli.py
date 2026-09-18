@@ -99,7 +99,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "prepare-rootfs-handoff-target-binding-review",
         help="Create a rejected-by-default logical target-binding review record and notes.",
         description=(
-            "Prepare an exact logical target-binding review from the accepted strategy and bound physical "
+            "Offline preparation of an exact logical target-binding review from the accepted strategy and bound physical "
             "storage report. No raw /dev path, mount target, trial execution or write authorization is emitted."
         ),
     )
@@ -114,7 +114,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "bind-rootfs-handoff-target-binding-review",
         help="Bind an independently edited logical target review to the exact physical evidence chain.",
         description=(
-            "Bind one review to exact physical storage report bytes and accepted strategy evidence. "
+            "Offline exact-file binding of one review to exact physical storage report bytes and accepted strategy evidence. "
             "Acceptance binds only the logical target identity; a fresh-device/manual trial gate remains mandatory."
         ),
     )
