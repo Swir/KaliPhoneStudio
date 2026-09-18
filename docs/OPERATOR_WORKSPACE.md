@@ -16,14 +16,18 @@ The operator workspace may:
 - export one deterministic JSON support bundle with tool paths redacted;
 - parse an already captured rescue transcript into exact rescue-diagnostics evidence;
 - bind an already captured bounded hardware-presence survey to exact rescue evidence;
-- prepare rejected-by-default hardware/storage/test-plan review records;
-- bind exact review records/notes to exact survey, storage-discovery and functional-plan files;
-- build a pending-only profile-driven functional test plan from accepted contextual survey review.
+- prepare rejected-by-default hardware/storage/test-plan/result-review records;
+- bind exact review records/notes to exact survey, storage-discovery, functional-plan and functional-observation files;
+- build a pending-only profile-driven functional test plan from accepted contextual survey review;
+- prepare a not-executed/inconclusive observation template only after the exact plan has an accepted independent review;
+- bind an operator-authored record from an already performed physical functional test to that exact plan/review chain;
+- summarize independently reviewed functional results and freeze the exact plan/review/observation/result-review/summary files into a functional-result bundle.
 
 It may **not**:
 
 - identify or query a connected phone through the offline workspace/evidence group;
 - execute Fastboot/ADB from the offline evidence group;
+- perform the physical functional test represented by an observation record;
 - select a rootfs storage target;
 - authorize a persistent write;
 - claim that a hardware subsystem works;
@@ -38,6 +42,8 @@ persistent_write_authorized     = false
 hardware_verified               = false
 beta_gate_credit                = false
 ```
+
+An observation evidence file may truthfully record `physical_test_executed=true` when the supplied operator record describes a test that was actually performed outside this offline command. That field is evidence about the earlier physical action; it never means the `evidence` CLI executed a phone command itself.
 
 ## CLI
 
@@ -108,7 +114,7 @@ Absolute executable paths are intentionally not exported because they can reveal
 
 ## Shared exact-file evidence CLI
 
-The same entry point shipped as `KaliPhoneStudioCLI.exe` now exposes an offline evidence group:
+The same entry point shipped as `KaliPhoneStudioCLI.exe` exposes an offline evidence group:
 
 ```bash
 python main.py evidence --help
@@ -126,6 +132,12 @@ bind-storage-review
 build-functional-test-plan
 prepare-functional-test-plan-review
 bind-functional-test-plan-review
+prepare-functional-test-observation
+bind-functional-test-observation
+prepare-functional-test-result-review
+bind-functional-test-result-review
+summarize-functional-test-results
+build-functional-result-bundle
 ```
 
 Examples:
@@ -152,7 +164,66 @@ python main.py evidence build-functional-test-plan \
   --out physical-functional-test-plan.json
 ```
 
-All output paths are create-only. Missing, detached or invalid upstream evidence fails closed before a new evidence file is written. Review templates start rejected with checks false. A generated functional plan contains pending tests only. These commands do not capture the phone themselves and cannot transform host-side processing into hardware/Beta verification.
+After the exact plan has a separate accepted review, create the safe observation template:
+
+```bash
+python main.py evidence prepare-functional-test-observation \
+  --test-plan physical-functional-test-plan.json \
+  --test-plan-review-evidence physical-functional-test-plan-review.json \
+  --test-id display \
+  --operator operator-1 \
+  --out display-observation-record.json
+```
+
+The generated record is deliberately `inconclusive`, `physical_test_executed=false` and all required observation checks are false. It is only a template. The operator must physically perform the exact test outside this offline command, edit the record to match what was actually observed, keep separate notes, and then bind those exact files:
+
+```bash
+python main.py evidence bind-functional-test-observation \
+  --test-plan physical-functional-test-plan.json \
+  --test-plan-review-evidence physical-functional-test-plan-review.json \
+  --test-id display \
+  --observation-record display-observation-record.json \
+  --observation-notes display-observation-notes.txt \
+  --out display-observation-evidence.json
+```
+
+Independent result review stays a separate boundary:
+
+```bash
+python main.py evidence prepare-functional-test-result-review \
+  --observation-evidence display-observation-evidence.json \
+  --reviewer reviewer-2 \
+  --out display-result-review-record.json
+```
+
+After the review record and notes are completed, bind them and then build the aggregate exact-plan summary. Repeat `--review-evidence` for each reviewed test:
+
+```bash
+python main.py evidence bind-functional-test-result-review \
+  --observation-evidence display-observation-evidence.json \
+  --review-record display-result-review-record.json \
+  --review-notes display-result-review-notes.txt \
+  --out display-result-review-evidence.json
+
+python main.py evidence summarize-functional-test-results \
+  --test-plan physical-functional-test-plan.json \
+  --review-evidence display-result-review-evidence.json \
+  --out physical-functional-test-summary.json
+```
+
+Finally, freeze the exact campaign into one non-promoting result bundle. Repeat `--observation-evidence` and `--review-evidence` for every included test:
+
+```bash
+python main.py evidence build-functional-result-bundle \
+  --test-plan physical-functional-test-plan.json \
+  --test-plan-review-evidence physical-functional-test-plan-review.json \
+  --observation-evidence display-observation-evidence.json \
+  --review-evidence display-result-review-evidence.json \
+  --summary-evidence physical-functional-test-summary.json \
+  --out physical-functional-result-bundle.json
+```
+
+All output paths are create-only. Missing, detached, non-canonical or invalid upstream evidence fails closed before a new evidence file is written. Review templates start rejected with checks false. A generated functional plan contains pending tests only. These commands do not capture the phone themselves and cannot transform host-side processing into hardware/Beta verification.
 
 Physical capture and the explicitly authorized temporary-boot command remain separate top-level commands with their existing confirmation boundaries. The offline `evidence` group never calls them internally.
 
@@ -171,12 +242,12 @@ The GUI imports PySide6 lazily so CLI and CI remain usable on minimal hosts with
 
 ## Windows verification
 
-The Windows host package continues to build both GUI and console `onedir` artifacts. The dedicated `operator-evidence-workspace` workflow additionally builds the frozen CLI on Windows and verifies that the evidence command group is present, the rescue/storage/functional help surfaces carry their safety wording, and representative missing-input cases exit fail-closed without creating output files.
+The Windows host package continues to build both GUI and console `onedir` artifacts. The dedicated `operator-evidence-workspace` workflow additionally builds the frozen CLI on Windows and verifies that the evidence command group is present, the rescue/storage/functional help surfaces carry their safety wording, and representative missing-input cases across plan/observation/result/bundle stages exit fail-closed without creating output files.
 
 This is host-package verification only. It does not count as a physical AC2003 test or a Beta gate pass.
 
 ## Relationship to physical bring-up
 
-This workspace is preparation/support tooling. A successful doctor report, clean diagnostics export, valid offline evidence transform or green frozen-Windows test does **not** advance physical support. The first AC2003 Beta still requires the real chain documented in [`../BETA_RELEASE_GATE.md`](../BETA_RELEASE_GATE.md): exact phone/firmware identification, matching stock `boot.img`, temporary boot, rescue/log evidence, Kali early userspace, required storage/power/hardware checks, exercised recovery and the final reviewed release manifest/checksums.
+This workspace is preparation/support tooling. A successful doctor report, clean diagnostics export, valid offline evidence transform, complete functional result bundle or green frozen-Windows test does **not** advance physical support. The first AC2003 Beta still requires the real chain documented in [`../BETA_RELEASE_GATE.md`](../BETA_RELEASE_GATE.md): exact phone/firmware identification, matching stock `boot.img`, temporary boot, rescue/log evidence, Kali early userspace, required storage/power/hardware checks, exercised recovery and the final reviewed release manifest/checksums.
 
 The dedicated physical capture/execution commands keep their existing confirmation boundaries. The shared evidence workspace consolidates only offline exact-file transformations and does not bypass or replace any physical review gate.

@@ -21,6 +21,12 @@ def test_evidence_workspace_exposes_review_gated_rescue_storage_and_functional_s
         "build-functional-test-plan",
         "prepare-functional-test-plan-review",
         "bind-functional-test-plan-review",
+        "prepare-functional-test-observation",
+        "bind-functional-test-observation",
+        "prepare-functional-test-result-review",
+        "bind-functional-test-result-review",
+        "summarize-functional-test-results",
+        "build-functional-result-bundle",
     )
     help_text = " ".join(operator_evidence_cli._build_parser().format_help().lower().split())
     assert "offline exact-file evidence workspace" in help_text
@@ -90,6 +96,63 @@ def test_missing_hardware_review_fails_closed_without_functional_plan(tmp_path: 
             "oneplus/avicii",
             "--hardware-review-evidence",
             str(tmp_path / "missing-review.json"),
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_exact_plan_review_fails_closed_without_observation_template(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-observation-template.json"
+    rc = operator_evidence_cli.main(
+        [
+            "prepare-functional-test-observation",
+            "--test-plan",
+            str(tmp_path / "missing-plan.json"),
+            "--test-plan-review-evidence",
+            str(tmp_path / "missing-plan-review.json"),
+            "--test-id",
+            "display",
+            "--operator",
+            "operator-ci",
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_observation_fails_closed_without_result_review_template(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-result-review-template.json"
+    rc = operator_evidence_cli.main(
+        [
+            "prepare-functional-test-result-review",
+            "--observation-evidence",
+            str(tmp_path / "missing-observation.json"),
+            "--reviewer",
+            "reviewer-ci",
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_exact_campaign_files_fail_closed_without_result_bundle(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-functional-result-bundle.json"
+    rc = operator_evidence_cli.main(
+        [
+            "build-functional-result-bundle",
+            "--test-plan",
+            str(tmp_path / "missing-plan.json"),
+            "--test-plan-review-evidence",
+            str(tmp_path / "missing-plan-review.json"),
+            "--summary-evidence",
+            str(tmp_path / "missing-summary.json"),
             "--out",
             str(destination),
         ]
