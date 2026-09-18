@@ -33,9 +33,9 @@ from .physical_hardware_survey import (
     write_physical_hardware_survey_evidence,
 )
 from .physical_hardware_test_observation import (
-    bind_physical_hardware_test_observation_from_files,
+    bind_current_physical_hardware_test_observation_from_files,
     load_physical_hardware_test_observation_evidence,
-    make_inconclusive_physical_hardware_test_observation_record,
+    make_current_inconclusive_physical_hardware_test_observation_record,
     write_physical_hardware_test_observation_evidence,
 )
 from .physical_hardware_test_plan import (
@@ -224,6 +224,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "The template starts not executed/inconclusive and grants no hardware/Beta credit."
         ),
     )
+    observation_template.add_argument("--boot-observation", type=Path, required=True)
     observation_template.add_argument("--test-plan", type=Path, required=True)
     observation_template.add_argument("--test-plan-review-evidence", type=Path, required=True)
     observation_template.add_argument("--test-id", required=True)
@@ -238,6 +239,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "this command itself performs no phone I/O and cannot promote hardware/Beta status."
         ),
     )
+    observation_bind.add_argument("--boot-observation", type=Path, required=True)
     observation_bind.add_argument("--test-plan", type=Path, required=True)
     observation_bind.add_argument("--test-plan-review-evidence", type=Path, required=True)
     observation_bind.add_argument("--test-id", required=True)
@@ -525,9 +527,11 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "prepare-functional-test-observation":
+        observation = load_current_physical_campaign_observation(args.boot_observation)
         plan = load_physical_hardware_test_plan(args.test_plan)
         plan_review = load_physical_hardware_test_plan_review_evidence(args.test_plan_review_evidence)
-        record = make_inconclusive_physical_hardware_test_observation_record(
+        record = make_current_inconclusive_physical_hardware_test_observation_record(
+            observation,
             plan,
             plan_review,
             args.test_id,
@@ -547,7 +551,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-functional-test-observation":
-        evidence = bind_physical_hardware_test_observation_from_files(
+        observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = bind_current_physical_hardware_test_observation_from_files(
+            observation,
             args.test_plan,
             args.test_plan_review_evidence,
             args.test_id,
