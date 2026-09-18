@@ -22,7 +22,7 @@ def test_evidence_workspace_exposes_review_gated_rescue_storage_and_functional_s
         "prepare-functional-test-plan-review",
         "bind-functional-test-plan-review",
     )
-    help_text = operator_evidence_cli._build_parser().format_help().lower()
+    help_text = " ".join(operator_evidence_cli._build_parser().format_help().lower().split())
     assert "offline exact-file evidence workspace" in help_text
     assert "do not connect to a phone" in help_text
     assert "do not run adb/fastboot" in help_text
