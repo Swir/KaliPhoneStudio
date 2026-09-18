@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from kaliphonestudio.physical_bringup_dossier import load_physical_bringup_dossier_evidence
 from kaliphonestudio.physical_bringup_dossier_review import load_physical_bringup_dossier_review_evidence
