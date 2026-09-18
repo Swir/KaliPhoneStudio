@@ -4,6 +4,10 @@ Active development changes are listed here. Older detailed entries remain in [`C
 
 ## 0.6.66-dev — cross-campaign release audit and multi-device identity hardening
 
+- Extended the current schema-v2 physical-observation admission boundary through new downstream campaign creation: hardware-survey review, functional-test planning, physical-storage discovery and bring-up session binding now require the exact current runtime/recovery-bound observation instead of accepting historical schema-v1 provenance.
+- Added a reusable offline campaign-admission helper that cross-checks profile, serial, exact observation digest, rescue transcript and rescue probe id; historical evidence remains readable for audit, but cannot seed a new current campaign through the guarded operator paths.
+- Updated the shared source/frozen Windows evidence workspace and focused Python 3.11/3.14 CI so new review/plan operations require the current boot-observation file; storage/session boundaries are covered by the same admission contract. No device I/O, storage selection, persistent write, hardware verification or Beta credit was added.
+- Project completion remains **58%** and Beta remains **BLOCKED** because the new provenance gate is host-side safety hardening and no physical AC2003 gate was completed.
 - Added formal Draft 2020-12 `devices/profile.schema.json` for profile schema v3 and a pinned CI-only validator that also runs the runtime semantic profile validator.
 - Replaced flat safety-sensitive alias matching with profile-driven typed identity signals: strong product/model values may identify a device, while weak contextual values such as a shared bootloader board can never identify a phone by themselves.
 - Upgraded the registry audit so every strong identity value must resolve exactly one profile across the complete catalogue; shared weak values are allowed only while weak-only resolution remains impossible. The same contract is executed through the frozen Windows CLI.
