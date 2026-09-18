@@ -153,6 +153,8 @@ def test_missing_exact_plan_review_fails_closed_without_observation_template(tmp
     rc = operator_evidence_cli.main(
         [
             "prepare-functional-test-observation",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
             "--test-plan",
             str(tmp_path / "missing-plan.json"),
             "--test-plan-review-evidence",
@@ -161,6 +163,31 @@ def test_missing_exact_plan_review_fails_closed_without_observation_template(tmp
             "display",
             "--operator",
             "operator-ci",
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_current_observation_fails_closed_without_observation_binding(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-functional-observation.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-functional-test-observation",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--test-plan",
+            str(tmp_path / "missing-plan.json"),
+            "--test-plan-review-evidence",
+            str(tmp_path / "missing-plan-review.json"),
+            "--test-id",
+            "display",
+            "--observation-record",
+            str(tmp_path / "missing-record.json"),
+            "--observation-notes",
+            str(tmp_path / "missing-notes.txt"),
             "--out",
             str(destination),
         ]
