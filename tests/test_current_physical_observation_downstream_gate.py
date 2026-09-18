@@ -30,6 +30,15 @@ from kaliphonestudio.physical_hardware_test_observation import (
     bind_current_physical_hardware_test_observation_from_files,
     make_current_inconclusive_physical_hardware_test_observation_record,
 )
+from kaliphonestudio.physical_hardware_test_review import (
+    PhysicalHardwareTestReviewError,
+    bind_current_physical_hardware_test_review_from_files,
+    make_current_rejected_physical_hardware_test_review_record,
+)
+from kaliphonestudio.physical_hardware_result_bundle import (
+    PhysicalHardwareResultBundleError,
+    build_current_physical_hardware_result_bundle_from_files,
+)
 from kaliphonestudio.physical_storage_discovery import (
     PhysicalStorageDiscoveryError,
     record_current_physical_storage_discovery,
@@ -163,6 +172,33 @@ def test_observation_binding_rejects_legacy_before_reading_campaign_files(tmp_pa
     with pytest.raises(PhysicalHardwareTestObservationError, match="requires schema-v2"):
         bind_current_physical_hardware_test_observation_from_files(
             _legacy(), missing, missing, "display", missing, missing
+        )
+    assert not missing.exists()
+
+
+def test_result_review_template_rejects_legacy_before_observation_validation() -> None:
+    with pytest.raises(PhysicalHardwareTestReviewError, match="requires schema-v2"):
+        make_current_rejected_physical_hardware_test_review_record(
+            _legacy(),
+            None,  # type: ignore[arg-type]
+            "reviewer-ci",
+        )
+
+
+def test_result_review_binding_rejects_legacy_before_reading_review_files(tmp_path: Path) -> None:
+    missing = tmp_path / "must-not-be-read.json"
+    with pytest.raises(PhysicalHardwareTestReviewError, match="requires schema-v2"):
+        bind_current_physical_hardware_test_review_from_files(
+            _legacy(), missing, missing, missing
+        )
+    assert not missing.exists()
+
+
+def test_result_bundle_rejects_legacy_before_reading_campaign_files(tmp_path: Path) -> None:
+    missing = tmp_path / "must-not-be-read.json"
+    with pytest.raises(PhysicalHardwareResultBundleError, match="requires schema-v2"):
+        build_current_physical_hardware_result_bundle_from_files(
+            _legacy(), missing, missing, (), (), missing
         )
     assert not missing.exists()
 
