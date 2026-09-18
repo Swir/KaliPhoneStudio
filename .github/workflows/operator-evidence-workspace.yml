@@ -115,6 +115,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation-bind help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-review help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-bind-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-review-bind help failed: $LASTEXITCODE" }
           & $Cli evidence build-functional-result-bundle --help | Set-Content -Encoding utf8 "dist/evidence-result-bundle-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-bundle help failed: $LASTEXITCODE" }
 
@@ -142,11 +144,15 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen functional observation bind did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-observation-bind.json") { throw "Refused functional observation bind created output" }
 
-          & $Cli evidence prepare-functional-test-result-review --observation-evidence "dist/missing-functional-observation.json" --reviewer reviewer-ci --out "dist/should-not-result-review.json" 2> "dist/evidence-result-review-refusal.txt"
+          & $Cli evidence prepare-functional-test-result-review --boot-observation "dist/missing-boot-observation.json" --observation-evidence "dist/missing-functional-observation.json" --reviewer reviewer-ci --out "dist/should-not-result-review.json" 2> "dist/evidence-result-review-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen result review template did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-result-review.json") { throw "Refused result review template created output" }
 
-          & $Cli evidence build-functional-result-bundle --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --summary-evidence "dist/missing-summary.json" --out "dist/should-not-result-bundle.json" 2> "dist/evidence-result-bundle-refusal.txt"
+          & $Cli evidence bind-functional-test-result-review --boot-observation "dist/missing-boot-observation.json" --observation-evidence "dist/missing-functional-observation.json" --review-record "dist/missing-result-review-record.json" --review-notes "dist/missing-result-review-notes.txt" --out "dist/should-not-result-review-bind.json" 2> "dist/evidence-result-review-bind-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional result review bind did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-result-review-bind.json") { throw "Refused functional result review bind created output" }
+
+          & $Cli evidence build-functional-result-bundle --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --summary-evidence "dist/missing-summary.json" --out "dist/should-not-result-bundle.json" 2> "dist/evidence-result-bundle-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen result bundle did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-result-bundle.json") { throw "Refused result bundle created output" }
 
@@ -199,7 +205,11 @@ jobs:
           assert "--boot-observation" in observation_bind
           result_review = text("evidence-result-review-help.txt")
           assert "never authorizes project support or beta release" in result_review
+          assert "--boot-observation" in result_review
+          result_review_bind = text("evidence-result-review-bind-help.txt")
+          assert "--boot-observation" in result_review_bind
           result_bundle = text("evidence-result-bundle-help.txt")
+          assert "--boot-observation" in result_bundle
           assert "manual release-gate input" in result_bundle
           assert "no hardware/beta credit" in result_bundle
 
@@ -211,6 +221,7 @@ jobs:
               "evidence-observation-refusal.txt",
               "evidence-observation-bind-refusal.txt",
               "evidence-result-review-refusal.txt",
+              "evidence-result-review-bind-refusal.txt",
               "evidence-result-bundle-refusal.txt",
           ):
               assert "evidence workflow error" in text(refusal)
