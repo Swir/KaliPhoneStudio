@@ -169,9 +169,17 @@ def _require_fresh_output(path: Path, label: str) -> None:
 def _preflight_execution_outputs(probe_out: Path, execution_out: Path) -> None:
     probe = Path(probe_out)
     execution = Path(execution_out)
-    if probe.absolute() == execution.absolute():
+    probe_tmp = probe.with_name(probe.name + ".tmp")
+    execution_tmp = execution.with_name(execution.name + ".tmp")
+    reserved_paths = {
+        probe.absolute(),
+        probe_tmp.absolute(),
+        execution.absolute(),
+        execution_tmp.absolute(),
+    }
+    if len(reserved_paths) != 4:
         raise PhysicalCandidateOperatorError(
-            "runtime-probe and execution evidence must use different output paths"
+            "runtime-probe/execution output and temporary paths must not overlap"
         )
     for path, label in (
         (probe, "temporary-boot runtime probe evidence"),
