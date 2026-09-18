@@ -13,13 +13,13 @@ The binder requires one exact chain for the same profile, serial and firmware ba
 - the cross-campaign physical release-gate audit;
 - a separate strategy review record and notes.
 
-The binder verifies digest continuity between these layers. A review from another campaign, a substituted discovery/review, identity or firmware drift, a changed rootfs artifact, or a changed recovery plan is rejected.
+The binder verifies digest continuity between these layers. A review from another campaign, a substituted discovery/review, identity or firmware drift, a changed rootfs artifact, or a changed recovery plan is rejected. The unified operator path additionally recomputes the canonical strategy-review record SHA-256 and byte size before any upstream evidence is loaded, so detached record metadata fails closed.
 
 ## What may be reviewed
 
 The record describes only a **logical candidate design**: profile-driven partition role, relative staging subpath, minimum required free bytes, the exact reviewed rootfs artifact and exact recovery plan. The candidate role must equal the reviewed profile-driven discovery hint and must not appear in the discovery contract's forbidden partitions.
 
-Absolute paths, Windows drive paths, backslashes and raw device paths are rejected. The review requires explicit checks for the physical evidence chain, capacity evidence, filesystem/encryption state, rollback plan, forbidden partitions, absence of a raw device path, and absence of write authorization.
+Absolute paths, Windows drive paths, backslashes and raw device paths are rejected. The template generator also refuses a minimum free-space requirement smaller than the reviewed rootfs artifact. The review requires explicit checks for the physical evidence chain, capacity evidence, filesystem/encryption state, rollback plan, forbidden partitions, absence of a raw device path, and absence of write authorization.
 
 ## What acceptance does not mean
 
@@ -40,10 +40,10 @@ No command in this stage invokes ADB/Fastboot, mounts or decrypts storage, choos
 
 ## Operator flow
 
-Prepare a rejected-by-default record only after the real physical storage discovery/review files exist:
+Use the shared evidence workspace so the same source command surface is available to normal host operation and the frozen Windows CLI path. Prepare a rejected-by-default record only after the real physical storage discovery/review files exist:
 
 ```bash
-python scripts/prepare_rootfs_handoff_strategy_review.py \
+python main.py evidence prepare-rootfs-handoff-strategy-review \
   --storage-discovery physical-storage-discovery.json \
   --storage-review physical-storage-review.json \
   --reviewer REVIEWER_ID \
@@ -57,7 +57,7 @@ python scripts/prepare_rootfs_handoff_strategy_review.py \
 After an independent reviewer edits the record and notes, bind the exact chain:
 
 ```bash
-python scripts/bind_rootfs_handoff_strategy_review.py \
+python main.py evidence bind-rootfs-handoff-strategy-review \
   --storage-discovery physical-storage-discovery.json \
   --storage-review physical-storage-review.json \
   --dossier physical-bringup-dossier.json \
@@ -67,5 +67,7 @@ python scripts/bind_rootfs_handoff_strategy_review.py \
   --review-notes strategy-review-notes.txt \
   --out rootfs-handoff-strategy-review.json
 ```
+
+The standalone `scripts/prepare_rootfs_handoff_strategy_review.py` and `scripts/bind_rootfs_handoff_strategy_review.py` entry points remain available for focused tooling, but the shared evidence workspace is the preferred operator route.
 
 The next safe milestone is a separate target-binding/execution gate that must revalidate the real phone and exact evidence again; this review is not that gate.
