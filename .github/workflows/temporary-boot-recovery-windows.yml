@@ -1,0 +1,122 @@
+name: temporary-boot-recovery-windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/temporary_boot_execution.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
+      - "scripts/execute_temporary_boot_once.py"
+      - "scripts/build_windows.ps1"
+      - "tests/test_temporary_boot_execution.py"
+      - "tests/test_physical_candidate_operator.py"
+      - "tests/test_physical_recovery_readiness.py"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - ".github/workflows/temporary-boot-recovery-windows.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/temporary_boot_execution.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
+      - "scripts/execute_temporary_boot_once.py"
+      - "scripts/build_windows.ps1"
+      - "tests/test_temporary_boot_execution.py"
+      - "tests/test_physical_candidate_operator.py"
+      - "tests/test_physical_recovery_readiness.py"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - ".github/workflows/temporary-boot-recovery-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-recovery-gate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install pinned host build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+      - name: Verify source recovery/temporary-boot boundary
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_physical_recovery_readiness.py
+          tests/test_temporary_boot_execution.py
+          tests/test_physical_candidate_operator.py
+      - name: Build frozen Windows GUI and CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Verify frozen CLI requires recovery readiness before device I/O
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+          & $Cli execute-temporary-boot-once --help | Set-Content -Encoding utf8 "dist/recovery-gated-boot-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen temporary-boot help failed: $LASTEXITCODE" }
+
+          @'
+          from pathlib import Path
+          text = " ".join(Path("dist/recovery-gated-boot-help.txt").read_text(encoding="utf-8-sig").lower().split())
+          for flag in (
+              "--boot-identity-binding",
+              "--physical-baseline",
+              "--recovery-readiness",
+              "--stock-boot",
+              "--execute-temporary-boot",
+          ):
+              assert flag in text, flag
+          assert "no persistent write verb" in text
+          '@ | python -
+
+          $Common = @(
+            "execute-temporary-boot-once",
+            "--profile-id", "oneplus/avicii",
+            "--physical-candidate-gate", "dist/missing-gate.json",
+            "--boot-identity-binding", "dist/missing-boot-identity.json",
+            "--physical-baseline", "dist/missing-physical-baseline.json",
+            "--recovery-readiness", "dist/missing-recovery-readiness.json",
+            "--stock-boot", "dist/missing-stock-boot.img",
+            "--capture-bundle", "dist/missing-capture.json",
+            "--baseline-evidence", "dist/missing-baseline.json",
+            "--fastboot-tool-evidence", "dist/missing-tool.json",
+            "--fastboot-executable", "dist/missing-fastboot.exe",
+            "--boot-image", "dist/missing-candidate-boot.img",
+            "--confirmation", "WRONG-ON-PURPOSE",
+            "--probe-out", "dist/should-not-probe.json",
+            "--execution-out", "dist/should-not-execute.json"
+          )
+
+          & $Cli @Common 2> "dist/no-opt-in-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen temporary boot did not refuse without explicit opt-in: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-probe.json") { throw "Refused frozen temporary boot created probe evidence" }
+          if (Test-Path "dist/should-not-execute.json") { throw "Refused frozen temporary boot created execution evidence" }
+
+          & $Cli @Common --execute-temporary-boot 2> "dist/missing-recovery-chain-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen temporary boot did not fail closed on missing exact evidence: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-probe.json") { throw "Missing-evidence frozen temporary boot created probe evidence" }
+          if (Test-Path "dist/should-not-execute.json") { throw "Missing-evidence frozen temporary boot created execution evidence" }
+
+          @'
+          from pathlib import Path
+          no_opt = " ".join(Path("dist/no-opt-in-refusal.txt").read_text(encoding="utf-8-sig").lower().split())
+          missing = " ".join(Path("dist/missing-recovery-chain-refusal.txt").read_text(encoding="utf-8-sig").lower().split())
+          assert "--execute-temporary-boot" in no_opt
+          assert "physical candidate gate" in missing
+          '@ | python -
