@@ -70,6 +70,27 @@ def test_missing_rescue_inputs_fail_closed_without_output(tmp_path: Path) -> Non
     assert not destination.exists()
 
 
+def test_missing_boot_observation_fails_closed_without_hardware_review(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-hardware-review.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-hardware-survey-review",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--survey-evidence",
+            str(tmp_path / "missing-survey.json"),
+            "--review-record",
+            str(tmp_path / "missing-review-record.json"),
+            "--review-notes",
+            str(tmp_path / "missing-review-notes.txt"),
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
 def test_missing_storage_discovery_fails_closed_without_template(tmp_path: Path) -> None:
     destination = tmp_path / "should-not-storage-review.json"
     rc = operator_evidence_cli.main(
