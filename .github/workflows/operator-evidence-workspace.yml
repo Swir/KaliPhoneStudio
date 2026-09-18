@@ -111,6 +111,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan-review help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-observation --help | Set-Content -Encoding utf8 "dist/evidence-observation-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-functional-test-observation --help | Set-Content -Encoding utf8 "dist/evidence-observation-bind-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation-bind help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-review help failed: $LASTEXITCODE" }
           & $Cli evidence build-functional-result-bundle --help | Set-Content -Encoding utf8 "dist/evidence-result-bundle-help.txt"
@@ -132,9 +134,13 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan review did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-plan-review.json") { throw "Refused functional plan review created output" }
 
-          & $Cli evidence prepare-functional-test-observation --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --operator operator-ci --out "dist/should-not-observation.json" 2> "dist/evidence-observation-refusal.txt"
+          & $Cli evidence prepare-functional-test-observation --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --operator operator-ci --out "dist/should-not-observation.json" 2> "dist/evidence-observation-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen observation template did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-observation.json") { throw "Refused observation template created output" }
+
+          & $Cli evidence bind-functional-test-observation --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --observation-record "dist/missing-observation-record.json" --observation-notes "dist/missing-observation-notes.txt" --out "dist/should-not-observation-bind.json" 2> "dist/evidence-observation-bind-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional observation bind did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-observation-bind.json") { throw "Refused functional observation bind created output" }
 
           & $Cli evidence prepare-functional-test-result-review --observation-evidence "dist/missing-functional-observation.json" --reviewer reviewer-ci --out "dist/should-not-result-review.json" 2> "dist/evidence-result-review-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen result review template did not fail closed: $LASTEXITCODE" }
@@ -188,6 +194,9 @@ jobs:
           observation = text("evidence-observation-help.txt")
           assert "starts not executed/inconclusive" in observation
           assert "no hardware/beta credit" in observation
+          assert "--boot-observation" in observation
+          observation_bind = text("evidence-observation-bind-help.txt")
+          assert "--boot-observation" in observation_bind
           result_review = text("evidence-result-review-help.txt")
           assert "never authorizes project support or beta release" in result_review
           result_bundle = text("evidence-result-bundle-help.txt")
@@ -200,6 +209,7 @@ jobs:
               "evidence-functional-refusal.txt",
               "evidence-plan-review-refusal.txt",
               "evidence-observation-refusal.txt",
+              "evidence-observation-bind-refusal.txt",
               "evidence-result-review-refusal.txt",
               "evidence-result-bundle-refusal.txt",
           ):
