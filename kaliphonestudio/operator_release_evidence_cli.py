@@ -37,6 +37,7 @@ from .physical_bringup_dossier_verify import (
 )
 from .physical_bringup_session import (
     bind_physical_bringup_session,
+    load_physical_bringup_session_evidence,
     write_physical_bringup_session_evidence,
 )
 from .physical_candidate_gate import PhysicalCandidateGateEvidence
@@ -338,8 +339,8 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             digest,
             profile_id=evidence.profile_id,
             device_serial=evidence.device_serial,
-            kali_early_userspace_included=evidence.kali_early_userspace_included,
-            manual_review_required=True,
+            kali_early_userspace_signal_present=evidence.kali_early_userspace_signal_present,
+            manual_review_required=evidence.manual_review_required,
         )
 
     if command == "build-bringup-dossier":
