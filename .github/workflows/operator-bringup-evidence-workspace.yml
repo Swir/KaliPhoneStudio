@@ -1,0 +1,165 @@
+name: operator-bringup-evidence-workspace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_dispatch.py"
+      - "kaliphonestudio/operator_bringup_evidence_cli.py"
+      - "kaliphonestudio/physical_bringup_session.py"
+      - "kaliphonestudio/physical_bringup_dossier.py"
+      - "kaliphonestudio/physical_bringup_dossier_verify.py"
+      - "kaliphonestudio/physical_bringup_dossier_review.py"
+      - "kaliphonestudio/physical_release_gate_audit.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_operator_bringup_evidence_cli.py"
+      - "tests/test_physical_bringup_session.py"
+      - "tests/test_physical_bringup_dossier.py"
+      - "tests/test_physical_bringup_dossier_verify.py"
+      - "tests/test_physical_bringup_dossier_review.py"
+      - "tests/test_physical_release_gate_audit.py"
+      - ".github/workflows/operator-bringup-evidence-workspace.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_dispatch.py"
+      - "kaliphonestudio/operator_bringup_evidence_cli.py"
+      - "kaliphonestudio/physical_bringup_session.py"
+      - "kaliphonestudio/physical_bringup_dossier.py"
+      - "kaliphonestudio/physical_bringup_dossier_verify.py"
+      - "kaliphonestudio/physical_bringup_dossier_review.py"
+      - "kaliphonestudio/physical_release_gate_audit.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_operator_bringup_evidence_cli.py"
+      - "tests/test_physical_bringup_session.py"
+      - "tests/test_physical_bringup_dossier.py"
+      - "tests/test_physical_bringup_dossier_verify.py"
+      - "tests/test_physical_bringup_dossier_review.py"
+      - "tests/test_physical_release_gate_audit.py"
+      - ".github/workflows/operator-bringup-evidence-workspace.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-cli-bringup-audit-safety:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install runtime and pinned Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+
+      - name: Verify late-stage evidence contracts before freezing
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_operator_bringup_evidence_cli.py
+          tests/test_physical_bringup_session.py
+          tests/test_physical_bringup_dossier.py
+          tests/test_physical_bringup_dossier_verify.py
+          tests/test_physical_bringup_dossier_review.py
+          tests/test_physical_release_gate_audit.py
+
+      - name: Build frozen Windows host CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Smoke-test frozen bring-up evidence commands and fail-closed refusals
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          & $Cli evidence --help | Set-Content -Encoding utf8 "dist/evidence-root-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen shared evidence help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-bringup-session --help | Set-Content -Encoding utf8 "dist/evidence-session-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen bring-up session help failed: $LASTEXITCODE" }
+          & $Cli evidence build-bringup-dossier --help | Set-Content -Encoding utf8 "dist/evidence-dossier-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen dossier help failed: $LASTEXITCODE" }
+          & $Cli evidence verify-bringup-dossier --help | Set-Content -Encoding utf8 "dist/evidence-dossier-verify-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen dossier verification help failed: $LASTEXITCODE" }
+          & $Cli evidence prepare-bringup-dossier-review --help | Set-Content -Encoding utf8 "dist/evidence-dossier-review-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen dossier review help failed: $LASTEXITCODE" }
+          & $Cli evidence build-release-gate-audit --help | Set-Content -Encoding utf8 "dist/evidence-release-audit-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen release-gate audit help failed: $LASTEXITCODE" }
+
+          & $Cli evidence bind-bringup-session --candidate-gate "dist/missing-candidate.json" --boot-observation "dist/missing-boot.json" --rescue-diagnostics "dist/missing-rescue.json" --functional-probes "dist/missing-probes.json" --storage-discovery "dist/missing-storage.json" --storage-review "dist/missing-storage-review.json" --out "dist/should-not-session.json" 2> "dist/evidence-session-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen bring-up session did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-session.json") { throw "Refused session created output" }
+
+          & $Cli evidence verify-bringup-dossier --dossier "dist/missing-dossier.json" --file "physical_candidate_gate=dist/missing-candidate.json" --out "dist/should-not-verification.json" 2> "dist/evidence-dossier-verify-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen dossier verification did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-verification.json") { throw "Refused dossier verification created output" }
+
+          & $Cli evidence prepare-bringup-dossier-review --dossier "dist/missing-dossier.json" --reviewer reviewer-ci --record-out "dist/should-not-record.json" --notes-out "dist/should-not-notes.txt" 2> "dist/evidence-dossier-review-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen dossier review template did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-record.json") { throw "Refused dossier review created record" }
+          if (Test-Path "dist/should-not-notes.txt") { throw "Refused dossier review created notes" }
+
+          & $Cli evidence build-release-gate-audit --dossier "dist/missing-dossier.json" --dossier-verification "dist/missing-verification.json" --dossier-review "dist/missing-review.json" --functional-result-bundle "dist/missing-results.json" --test-plan "dist/missing-plan.json" --test-plan-review "dist/missing-plan-review.json" --out "dist/should-not-audit.json" 2> "dist/evidence-release-audit-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen release-gate audit did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-audit.json") { throw "Refused release-gate audit created output" }
+
+          @'
+          from pathlib import Path
+
+          def text(name):
+              raw = Path("dist", name).read_text(encoding="utf-8-sig").lower()
+              return " ".join(raw.split())
+
+          root = text("evidence-root-help.txt")
+          assert "offline exact-file evidence workspace" in root
+          assert "do not connect to a phone" in root
+          assert "do not run adb/fastboot" in root
+          assert "do not select storage targets" in root
+          assert "no hardware/beta credit" in root
+          for command in (
+              "bind-bringup-session",
+              "build-bringup-dossier",
+              "verify-bringup-dossier",
+              "prepare-bringup-dossier-review",
+              "bind-bringup-dossier-review",
+              "build-release-gate-audit",
+          ):
+              assert command in root
+
+          session = text("evidence-session-help.txt")
+          assert "offline-only" in session
+          assert "already recorded" in session
+          dossier = text("evidence-dossier-help.txt")
+          assert "exact evidence/raw file bytes" in dossier
+          verify = text("evidence-dossier-verify-help.txt")
+          assert "integrity evidence only" in verify
+          audit = text("evidence-release-audit-help.txt")
+          assert "physical gate incomplete" in audit
+          assert "beta unauthorized" in audit
+
+          for refusal in (
+              "evidence-session-refusal.txt",
+              "evidence-dossier-verify-refusal.txt",
+              "evidence-dossier-review-refusal.txt",
+              "evidence-release-audit-refusal.txt",
+          ):
+              assert "evidence workflow error" in text(refusal)
+          '@ | python -
