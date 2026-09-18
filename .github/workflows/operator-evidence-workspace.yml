@@ -107,6 +107,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen storage-review help failed: $LASTEXITCODE" }
           & $Cli evidence build-functional-test-plan --help | Set-Content -Encoding utf8 "dist/evidence-functional-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan help failed: $LASTEXITCODE" }
+          & $Cli evidence bind-functional-test-plan-review --help | Set-Content -Encoding utf8 "dist/evidence-plan-review-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan-review help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-observation --help | Set-Content -Encoding utf8 "dist/evidence-observation-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation help failed: $LASTEXITCODE" }
           & $Cli evidence prepare-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-help.txt"
@@ -125,6 +127,10 @@ jobs:
           & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --boot-observation "dist/missing-boot-observation.json" --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-plan.json") { throw "Refused functional plan created output" }
+
+          & $Cli evidence bind-functional-test-plan-review --boot-observation "dist/missing-boot-observation.json" --test-plan "dist/missing-plan.json" --review-record "dist/missing-plan-review-record.json" --review-notes "dist/missing-plan-review-notes.txt" --out "dist/should-not-plan-review.json" 2> "dist/evidence-plan-review-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan review did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-plan-review.json") { throw "Refused functional plan review created output" }
 
           & $Cli evidence prepare-functional-test-observation --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --operator operator-ci --out "dist/should-not-observation.json" 2> "dist/evidence-observation-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen observation template did not fail closed: $LASTEXITCODE" }
@@ -177,6 +183,8 @@ jobs:
           assert "cannot select a /dev path or authorize writes" in storage
           functional = text("evidence-functional-help.txt")
           assert "checklist, not hardware verification" in functional
+          plan_review = text("evidence-plan-review-help.txt")
+          assert "--boot-observation" in plan_review
           observation = text("evidence-observation-help.txt")
           assert "starts not executed/inconclusive" in observation
           assert "no hardware/beta credit" in observation
@@ -190,6 +198,7 @@ jobs:
               "evidence-rescue-refusal.txt",
               "evidence-storage-refusal.txt",
               "evidence-functional-refusal.txt",
+              "evidence-plan-review-refusal.txt",
               "evidence-observation-refusal.txt",
               "evidence-result-review-refusal.txt",
               "evidence-result-bundle-refusal.txt",
