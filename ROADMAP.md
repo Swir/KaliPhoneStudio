@@ -42,7 +42,7 @@ The compact dashboard is generated from the same authoritative `BUILD_STATUS.jso
 
 Host-side contracts are prepared, but **none of the items below may be promoted from host-only or synthetic evidence**.
 
-- [x] Read-only Fastboot baseline capture/import tooling.
+- [x] Read-only Fastboot baseline capture/import tooling, now exposed through one shared profile-token-guarded host/Windows CLI path with exact tool/transcript/evidence binding.
 - [x] Exact physical stock-baseline/candidate gate contracts.
 - [x] Serial/profile/firmware/candidate-bound one-shot temporary-boot execution path with explicit confirmation.
 - [x] Physical rescue observation, exact rescue probe markers and bounded read-only diagnostics.
@@ -109,9 +109,10 @@ Each subsystem requires real physical evidence before it can be called working.
 
 - [x] Current Python host application and profile registry foundation.
 - [x] Fail-closed evidence/operator CLI paths for baseline, candidate, temporary boot, rescue, storage and functional-hardware review.
-- [ ] Consolidate the safety/evidence flow into a polished Windows GUI/CLI without bypassing explicit confirmation boundaries.
-- [ ] Add clearer diagnostics export and guided recovery workflow.
-- [ ] Package Windows executable only after the CLI safety contracts stay equivalent under packaging.
+- [x] Clear offline diagnostics export and profile-driven guided recovery workflow.
+- [x] Reproducible unsigned Windows development GUI/CLI package is built and smoke-tested from the same safety contracts; this is not a Beta artifact.
+- [x] Guarded physical Fastboot baseline capture is routed through the shared host/Windows CLI, requires the exact profile confirmation token before external commands, re-verifies the exact Fastboot tool identity after capture and performs no persistent phone write.
+- [ ] Consolidate the remaining candidate/rescue/storage/functional evidence workflows into a polished Windows GUI/CLI without bypassing explicit confirmation boundaries.
 
 ## Milestone G — Beta release
 
@@ -142,4 +143,4 @@ KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual
 
 ## Immediate next work
 
-The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, run the established baseline → stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → exact functional result bundle → storage review/dossier chain → cross-campaign release-gate audit. Only then design and review the reversible rootfs handoff target for that exact device state.
+The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, use the guarded profile-token capture CLI for the exact baseline, then continue through stock boot provenance → candidate → temporary rescue boot → accepted survey review → accepted exact plan review → schema-v2 observations/reviews → exact functional result bundle → storage review/dossier chain → cross-campaign release-gate audit. Only then design and review the reversible rootfs handoff target for that exact device state.
