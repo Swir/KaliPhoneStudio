@@ -7,6 +7,9 @@ on:
       - "devices/**/profile.json"
       - "kaliphonestudio/functional_hardware_contract.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
+      - "kaliphonestudio/physical_boot_observation.py"
+      - "tests/test_current_physical_observation_downstream_gate.py"
       - "kaliphonestudio/physical_hardware_review.py"
       - "kaliphonestudio/profiles.py"
       - "scripts/build_physical_hardware_test_plan.py"
@@ -18,6 +21,9 @@ on:
       - "devices/**/profile.json"
       - "kaliphonestudio/functional_hardware_contract.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
+      - "kaliphonestudio/physical_boot_observation.py"
+      - "tests/test_current_physical_observation_downstream_gate.py"
       - "kaliphonestudio/physical_hardware_review.py"
       - "kaliphonestudio/profiles.py"
       - "scripts/build_physical_hardware_test_plan.py"
@@ -43,11 +49,13 @@ jobs:
           python -m py_compile
           kaliphonestudio/functional_hardware_contract.py
           kaliphonestudio/physical_hardware_test_plan.py
+          kaliphonestudio/physical_campaign_admission.py
           kaliphonestudio/profiles.py
           scripts/build_physical_hardware_test_plan.py
           tests/test_functional_hardware_contract.py
           tests/test_physical_hardware_test_plan.py
+          tests/test_current_physical_observation_downstream_gate.py
       - name: Run fail-closed functional hardware planning tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: pytest -q tests/test_functional_hardware_contract.py tests/test_physical_hardware_test_plan.py
+        run: pytest -q tests/test_functional_hardware_contract.py tests/test_physical_hardware_test_plan.py tests/test_current_physical_observation_downstream_gate.py
