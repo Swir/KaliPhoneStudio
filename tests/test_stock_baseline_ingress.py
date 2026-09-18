@@ -22,9 +22,27 @@ def _payload(marker: bytes = b"A") -> bytes:
 
 
 def _boot_v2() -> bytes:
-    image = bytearray(4096)
+    """Return a minimal structurally valid legacy Android boot header-v2 image."""
+    page_size = 4096
+    kernel_size = 32
+    ramdisk_size = 24
+    dtb_size = 16
+    # header page + one aligned page each for kernel, ramdisk and DTB
+    image = bytearray(page_size * 4)
     image[:8] = b"ANDROID!"
+    struct.pack_into("<I", image, 8, kernel_size)
+    struct.pack_into("<I", image, 16, ramdisk_size)
+    struct.pack_into("<I", image, 24, 0)  # second_size
+    struct.pack_into("<I", image, 36, page_size)
     struct.pack_into("<I", image, 40, 2)
+    struct.pack_into("<I", image, 1632, 0)  # recovery_dtbo_size
+    struct.pack_into("<Q", image, 1636, 0)  # ignored when recovery DTBO is absent
+    struct.pack_into("<I", image, 1644, 1660)  # sizeof(boot_img_hdr_v2)
+    struct.pack_into("<I", image, 1648, dtb_size)
+    struct.pack_into("<Q", image, 1652, 0x10000000)
+    image[page_size : page_size + kernel_size] = b"K" * kernel_size
+    image[page_size * 2 : page_size * 2 + ramdisk_size] = b"R" * ramdisk_size
+    image[page_size * 3 : page_size * 3 + dtb_size] = b"D" * dtb_size
     return bytes(image)
 
 
