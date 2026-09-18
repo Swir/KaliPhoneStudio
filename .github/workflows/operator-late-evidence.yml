@@ -7,30 +7,42 @@ on:
       - "main.py"
       - "kaliphonestudio/operator_evidence_workspace.py"
       - "kaliphonestudio/operator_release_evidence_cli.py"
+      - "kaliphonestudio/operator_strategy_evidence_cli.py"
+      - "kaliphonestudio/rootfs_handoff_strategy_review.py"
       - "kaliphonestudio/physical_bringup_session.py"
       - "kaliphonestudio/physical_bringup_dossier.py"
       - "kaliphonestudio/physical_bringup_dossier_verify.py"
       - "kaliphonestudio/physical_bringup_dossier_review.py"
       - "kaliphonestudio/physical_release_gate_audit.py"
+      - "scripts/prepare_rootfs_handoff_strategy_review.py"
+      - "scripts/bind_rootfs_handoff_strategy_review.py"
       - "scripts/build_windows.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_operator_release_evidence_cli.py"
+      - "tests/test_operator_strategy_evidence_cli.py"
+      - "tests/test_rootfs_handoff_strategy_review.py"
       - ".github/workflows/operator-late-evidence.yml"
   pull_request:
     paths:
       - "main.py"
       - "kaliphonestudio/operator_evidence_workspace.py"
       - "kaliphonestudio/operator_release_evidence_cli.py"
+      - "kaliphonestudio/operator_strategy_evidence_cli.py"
+      - "kaliphonestudio/rootfs_handoff_strategy_review.py"
       - "kaliphonestudio/physical_bringup_session.py"
       - "kaliphonestudio/physical_bringup_dossier.py"
       - "kaliphonestudio/physical_bringup_dossier_verify.py"
       - "kaliphonestudio/physical_bringup_dossier_review.py"
       - "kaliphonestudio/physical_release_gate_audit.py"
+      - "scripts/prepare_rootfs_handoff_strategy_review.py"
+      - "scripts/bind_rootfs_handoff_strategy_review.py"
       - "scripts/build_windows.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_operator_release_evidence_cli.py"
+      - "tests/test_operator_strategy_evidence_cli.py"
+      - "tests/test_rootfs_handoff_strategy_review.py"
       - ".github/workflows/operator-late-evidence.yml"
   workflow_dispatch:
 
@@ -65,6 +77,8 @@ jobs:
           python -m pytest -q
           tests/test_operator_evidence_cli.py
           tests/test_operator_release_evidence_cli.py
+          tests/test_operator_strategy_evidence_cli.py
+          tests/test_rootfs_handoff_strategy_review.py
           tests/test_physical_bringup_session.py
           tests/test_physical_bringup_dossier.py
           tests/test_physical_bringup_dossier_verify.py
@@ -89,7 +103,9 @@ jobs:
             "verify-bringup-dossier",
             "prepare-bringup-dossier-review",
             "bind-bringup-dossier-review",
-            "build-release-gate-audit"
+            "build-release-gate-audit",
+            "prepare-rootfs-handoff-strategy-review",
+            "bind-rootfs-handoff-strategy-review"
           )) {
             & $Cli evidence $Command --help | Set-Content -Encoding utf8 ("dist/help-" + $Command + ".txt")
             if ($LASTEXITCODE -ne 0) { throw "Frozen help failed for $Command : $LASTEXITCODE" }
@@ -126,6 +142,31 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen release audit did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-release-audit.json") { throw "Refused release audit created output" }
 
+          & $Cli evidence prepare-rootfs-handoff-strategy-review `
+            --storage-discovery "dist/missing-storage.json" `
+            --storage-review "dist/missing-storage-review.json" `
+            --reviewer reviewer-ci `
+            --candidate-partition-role userdata `
+            --staging-subpath kaliphonestudio/rootfs-stage `
+            --required-free-bytes 1 `
+            --record-out "dist/should-not-strategy-record.json" `
+            --notes-out "dist/should-not-strategy-notes.txt" 2> "dist/refusal-strategy-prepare.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen strategy template did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-strategy-record.json") { throw "Refused strategy template created record" }
+          if (Test-Path "dist/should-not-strategy-notes.txt") { throw "Refused strategy template created notes" }
+
+          & $Cli evidence bind-rootfs-handoff-strategy-review `
+            --storage-discovery "dist/missing-storage.json" `
+            --storage-review "dist/missing-storage-review.json" `
+            --dossier "dist/missing-dossier.json" `
+            --dossier-review "dist/missing-dossier-review.json" `
+            --release-gate-audit "dist/missing-release-audit.json" `
+            --review-record "dist/missing-strategy-record.json" `
+            --review-notes "dist/missing-strategy-notes.txt" `
+            --out "dist/should-not-strategy-evidence.json" 2> "dist/refusal-strategy-bind.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen strategy binder did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-strategy-evidence.json") { throw "Refused strategy binder created output" }
+
           @'
           from pathlib import Path
 
@@ -147,6 +188,8 @@ jobs:
               "prepare-bringup-dossier-review",
               "bind-bringup-dossier-review",
               "build-release-gate-audit",
+              "prepare-rootfs-handoff-strategy-review",
+              "bind-rootfs-handoff-strategy-review",
           ):
               assert command in root
               assert "offline" in text("help-" + command + ".txt")
@@ -155,6 +198,8 @@ jobs:
               "refusal-session.txt",
               "refusal-dossier-review.txt",
               "refusal-release-audit.txt",
+              "refusal-strategy-prepare.txt",
+              "refusal-strategy-bind.txt",
           ):
               assert "evidence workflow error" in text(refusal)
           '@ | python -
