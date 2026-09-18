@@ -196,6 +196,13 @@ jobs:
           def load(name):
               return json.loads(Path("dist", name).read_text(encoding="utf-8-sig"))
 
+          def text(name):
+              # argparse wraps help according to the console width. Normalize
+              # whitespace so safety assertions verify words/meaning rather than
+              # a platform-specific line break.
+              raw = Path("dist", name).read_text(encoding="utf-8-sig").lower()
+              return " ".join(raw.split())
+
           profiles = load("profiles.json")
           assert any(item["profile_id"] == "oneplus/avicii" for item in profiles)
           doctor = load("doctor.json")
@@ -214,28 +221,28 @@ jobs:
           assert bundle["hardware_verified"] is False
           assert bundle["beta_gate_credit"] is False
 
-          capture_help = Path("dist/capture-help.txt").read_text(encoding="utf-8-sig").lower()
+          capture_help = text("capture-help.txt")
           assert "read-only" in capture_help
           assert "--confirm-token" in capture_help
-          stock_help = Path("dist/stock-provenance-help.txt").read_text(encoding="utf-8-sig").lower()
+          stock_help = text("stock-provenance-help.txt")
           assert "offline" in stock_help
           assert "--ota" in stock_help
           assert "--payload" in stock_help
-          bind_help = Path("dist/stock-bind-help.txt").read_text(encoding="utf-8-sig").lower()
+          bind_help = text("stock-bind-help.txt")
           assert "offline" in bind_help
           assert "--baseline-evidence" in bind_help
-          candidate_help = Path("dist/candidate-bind-help.txt").read_text(encoding="utf-8-sig").lower()
+          candidate_help = text("candidate-bind-help.txt")
           assert "offline" in candidate_help
           assert "--physical-baseline" in candidate_help
-          offer_help = Path("dist/temporary-offer-help.txt").read_text(encoding="utf-8-sig").lower()
+          offer_help = text("temporary-offer-help.txt")
           assert "offline" in offer_help
           assert "not authorize execution" in offer_help
-          execution_help = Path("dist/temporary-execution-help.txt").read_text(encoding="utf-8-sig").lower()
+          execution_help = text("temporary-execution-help.txt")
           assert "--execute-temporary-boot" in execution_help
           assert "no persistent write verb" in execution_help
-          refusal = Path("dist/capture-refusal.txt").read_text(encoding="utf-8-sig").lower()
+          refusal = text("capture-refusal.txt")
           assert "--confirm-token" in refusal
-          execution_refusal = Path("dist/execution-refusal.txt").read_text(encoding="utf-8-sig").lower()
+          execution_refusal = text("execution-refusal.txt")
           assert "--execute-temporary-boot" in execution_refusal
           '@ | python -
 
