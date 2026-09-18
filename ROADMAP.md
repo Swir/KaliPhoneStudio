@@ -4,10 +4,6 @@ Current development line — 0.6.66-dev
 
 **58% complete**
 
-```text
-[█████████████████████████████---------------------] 58%
-```
-
 <div align="center">
   <img src="assets/readme/progress-mini.svg" alt="KaliPhoneStudio compact roadmap progress dashboard" width="900" />
 </div>
@@ -23,6 +19,9 @@ The compact dashboard is generated from the same authoritative `BUILD_STATUS.jso
 - [x] Python package `kaliphonestudio` and profile registry.
 - [x] Profile-scoped identity/serial verification and confirmation token.
 - [x] Profile-driven boot/partition/recovery/test contracts.
+- [x] Formal Draft 2020-12 `devices/profile.schema.json` plus runtime semantic validation for profile schema v3.
+- [x] Typed identity contract separates strong product/model signals from weak contextual signals such as a potentially shared board identifier.
+- [x] Registry-wide audit requires every strong value to resolve uniquely while weak-only device identification fails closed; the same contract is exercised through the frozen Windows CLI.
 - [x] First profile: `oneplus/avicii` / OnePlus Nord AC2003.
 - [x] Generic safety/temporary-boot paths avoid global AC2003 hard-coding where device policy can be profile-driven.
 - [x] Source/tool locking and provenance contracts.
@@ -141,7 +140,7 @@ KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual
 - current host-authority counter: the three reviewed reproducibility authority state fields in `BUILD_STATUS.json`;
 - unknown/unverifiable progress renders **N/A**, never fabricated `0%`/`100%`;
 - project progress and Beta release readiness are separate signals;
-- the protected text bar and percent remain human-readable fallbacks.
+- the numeric `58% complete` line is the human-readable fallback; legacy text-art progress meters are intentionally not maintained.
 
 ## Immediate next work
 

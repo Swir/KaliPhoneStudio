@@ -2,8 +2,14 @@
 
 Active development changes are listed here. Older detailed entries remain in [`CHANGELOG_HISTORY.md`](CHANGELOG_HISTORY.md).
 
-## 0.6.66-dev — cross-campaign physical release-gate audit
+## 0.6.66-dev — cross-campaign release audit and multi-device identity hardening
 
+- Added formal Draft 2020-12 `devices/profile.schema.json` for profile schema v3 and a pinned CI-only validator that also runs the runtime semantic profile validator.
+- Replaced flat safety-sensitive alias matching with profile-driven typed identity signals: strong product/model values may identify a device, while weak contextual values such as a shared bootloader board can never identify a phone by themselves.
+- Upgraded the registry audit so every strong identity value must resolve exactly one profile across the complete catalogue; shared weak values are allowed only while weak-only resolution remains impossible. The same contract is executed through the frozen Windows CLI.
+- Migrated `oneplus/avicii` to schema v3 with strong `avicii`/AC2003 identity and weak `lito` board context; this is a host-side safety contract and does not add physical hardware support.
+- Updated multi-device documentation, README/ROADMAP status wording, BUILD_STATUS and regression coverage; removed legacy text-art progress meters from maintained README/ROADMAP while preserving the numeric fallback and deterministic SWIR Progress SVG PRO presentation.
+- Project completion remains **58%** and Beta remains **BLOCKED** because no new physical AC2003 gate was passed.
 - Added `kaliphonestudio.physical_release_gate_audit` as a schema-v1 fail-closed audit packet joining one accepted exact physical bring-up dossier/review chain to one exact physical functional-result campaign.
 - The audit requires the canonical physical bring-up dossier, independent post-copy dossier verification, accepted dossier review, exact functional-result bundle, canonical functional-test plan and accepted independent test-plan review as exact non-symlink files with SHA-256/size and TOCTOU checks.
 - Cross-campaign validation now rejects profile/device drift and requires the exact physical boot observation, rescue diagnostics, raw rescue transcript and rescue probe identity to agree between the bring-up/storage dossier and the functional-test plan; the exact functional-hardware contract is also cross-checked.
@@ -33,7 +39,7 @@ Active development changes are listed here. Older detailed entries remain in [`C
 - Extended focused regression tests and `physical-hardware-functional-results` CI around rejected/detached review handling, immutable schema-v2 round trips and forbidden write/hardware/Beta promotion.
 - Implemented **SWIR Progress SVG PRO v1** with deterministic `progress-card.svg`, `progress-mini.svg`, a reusable N/A template, generator/check, XML/geometry/math tests and dedicated CI. The assets read the authoritative `BUILD_STATUS.json` project ledger and render Beta readiness separately.
 - For the current 58% ledger value, the generated fill is exactly 638/1100 px on the card and 406/700 px on the mini. Unknown progress renders N/A with no fabricated fill.
-- Embedded the card in README and mini in ROADMAP with textual fallback while preserving SWIR README PRO v2, Search Keywords and the protected 58% text bar.
+- Embedded the card in README and mini in ROADMAP with textual fallback while preserving SWIR README PRO v2 and Search Keywords.
 - Project completion remains **58%** and Beta remains **BLOCKED** because no new physical AC2003 gate has been passed.
 
 ## 0.6.63-dev — independent exact physical test-plan manual review
