@@ -4,11 +4,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from kaliphonestudio.physical_campaign_admission import load_current_physical_campaign_observation
 from kaliphonestudio.physical_rescue_diagnostics import load_physical_rescue_diagnostics_evidence
 from kaliphonestudio.physical_rescue_functional_probes import load_physical_rescue_functional_probe_evidence
 from kaliphonestudio.physical_storage_discovery import (
     load_rootfs_handoff_assessment,
-    record_physical_storage_discovery,
+    record_current_physical_storage_discovery,
     write_physical_storage_discovery_evidence,
 )
 from kaliphonestudio.profiles import get_profile
@@ -23,6 +24,7 @@ def main() -> int:
     )
     parser.add_argument("--devices-root", type=Path, default=Path("devices"))
     parser.add_argument("--profile-id", required=True)
+    parser.add_argument("--boot-observation", type=Path, required=True)
     parser.add_argument("--handoff-assessment", type=Path, required=True)
     parser.add_argument("--rescue-diagnostics", type=Path, required=True)
     parser.add_argument("--functional-probes", type=Path, required=True)
@@ -32,11 +34,13 @@ def main() -> int:
     args = parser.parse_args()
 
     profile = get_profile(args.devices_root, args.profile_id)
+    observation = load_current_physical_campaign_observation(args.boot_observation)
     assessment = load_rootfs_handoff_assessment(args.handoff_assessment)
     diagnostics = load_physical_rescue_diagnostics_evidence(args.rescue_diagnostics)
     functional = load_physical_rescue_functional_probe_evidence(args.functional_probes)
-    evidence = record_physical_storage_discovery(
+    evidence = record_current_physical_storage_discovery(
         profile,
+        observation,
         assessment,
         diagnostics,
         functional,
