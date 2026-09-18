@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from hashlib import sha256
 from pathlib import Path
 import subprocess
@@ -10,6 +10,7 @@ import pytest
 from kaliphonestudio.fastboot_baseline import FastbootBaselineEvidence
 from kaliphonestudio.fastboot_capture_bundle import FastbootCaptureBundleEvidence
 from kaliphonestudio.fastboot_tool import FastbootToolEvidence
+from kaliphonestudio.physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from kaliphonestudio.physical_candidate_gate import PhysicalCandidateGateEvidence
 from kaliphonestudio.profiles import DeviceProfile
 from kaliphonestudio.temporary_boot_execution import (
@@ -47,6 +48,70 @@ def _transcript(*, serial: str = "SERIAL123", unlocked: str = "yes", slot: str =
         "version-baseband": "BB1",
     }
     return "".join(f"(bootloader) {key}: {value}\n" for key, value in values.items()).encode("utf-8")
+
+
+def _binding(profile: DeviceProfile, gate: PhysicalCandidateGateEvidence) -> PhysicalBootIdentityBindingEvidence:
+    values = {field.name: None for field in fields(PhysicalBootIdentityBindingEvidence)}
+    values.update(
+        schema_version=1,
+        profile_id=profile.profile_id,
+        device_serial=gate.device_serial,
+        physical_baseline_bundle_sha256=gate.physical_baseline_bundle_sha256,
+        physical_candidate_gate_sha256=gate.evidence_sha256(),
+        stock_provenance_sha256=gate.stock_provenance_sha256,
+        boot_plan_sha256=gate.boot_plan_sha256,
+        stock_boot_sha256=gate.stock_boot_sha256,
+        stock_boot_size=4096,
+        stock_boot_header_version=2,
+        stock_kernel_sha256=_h("stock-kernel"),
+        stock_kernel_size=1024,
+        stock_ramdisk_sha256=_h("stock-ramdisk"),
+        stock_ramdisk_size=1024,
+        stock_second_sha256=None,
+        stock_second_size=0,
+        stock_recovery_dtbo_sha256=None,
+        stock_recovery_dtbo_size=0,
+        stock_dtb_sha256=_h("stock-dtb"),
+        stock_dtb_size=512,
+        stock_avb_footer_present=False,
+        stock_avb_footer_version_major=None,
+        stock_avb_footer_version_minor=None,
+        stock_avb_original_image_size=None,
+        stock_avb_vbmeta_offset=None,
+        stock_avb_vbmeta_size=None,
+        stock_avb_vbmeta_sha256=None,
+        candidate_boot_sha256=gate.boot_image_sha256,
+        candidate_boot_size=gate.boot_image_size,
+        candidate_boot_header_version=2,
+        candidate_kernel_sha256=gate.kernel_image_sha256,
+        candidate_kernel_size=1024,
+        candidate_ramdisk_sha256=_h("candidate-ramdisk"),
+        candidate_ramdisk_size=1024,
+        candidate_second_sha256=None,
+        candidate_second_size=0,
+        candidate_recovery_dtbo_sha256=None,
+        candidate_recovery_dtbo_size=0,
+        candidate_dtb_sha256=gate.dtb_sha256,
+        candidate_dtb_size=512,
+        candidate_external_dtbo_sha256=gate.dtbo_image_sha256,
+        candidate_external_dtbo_size=512,
+        candidate_avb_footer_present=False,
+        candidate_avb_footer_version_major=None,
+        candidate_avb_footer_version_minor=None,
+        candidate_avb_original_image_size=None,
+        candidate_avb_vbmeta_offset=None,
+        candidate_avb_vbmeta_size=None,
+        candidate_avb_vbmeta_sha256=None,
+        stock_exact_bytes_verified=True,
+        candidate_exact_bytes_verified=True,
+        component_identity_bound=True,
+        avb_layout_bound=True,
+        temporary_boot_executed=False,
+        phone_storage_written=False,
+        hardware_verified=False,
+        beta_gate_credit=False,
+    )
+    return PhysicalBootIdentityBindingEvidence(**values)
 
 
 def _fixture(tmp_path: Path):
@@ -179,7 +244,13 @@ def _fixture(tmp_path: Path):
         beta_gate_credit=False,
     )
     offer = prepare_temporary_boot_offer(
-        profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
+        profile,
+        gate,
+        capture,
+        tool,
+        boot_identity_binding=_binding(profile, gate),
+        fastboot_executable=fastboot,
+        boot_image=image,
     )
     authorization = authorize_temporary_boot_offer(offer, profile, "DEMO-PHONE")
     return profile, baseline, capture, tool, gate, offer, authorization, fastboot, image
@@ -278,6 +349,18 @@ def test_local_image_drift_fails_before_fastboot(tmp_path: Path) -> None:
     image.write_bytes(b"changed-after-authorization")
     runner, calls = _runner()
     with pytest.raises(TemporaryBootExecutionError, match="boot image bytes"):
+        execute_temporary_boot_once(profile, offer, auth, gate, capture, tool, baseline, runner=runner)
+    assert calls == []
+
+
+def test_binding_drift_fails_before_fastboot(tmp_path: Path) -> None:
+    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    offer = replace(
+        offer,
+        boot_identity_binding=replace(offer.boot_identity_binding, boot_plan_sha256=_h("other-plan")),
+    )
+    runner, calls = _runner()
+    with pytest.raises(TemporaryBootExecutionError, match="boot-plan mismatch"):
         execute_temporary_boot_once(profile, offer, auth, gate, capture, tool, baseline, runner=runner)
     assert calls == []
 
