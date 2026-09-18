@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -8,6 +8,7 @@ import pytest
 
 from kaliphonestudio.fastboot_capture_bundle import FastbootCaptureBundleEvidence
 from kaliphonestudio.fastboot_tool import FastbootToolEvidence
+from kaliphonestudio.physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from kaliphonestudio.physical_candidate_gate import PhysicalCandidateGateEvidence
 from kaliphonestudio.profiles import DeviceProfile
 from kaliphonestudio.temporary_boot_offer import (
@@ -21,6 +22,70 @@ from kaliphonestudio.temporary_boot_offer import (
 
 def _h(value: str) -> str:
     return sha256(value.encode("utf-8")).hexdigest()
+
+
+def _binding(profile: DeviceProfile, gate: PhysicalCandidateGateEvidence) -> PhysicalBootIdentityBindingEvidence:
+    values = {field.name: None for field in fields(PhysicalBootIdentityBindingEvidence)}
+    values.update(
+        schema_version=1,
+        profile_id=profile.profile_id,
+        device_serial=gate.device_serial,
+        physical_baseline_bundle_sha256=gate.physical_baseline_bundle_sha256,
+        physical_candidate_gate_sha256=gate.evidence_sha256(),
+        stock_provenance_sha256=gate.stock_provenance_sha256,
+        boot_plan_sha256=gate.boot_plan_sha256,
+        stock_boot_sha256=gate.stock_boot_sha256,
+        stock_boot_size=4096,
+        stock_boot_header_version=2,
+        stock_kernel_sha256=_h("stock-kernel"),
+        stock_kernel_size=1024,
+        stock_ramdisk_sha256=_h("stock-ramdisk"),
+        stock_ramdisk_size=1024,
+        stock_second_sha256=None,
+        stock_second_size=0,
+        stock_recovery_dtbo_sha256=None,
+        stock_recovery_dtbo_size=0,
+        stock_dtb_sha256=_h("stock-dtb") if gate.dtb_sha256 is not None else None,
+        stock_dtb_size=512 if gate.dtb_sha256 is not None else None,
+        stock_avb_footer_present=False,
+        stock_avb_footer_version_major=None,
+        stock_avb_footer_version_minor=None,
+        stock_avb_original_image_size=None,
+        stock_avb_vbmeta_offset=None,
+        stock_avb_vbmeta_size=None,
+        stock_avb_vbmeta_sha256=None,
+        candidate_boot_sha256=gate.boot_image_sha256,
+        candidate_boot_size=gate.boot_image_size,
+        candidate_boot_header_version=2,
+        candidate_kernel_sha256=gate.kernel_image_sha256,
+        candidate_kernel_size=1024,
+        candidate_ramdisk_sha256=_h("candidate-ramdisk"),
+        candidate_ramdisk_size=1024,
+        candidate_second_sha256=None,
+        candidate_second_size=0,
+        candidate_recovery_dtbo_sha256=None,
+        candidate_recovery_dtbo_size=0,
+        candidate_dtb_sha256=gate.dtb_sha256,
+        candidate_dtb_size=512 if gate.dtb_sha256 is not None else None,
+        candidate_external_dtbo_sha256=gate.dtbo_image_sha256,
+        candidate_external_dtbo_size=512 if gate.dtbo_image_sha256 is not None else None,
+        candidate_avb_footer_present=False,
+        candidate_avb_footer_version_major=None,
+        candidate_avb_footer_version_minor=None,
+        candidate_avb_original_image_size=None,
+        candidate_avb_vbmeta_offset=None,
+        candidate_avb_vbmeta_size=None,
+        candidate_avb_vbmeta_sha256=None,
+        stock_exact_bytes_verified=True,
+        candidate_exact_bytes_verified=True,
+        component_identity_bound=True,
+        avb_layout_bound=True,
+        temporary_boot_executed=False,
+        phone_storage_written=False,
+        hardware_verified=False,
+        beta_gate_credit=False,
+    )
+    return PhysicalBootIdentityBindingEvidence(**values)
 
 
 def _fixture(tmp_path: Path, *, boot_limit: int = 1024 * 1024):
@@ -108,15 +173,36 @@ def _fixture(tmp_path: Path, *, boot_limit: int = 1024 * 1024):
     return profile, gate, capture, tool, fastboot, image
 
 
+def _prepare(profile, gate, capture, tool, fastboot, image):
+    return prepare_temporary_boot_offer(
+        profile,
+        gate,
+        capture,
+        tool,
+        boot_identity_binding=_binding(profile, gate),
+        fastboot_executable=fastboot,
+        boot_image=image,
+    )
+
+
 def test_prepare_offer_is_exact_argv_only_and_nonexecuting(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
+    binding = _binding(profile, gate)
     offer = prepare_temporary_boot_offer(
-        profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
+        profile,
+        gate,
+        capture,
+        tool,
+        boot_identity_binding=binding,
+        fastboot_executable=fastboot,
+        boot_image=image,
     )
     assert offer.argv == (
         str(fastboot.resolve()), "-s", "SERIAL123", "boot", str(image.resolve())
     )
-    assert offer.evidence.command_policy == "fastboot-serial-temporary-boot-only-v1"
+    assert offer.evidence.schema_version == 2
+    assert offer.evidence.command_policy == "fastboot-serial-temporary-boot-only-v2-exact-boot-identity"
+    assert offer.evidence.physical_boot_identity_binding_sha256 == binding.evidence_sha256()
     assert offer.evidence.persistent_write is False
     assert offer.evidence.phone_storage_written is False
     assert offer.evidence.temporary_boot_executed is False
@@ -125,46 +211,66 @@ def test_prepare_offer_is_exact_argv_only_and_nonexecuting(tmp_path: Path) -> No
     verify_temporary_boot_offer(offer, profile, gate, capture, tool)
 
 
+def test_rejects_detached_exact_boot_identity_binding(tmp_path: Path) -> None:
+    profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
+    binding = replace(_binding(profile, gate), boot_plan_sha256=_h("other-plan"))
+    with pytest.raises(TemporaryBootOfferError, match="boot-plan mismatch"):
+        prepare_temporary_boot_offer(
+            profile,
+            gate,
+            capture,
+            tool,
+            boot_identity_binding=binding,
+            fastboot_executable=fastboot,
+            boot_image=image,
+        )
+
+
+def test_rejects_candidate_binding_byte_drift(tmp_path: Path) -> None:
+    profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
+    binding = replace(_binding(profile, gate), candidate_boot_sha256=_h("other-image"))
+    with pytest.raises(TemporaryBootOfferError, match="candidate boot mismatch"):
+        prepare_temporary_boot_offer(
+            profile,
+            gate,
+            capture,
+            tool,
+            boot_identity_binding=binding,
+            fastboot_executable=fastboot,
+            boot_image=image,
+        )
+
+
 def test_rejects_detached_capture_bundle(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
     capture = replace(capture, transcript_sha256=_h("other-transcript"))
     with pytest.raises(TemporaryBootOfferError, match="detached"):
-        prepare_temporary_boot_offer(
-            profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
-        )
+        _prepare(profile, gate, capture, tool, fastboot, image)
 
 
 def test_rejects_fastboot_byte_drift(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
     fastboot.write_bytes(b"different-fastboot")
     with pytest.raises(TemporaryBootOfferError, match="executable bytes"):
-        prepare_temporary_boot_offer(
-            profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
-        )
+        _prepare(profile, gate, capture, tool, fastboot, image)
 
 
 def test_rejects_candidate_image_byte_drift(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
     image.write_bytes(b"different-image")
     with pytest.raises(TemporaryBootOfferError, match="boot image bytes"):
-        prepare_temporary_boot_offer(
-            profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
-        )
+        _prepare(profile, gate, capture, tool, fastboot, image)
 
 
 def test_rejects_boot_image_above_profile_limit(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path, boot_limit=64)
     with pytest.raises(TemporaryBootOfferError, match="partition limit"):
-        prepare_temporary_boot_offer(
-            profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
-        )
+        _prepare(profile, gate, capture, tool, fastboot, image)
 
 
 def test_user_authorization_requires_exact_profile_confirmation(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
-    offer = prepare_temporary_boot_offer(
-        profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
-    )
+    offer = _prepare(profile, gate, capture, tool, fastboot, image)
     with pytest.raises(TemporaryBootOfferError, match="confirmation token"):
         authorize_temporary_boot_offer(offer, profile, "WRONG")
     authorization = authorize_temporary_boot_offer(offer, profile, "DEMO-PHONE")
@@ -182,7 +288,13 @@ def test_rejects_profile_or_gate_host_claim_drift(tmp_path: Path) -> None:
     changed_profile = replace(profile, data={**profile.data, "profile_id": "acme/other"})
     with pytest.raises(TemporaryBootOfferError, match="profile mismatch"):
         prepare_temporary_boot_offer(
-            changed_profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
+            changed_profile,
+            gate,
+            capture,
+            tool,
+            boot_identity_binding=_binding(profile, gate),
+            fastboot_executable=fastboot,
+            boot_image=image,
         )
     with pytest.raises(TemporaryBootOfferError, match="host-only claim"):
         prepare_temporary_boot_offer(
@@ -190,6 +302,7 @@ def test_rejects_profile_or_gate_host_claim_drift(tmp_path: Path) -> None:
             replace(gate, temporary_boot_executed=True),
             capture,
             tool,
+            boot_identity_binding=_binding(profile, gate),
             fastboot_executable=fastboot,
             boot_image=image,
         )
@@ -197,9 +310,7 @@ def test_rejects_profile_or_gate_host_claim_drift(tmp_path: Path) -> None:
 
 def test_writer_is_immutable_and_rejects_execution_claim(tmp_path: Path) -> None:
     profile, gate, capture, tool, fastboot, image = _fixture(tmp_path)
-    offer = prepare_temporary_boot_offer(
-        profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
-    )
+    offer = _prepare(profile, gate, capture, tool, fastboot, image)
     destination = tmp_path / "offer.json"
     digest = write_temporary_boot_offer(offer.evidence, destination)
     assert digest == offer.evidence.evidence_sha256()
