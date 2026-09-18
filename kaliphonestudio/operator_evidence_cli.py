@@ -2,10 +2,10 @@
 
 This module deliberately contains no ADB/Fastboot/subprocess/device-I/O path. It
 consolidates exact-file rescue, survey-review, storage-review and functional-test
-planning operations that previously required separate helper scripts. Every
-operation consumes already captured evidence/files and preserves the underlying
-fail-closed contracts; it cannot select a storage target, authorize a persistent
-write, promote hardware support or grant Beta credit.
+planning/result operations that previously required separate helper scripts.
+Every operation consumes already captured evidence/files and preserves the
+underlying fail-closed contracts; it cannot select a storage target, authorize a
+persistent write, promote hardware support or grant Beta credit.
 """
 from __future__ import annotations
 
@@ -17,6 +17,10 @@ import re
 import sys
 from typing import Sequence
 
+from .physical_hardware_result_bundle import (
+    build_physical_hardware_result_bundle_from_files,
+    write_physical_hardware_result_bundle_evidence,
+)
 from .physical_hardware_review import (
     make_rejected_hardware_review_record,
     review_physical_hardware_survey_files,
@@ -27,6 +31,12 @@ from .physical_hardware_survey import (
     record_physical_hardware_survey,
     write_physical_hardware_survey_evidence,
 )
+from .physical_hardware_test_observation import (
+    bind_physical_hardware_test_observation_from_files,
+    load_physical_hardware_test_observation_evidence,
+    make_inconclusive_physical_hardware_test_observation_record,
+    write_physical_hardware_test_observation_evidence,
+)
 from .physical_hardware_test_plan import (
     build_physical_hardware_test_plan_from_file,
     load_physical_hardware_test_plan,
@@ -34,8 +44,18 @@ from .physical_hardware_test_plan import (
 )
 from .physical_hardware_test_plan_review import (
     bind_physical_hardware_test_plan_review_from_files,
+    load_physical_hardware_test_plan_review_evidence,
     make_rejected_physical_hardware_test_plan_review_record,
     write_physical_hardware_test_plan_review_evidence,
+)
+from .physical_hardware_test_review import (
+    bind_physical_hardware_test_review_from_files,
+    make_rejected_physical_hardware_test_review_record,
+    write_physical_hardware_test_review_evidence,
+)
+from .physical_hardware_test_summary import (
+    build_physical_hardware_test_summary_from_files,
+    write_physical_hardware_test_summary_evidence,
 )
 from .physical_rescue_diagnostics import (
     load_physical_boot_observation_for_diagnostics,
@@ -66,6 +86,12 @@ EVIDENCE_COMMANDS = (
     "build-functional-test-plan",
     "prepare-functional-test-plan-review",
     "bind-functional-test-plan-review",
+    "prepare-functional-test-observation",
+    "bind-functional-test-observation",
+    "prepare-functional-test-result-review",
+    "bind-functional-test-result-review",
+    "summarize-functional-test-results",
+    "build-functional-result-bundle",
 )
 
 
@@ -185,6 +211,88 @@ def _build_parser() -> argparse.ArgumentParser:
     plan_review.add_argument("--review-record", type=Path, required=True)
     plan_review.add_argument("--review-notes", type=Path, required=True)
     _add_output(plan_review)
+
+    observation_template = sub.add_parser(
+        "prepare-functional-test-observation",
+        help="Create an inconclusive/not-executed template for one exact reviewed physical functional test.",
+        description=(
+            "Offline-only: requires the exact accepted plan-review evidence before creating a template. "
+            "The template starts not executed/inconclusive and grants no hardware/Beta credit."
+        ),
+    )
+    observation_template.add_argument("--test-plan", type=Path, required=True)
+    observation_template.add_argument("--test-plan-review-evidence", type=Path, required=True)
+    observation_template.add_argument("--test-id", required=True)
+    observation_template.add_argument("--operator", required=True)
+    _add_output(observation_template)
+
+    observation_bind = sub.add_parser(
+        "bind-functional-test-observation",
+        help="Bind one operator record/notes set to the exact accepted physical functional-test plan.",
+        description=(
+            "Offline-only evidence binding. The operator record must describe an already performed physical test; "
+            "this command itself performs no phone I/O and cannot promote hardware/Beta status."
+        ),
+    )
+    observation_bind.add_argument("--test-plan", type=Path, required=True)
+    observation_bind.add_argument("--test-plan-review-evidence", type=Path, required=True)
+    observation_bind.add_argument("--test-id", required=True)
+    observation_bind.add_argument("--observation-record", type=Path, required=True)
+    observation_bind.add_argument("--observation-notes", type=Path, required=True)
+    _add_output(observation_bind)
+
+    result_review_template = sub.add_parser(
+        "prepare-functional-test-result-review",
+        help="Create a rejected-by-default independent review template for one exact observation evidence file.",
+        description=(
+            "Offline-only: prepares manual result review. A later accepted review is test-level evidence only "
+            "and never authorizes project support or Beta release."
+        ),
+    )
+    result_review_template.add_argument("--observation-evidence", type=Path, required=True)
+    result_review_template.add_argument("--reviewer", required=True)
+    _add_output(result_review_template)
+
+    result_review_bind = sub.add_parser(
+        "bind-functional-test-result-review",
+        help="Bind an exact observation, review record and review notes into immutable result-review evidence.",
+        description=(
+            "Offline-only: binds a manual reviewed pass/fail/inconclusive decision for one exact observation. "
+            "Project support/hardware/Beta promotion remains forbidden."
+        ),
+    )
+    result_review_bind.add_argument("--observation-evidence", type=Path, required=True)
+    result_review_bind.add_argument("--review-record", type=Path, required=True)
+    result_review_bind.add_argument("--review-notes", type=Path, required=True)
+    _add_output(result_review_bind)
+
+    result_summary = sub.add_parser(
+        "summarize-functional-test-results",
+        help="Build an exact-plan aggregate status summary from independent result-review evidence.",
+        description=(
+            "Offline-only: summarizes exact reviewed test statuses. Complete reviewed-pass coverage is still "
+            "release-gate input only and grants no hardware/Beta credit."
+        ),
+    )
+    result_summary.add_argument("--test-plan", type=Path, required=True)
+    result_summary.add_argument("--review-evidence", type=Path, action="append", default=[])
+    _add_output(result_summary)
+
+    result_bundle = sub.add_parser(
+        "build-functional-result-bundle",
+        help="Freeze exact plan/review/observations/result-reviews/summary into one audit bundle.",
+        description=(
+            "Offline-only: cross-binds the complete exact-file functional campaign. Even complete Beta-required "
+            "reviewed-pass coverage remains manual release-gate input and grants no hardware/Beta credit."
+        ),
+    )
+    result_bundle.add_argument("--test-plan", type=Path, required=True)
+    result_bundle.add_argument("--test-plan-review-evidence", type=Path, required=True)
+    result_bundle.add_argument("--observation-evidence", type=Path, action="append", default=[])
+    result_bundle.add_argument("--review-evidence", type=Path, action="append", default=[])
+    result_bundle.add_argument("--summary-evidence", type=Path, required=True)
+    _add_output(result_bundle)
+
     return parser
 
 
@@ -403,6 +511,127 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             device_serial=evidence.device_serial,
             decision=evidence.decision,
             accepted_for_physical_execution=evidence.accepted_for_physical_execution,
+        )
+
+    if command == "prepare-functional-test-observation":
+        plan = load_physical_hardware_test_plan(args.test_plan)
+        plan_review = load_physical_hardware_test_plan_review_evidence(args.test_plan_review_evidence)
+        record = make_inconclusive_physical_hardware_test_observation_record(
+            plan,
+            plan_review,
+            args.test_id,
+            args.operator,
+        )
+        digest = _write_text_exclusive(args.out, record.canonical_json())
+        return _safe_result(
+            command,
+            args.out,
+            digest,
+            profile_id=record.profile_id,
+            device_serial=record.device_serial,
+            test_id=record.test_id,
+            outcome=record.outcome,
+            physical_test_executed=record.physical_test_executed,
+            template_only=True,
+        )
+
+    if command == "bind-functional-test-observation":
+        evidence = bind_physical_hardware_test_observation_from_files(
+            args.test_plan,
+            args.test_plan_review_evidence,
+            args.test_id,
+            args.observation_record,
+            args.observation_notes,
+        )
+        digest = write_physical_hardware_test_observation_evidence(evidence, args.out)
+        return _safe_result(
+            command,
+            args.out,
+            digest,
+            profile_id=evidence.profile_id,
+            device_serial=evidence.device_serial,
+            test_id=evidence.test_id,
+            outcome=evidence.outcome,
+            evidence_physical_test_executed=evidence.physical_test_executed,
+            manual_review_required=evidence.manual_review_required,
+        )
+
+    if command == "prepare-functional-test-result-review":
+        observation = load_physical_hardware_test_observation_evidence(args.observation_evidence)
+        record = make_rejected_physical_hardware_test_review_record(observation, args.reviewer)
+        digest = _write_text_exclusive(args.out, record.canonical_json())
+        return _safe_result(
+            command,
+            args.out,
+            digest,
+            profile_id=observation.profile_id,
+            device_serial=observation.device_serial,
+            test_id=observation.test_id,
+            decision="rejected",
+            template_only=True,
+        )
+
+    if command == "bind-functional-test-result-review":
+        evidence = bind_physical_hardware_test_review_from_files(
+            args.observation_evidence,
+            args.review_record,
+            args.review_notes,
+        )
+        digest = write_physical_hardware_test_review_evidence(evidence, args.out)
+        return _safe_result(
+            command,
+            args.out,
+            digest,
+            profile_id=evidence.profile_id,
+            device_serial=evidence.device_serial,
+            test_id=evidence.test_id,
+            decision=evidence.decision,
+            reviewed_result=evidence.reviewed_result,
+            accepted_for_functional_status=evidence.accepted_for_functional_status,
+            manual_release_gate_review_required=evidence.manual_release_gate_review_required,
+        )
+
+    if command == "summarize-functional-test-results":
+        summary = build_physical_hardware_test_summary_from_files(
+            args.test_plan,
+            args.review_evidence,
+        )
+        digest = write_physical_hardware_test_summary_evidence(summary, args.out)
+        return _safe_result(
+            command,
+            args.out,
+            digest,
+            profile_id=summary.profile_id,
+            device_serial=summary.device_serial,
+            reviewed_pass_count=summary.reviewed_pass_count,
+            test_count=summary.test_count,
+            beta_required_reviewed_pass_count=summary.beta_required_reviewed_pass_count,
+            beta_required_test_count=summary.beta_required_test_count,
+            beta_required_tests_all_reviewed_pass=summary.beta_required_tests_all_reviewed_pass,
+            manual_release_gate_review_required=True,
+        )
+
+    if command == "build-functional-result-bundle":
+        bundle = build_physical_hardware_result_bundle_from_files(
+            args.test_plan,
+            args.test_plan_review_evidence,
+            args.observation_evidence,
+            args.review_evidence,
+            args.summary_evidence,
+        )
+        digest = write_physical_hardware_result_bundle_evidence(bundle, args.out)
+        return _safe_result(
+            command,
+            args.out,
+            digest,
+            profile_id=bundle.profile_id,
+            device_serial=bundle.device_serial,
+            observation_count=bundle.observation_count,
+            result_review_count=bundle.result_review_count,
+            beta_required_reviewed_pass_count=bundle.beta_required_reviewed_pass_count,
+            beta_required_test_count=bundle.beta_required_test_count,
+            beta_required_tests_all_reviewed_pass=bundle.beta_required_tests_all_reviewed_pass,
+            manual_release_gate_review_required=True,
         )
 
     raise ValueError(f"unsupported evidence command: {command}")
