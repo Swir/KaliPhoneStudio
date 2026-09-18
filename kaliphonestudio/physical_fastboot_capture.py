@@ -3,11 +3,11 @@
 This module is the single operator-facing implementation for capturing one exact
 read-only physical Fastboot baseline. It verifies the profile-specific
 confirmation token before any external command, verifies the reviewed Fastboot
-binary, executes only ``fastboot --version``, ``fastboot devices`` and
-``fastboot -s SERIAL getvar all``, then publishes an exact four-file evidence
-set. It never boots, reboots, flashes, erases, changes slots or writes phone
-storage. A successful capture is evidence input only and grants no hardware or
-Beta credit.
+binary before and after acquisition, executes only ``fastboot --version``,
+``fastboot devices`` and ``fastboot -s SERIAL getvar all``, then publishes an
+exact four-file evidence set. It never boots, reboots, flashes, erases, changes
+slots or writes phone storage. A successful capture is evidence input only and
+grants no hardware or Beta credit.
 """
 from __future__ import annotations
 
@@ -58,8 +58,8 @@ class PhysicalFastbootCaptureResult:
     profile_id: str
     product: str
     serialno: str
-    current_slot: str
-    slot_count: int
+    current_slot: str | None
+    slot_count: int | None
     unlocked: bool
     secure: bool
     firmware_build: str
@@ -179,8 +179,10 @@ def capture_physical_fastboot_baseline(
 
     The profile confirmation token is checked before any Fastboot executable is
     inspected or run. All final and staging destinations are validated before
-    device interaction. On any failure after publication begins, all newly
-    published final files are removed and every staging file is cleaned up.
+    device interaction. The exact Fastboot binary identity is checked again
+    after acquisition so a tool change during the capture fails closed. On any
+    failure after publication begins, all newly published final files are
+    removed and every staging file is cleaned up.
     """
     if not isinstance(profile, DeviceProfile):
         raise PhysicalFastbootCaptureError("a validated DeviceProfile is required")
@@ -196,11 +198,12 @@ def capture_physical_fastboot_baseline(
         raise PhysicalFastbootCaptureError("exact firmware fingerprint is required")
 
     _validate_destinations(destinations)
+    policy_path = Path(fastboot_policy)
 
     try:
         tool_evidence, resolved_fastboot = inspect_fastboot_tool(
             fastboot,
-            policy_path=Path(fastboot_policy),
+            policy_path=policy_path,
             timeout_seconds=tool_timeout_seconds,
         )
         payload = capture_fastboot_getvar_all(
@@ -209,6 +212,15 @@ def capture_physical_fastboot_baseline(
             timeout_seconds=capture_timeout_seconds,
         )
         validate_capture_with_offline_parser(payload)
+        post_capture_tool_evidence, post_capture_resolved = inspect_fastboot_tool(
+            resolved_fastboot,
+            policy_path=policy_path,
+            timeout_seconds=tool_timeout_seconds,
+        )
+        if post_capture_resolved != resolved_fastboot or post_capture_tool_evidence != tool_evidence:
+            raise PhysicalFastbootCaptureError(
+                "Fastboot executable identity changed during physical baseline capture"
+            )
     except (FastbootCaptureError, FastbootToolError) as exc:
         raise PhysicalFastbootCaptureError(str(exc)) from exc
 
