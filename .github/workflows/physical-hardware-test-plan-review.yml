@@ -6,6 +6,9 @@ on:
     paths:
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
+      - "kaliphonestudio/physical_boot_observation.py"
+      - "tests/test_current_physical_observation_downstream_gate.py"
       - "scripts/prepare_physical_hardware_test_plan_review.py"
       - "scripts/review_physical_hardware_test_plan.py"
       - "tests/test_physical_hardware_test_plan_review.py"
@@ -14,6 +17,9 @@ on:
     paths:
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
+      - "kaliphonestudio/physical_boot_observation.py"
+      - "tests/test_current_physical_observation_downstream_gate.py"
       - "scripts/prepare_physical_hardware_test_plan_review.py"
       - "scripts/review_physical_hardware_test_plan.py"
       - "tests/test_physical_hardware_test_plan_review.py"
@@ -38,10 +44,13 @@ jobs:
           python -m py_compile
           kaliphonestudio/physical_hardware_test_plan.py
           kaliphonestudio/physical_hardware_test_plan_review.py
+          kaliphonestudio/physical_campaign_admission.py
+          kaliphonestudio/physical_boot_observation.py
           scripts/prepare_physical_hardware_test_plan_review.py
           scripts/review_physical_hardware_test_plan.py
           tests/test_physical_hardware_test_plan_review.py
+          tests/test_current_physical_observation_downstream_gate.py
       - name: Run fail-closed plan-review tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: pytest -q tests/test_physical_hardware_test_plan_review.py
+        run: pytest -q tests/test_physical_hardware_test_plan_review.py tests/test_current_physical_observation_downstream_gate.py
