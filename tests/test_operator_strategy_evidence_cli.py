@@ -47,6 +47,8 @@ def test_unified_workspace_exposes_strategy_review_commands(capsys) -> None:
     expected = (
         "prepare-rootfs-handoff-strategy-review",
         "bind-rootfs-handoff-strategy-review",
+        "prepare-rootfs-handoff-target-binding-review",
+        "bind-rootfs-handoff-target-binding-review",
     )
     assert operator_strategy_evidence_cli.STRATEGY_EVIDENCE_COMMANDS == expected
     assert len(operator_evidence_workspace.ALL_EVIDENCE_COMMANDS) == len(
@@ -155,6 +157,42 @@ def test_missing_bind_inputs_fail_closed_without_evidence(tmp_path: Path) -> Non
             "--dossier", str(tmp_path / "missing-dossier.json"),
             "--dossier-review", str(tmp_path / "missing-dossier-review.json"),
             "--release-gate-audit", str(tmp_path / "missing-audit.json"),
+            "--review-record", str(tmp_path / "missing-record.json"),
+            "--review-notes", str(tmp_path / "missing-notes.txt"),
+            "--out", str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
+def test_missing_target_binding_prepare_inputs_fail_closed_without_outputs(tmp_path: Path) -> None:
+    record = tmp_path / "target-record.json"
+    notes = tmp_path / "target-notes.txt"
+    rc = operator_evidence_workspace.main(
+        [
+            "prepare-rootfs-handoff-target-binding-review",
+            "--storage-discovery", str(tmp_path / "missing-discovery.json"),
+            "--storage-report", str(tmp_path / "missing-report.json"),
+            "--strategy-review", str(tmp_path / "missing-strategy.json"),
+            "--reviewer", "reviewer-ci",
+            "--record-out", str(record),
+            "--notes-out", str(notes),
+        ]
+    )
+    assert rc == 2
+    assert not record.exists()
+    assert not notes.exists()
+
+
+def test_missing_target_binding_bind_inputs_fail_closed_without_output(tmp_path: Path) -> None:
+    destination = tmp_path / "target-binding.json"
+    rc = operator_evidence_workspace.main(
+        [
+            "bind-rootfs-handoff-target-binding-review",
+            "--storage-discovery", str(tmp_path / "missing-discovery.json"),
+            "--storage-report", str(tmp_path / "missing-report.json"),
+            "--strategy-review", str(tmp_path / "missing-strategy.json"),
             "--review-record", str(tmp_path / "missing-record.json"),
             "--review-notes", str(tmp_path / "missing-notes.txt"),
             "--out", str(destination),

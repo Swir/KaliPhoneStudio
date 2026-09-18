@@ -1,8 +1,10 @@
-"""Offline rootfs-strategy review commands for the shared operator workspace.
+"""Offline rootfs-strategy and logical target-binding commands for the shared operator workspace.
 
 These commands consume already captured physical evidence only. They never invoke
-ADB/Fastboot, never communicate with a phone, never select a raw storage path,
-never authorize a persistent write and never grant hardware/Beta credit.
+ADB/Fastboot, never communicate with a phone, never bind a raw block-device path
+or mount target, never authorize a persistent write and never grant hardware/Beta
+credit. An accepted target-binding review binds only a logical identity and still
+requires a later fresh-device/manual execution gate.
 """
 from __future__ import annotations
 
@@ -27,11 +29,18 @@ from .rootfs_handoff_strategy_review import (
     read_rootfs_handoff_strategy_review_notes,
     write_rootfs_handoff_strategy_review_evidence,
 )
+from .rootfs_handoff_target_binding import (
+    bind_rootfs_handoff_target_binding_review,
+    prepare_rootfs_handoff_target_binding_review_record,
+    write_rootfs_handoff_target_binding_evidence,
+)
 
 _SAFE_REVIEWER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$")
 STRATEGY_EVIDENCE_COMMANDS = (
     "prepare-rootfs-handoff-strategy-review",
     "bind-rootfs-handoff-strategy-review",
+    "prepare-rootfs-handoff-target-binding-review",
+    "bind-rootfs-handoff-target-binding-review",
 )
 
 
@@ -39,8 +48,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="KaliPhoneStudio evidence",
         description=(
-            "Offline reversible rootfs-strategy review workspace. No phone I/O, raw target selection, "
-            "persistent write authorization, hardware promotion or Beta credit is possible here."
+            "Offline reversible rootfs strategy/target review workspace. No phone I/O, raw target binding, "
+            "mounting, persistent write authorization, hardware promotion or Beta credit is possible here."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Emit a machine-readable safety/result summary.")
@@ -79,6 +88,36 @@ def _build_parser() -> argparse.ArgumentParser:
     bind.add_argument("--review-record", type=Path, required=True)
     bind.add_argument("--review-notes", type=Path, required=True)
     bind.add_argument("--out", type=Path, required=True)
+
+    prepare_target = sub.add_parser(
+        "prepare-rootfs-handoff-target-binding-review",
+        help="Create a rejected-by-default logical target-binding review record and notes.",
+        description=(
+            "Prepare an exact logical target-binding review from the accepted strategy and bound physical "
+            "storage report. No raw /dev path, mount target, trial execution or write authorization is emitted."
+        ),
+    )
+    prepare_target.add_argument("--storage-discovery", type=Path, required=True)
+    prepare_target.add_argument("--storage-report", type=Path, required=True)
+    prepare_target.add_argument("--strategy-review", type=Path, required=True)
+    prepare_target.add_argument("--reviewer", required=True)
+    prepare_target.add_argument("--record-out", type=Path, required=True)
+    prepare_target.add_argument("--notes-out", type=Path, required=True)
+
+    bind_target = sub.add_parser(
+        "bind-rootfs-handoff-target-binding-review",
+        help="Bind an independently edited logical target review to the exact physical evidence chain.",
+        description=(
+            "Bind one review to exact physical storage report bytes and accepted strategy evidence. "
+            "Acceptance binds only the logical target identity; a fresh-device/manual trial gate remains mandatory."
+        ),
+    )
+    bind_target.add_argument("--storage-discovery", type=Path, required=True)
+    bind_target.add_argument("--storage-report", type=Path, required=True)
+    bind_target.add_argument("--strategy-review", type=Path, required=True)
+    bind_target.add_argument("--review-record", type=Path, required=True)
+    bind_target.add_argument("--review-notes", type=Path, required=True)
+    bind_target.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -86,7 +125,7 @@ def _write_pair_exclusive(record_path: Path, record_text: str, notes_path: Path,
     record_path = Path(record_path)
     notes_path = Path(notes_path)
     if record_path == notes_path:
-        raise ValueError("strategy review record and notes outputs must be different files")
+        raise ValueError("review record and notes outputs must be different files")
     for destination in (record_path, notes_path):
         if destination.exists() or destination.is_symlink():
             raise ValueError(f"refusing to overwrite existing output: {destination}")
@@ -115,6 +154,8 @@ def _safe_result(command: str, path: Path, digest: str, **extra: object) -> dict
         "physical_interaction_performed": False,
         "external_device_command_executed": False,
         "storage_target_selected": False,
+        "raw_device_path_bound": False,
+        "mount_target_bound": False,
         "persistent_write_authorized": False,
         "phone_storage_written": False,
         "hardware_verified": False,
@@ -133,7 +174,7 @@ def _emit(result: dict[str, object], *, as_json: bool) -> None:
     print(f"output: {result['path']}")
     print(f"sha256: {result['sha256']}")
     print("physical interaction/device command: no")
-    print("storage target/persistent write: no")
+    print("raw target/mount/persistent write: no")
     print("hardware/Beta authorization: no")
 
 
@@ -178,8 +219,6 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             write_authorized=False,
             phone_storage_written=False,
         )
-        # Run the canonical parser before writing any template so malformed roles,
-        # paths, digests or size values cannot be emitted even in rejected state.
         record = parse_rootfs_handoff_strategy_review_record(json.loads(record.canonical_json()))
         notes = (
             "Rootfs handoff strategy review notes\n\n"
@@ -203,8 +242,6 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
 
     if args.evidence_command == "bind-rootfs-handoff-strategy-review":
         record, record_sha, record_size = load_rootfs_handoff_strategy_review_record(args.review_record)
-        # Recompute the identity from the parsed canonical record before binding. This makes
-        # the shared operator path fail closed if a caller ever supplies detached metadata.
         canonical = record.canonical_json().encode("utf-8")
         if record_sha != sha256(canonical).hexdigest() or record_size != len(canonical):
             raise ValueError("strategy review record digest/size does not match canonical record bytes")
@@ -232,6 +269,58 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             strategy_design_accepted=evidence.strategy_design_accepted,
             manual_target_binding_required=evidence.manual_target_binding_required,
             physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
+        )
+
+    if args.evidence_command == "prepare-rootfs-handoff-target-binding-review":
+        record = prepare_rootfs_handoff_target_binding_review_record(
+            args.storage_discovery,
+            args.storage_report,
+            args.strategy_review,
+            args.reviewer,
+        )
+        notes = (
+            "Rootfs handoff target-binding review notes\n\n"
+            "Review the exact logical partition identity, filesystem/encryption unlock state, free capacity, "
+            "recovery plan and staging subpath. Do not record a raw /dev path, mount target or write authorization.\n"
+        )
+        record_digest, notes_digest = _write_pair_exclusive(
+            args.record_out, record.canonical_json(), args.notes_out, notes
+        )
+        return _safe_result(
+            args.evidence_command,
+            args.record_out,
+            record_digest,
+            profile_id=record.profile_id,
+            device_serial=record.device_serial,
+            decision="rejected",
+            template_only=True,
+            logical_target_identity_bound=False,
+            trial_execution_allowed=False,
+            notes_path=str(args.notes_out),
+            notes_sha256=notes_digest,
+        )
+
+    if args.evidence_command == "bind-rootfs-handoff-target-binding-review":
+        evidence = bind_rootfs_handoff_target_binding_review(
+            args.storage_discovery,
+            args.storage_report,
+            args.strategy_review,
+            args.review_record,
+            args.review_notes,
+        )
+        digest = write_rootfs_handoff_target_binding_evidence(evidence, args.out)
+        return _safe_result(
+            args.evidence_command,
+            args.out,
+            digest,
+            profile_id=evidence.profile_id,
+            device_serial=evidence.device_serial,
+            decision=evidence.decision,
+            logical_target_identity_bound=evidence.logical_target_identity_bound,
+            fresh_device_revalidation_required=evidence.fresh_device_revalidation_required,
+            manual_trial_execution_required=evidence.manual_trial_execution_required,
+            physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
+            trial_execution_allowed=False,
         )
 
     raise ValueError(f"unsupported strategy evidence command: {args.evidence_command}")
