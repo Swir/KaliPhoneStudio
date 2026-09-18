@@ -1,0 +1,71 @@
+name: physical-fastboot-capture
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/fastboot_capture.py"
+      - "kaliphonestudio/fastboot_baseline.py"
+      - "kaliphonestudio/fastboot_tool.py"
+      - "kaliphonestudio/fastboot_capture_bundle.py"
+      - "devices/**/profile.json"
+      - "tools/fastboot-tool-policy.json"
+      - "scripts/capture_fastboot_baseline.py"
+      - "tests/test_physical_fastboot_capture.py"
+      - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
+      - ".github/workflows/physical-fastboot-capture.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/fastboot_capture.py"
+      - "kaliphonestudio/fastboot_baseline.py"
+      - "kaliphonestudio/fastboot_tool.py"
+      - "kaliphonestudio/fastboot_capture_bundle.py"
+      - "devices/**/profile.json"
+      - "tools/fastboot-tool-policy.json"
+      - "scripts/capture_fastboot_baseline.py"
+      - "tests/test_physical_fastboot_capture.py"
+      - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
+      - ".github/workflows/physical-fastboot-capture.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-capture-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test dependency
+        run: python -m pip install pytest
+      - name: Compile guarded capture surface
+        run: >-
+          python -m compileall -q
+          kaliphonestudio/physical_fastboot_capture.py
+          kaliphonestudio/fastboot_capture.py
+          kaliphonestudio/fastboot_baseline.py
+          kaliphonestudio/fastboot_tool.py
+          kaliphonestudio/fastboot_capture_bundle.py
+          scripts/capture_fastboot_baseline.py
+          main.py
+      - name: Run read-only capture and baseline contracts
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_physical_fastboot_capture.py
+          tests/test_fastboot_capture.py
+          tests/test_fastboot_baseline.py
+          tests/test_fastboot_tool.py
