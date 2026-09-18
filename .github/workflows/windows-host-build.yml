@@ -7,6 +7,11 @@ on:
       - "main.py"
       - "kaliphonestudio/app.py"
       - "kaliphonestudio/operator_diagnostics.py"
+      - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/fastboot_capture.py"
+      - "kaliphonestudio/fastboot_baseline.py"
+      - "kaliphonestudio/fastboot_tool.py"
+      - "kaliphonestudio/fastboot_capture_bundle.py"
       - "devices/**/profile.json"
       - "assets/**"
       - "tools/**"
@@ -16,13 +21,20 @@ on:
       - "build/windows-requirements.txt"
       - "scripts/build_windows.ps1"
       - "tests/test_windows_packaging_contract.py"
+      - "tests/test_physical_fastboot_capture.py"
       - "docs/WINDOWS_HOST_BUILD.md"
+      - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
       - ".github/workflows/windows-host-build.yml"
   pull_request:
     paths:
       - "main.py"
       - "kaliphonestudio/app.py"
       - "kaliphonestudio/operator_diagnostics.py"
+      - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/fastboot_capture.py"
+      - "kaliphonestudio/fastboot_baseline.py"
+      - "kaliphonestudio/fastboot_tool.py"
+      - "kaliphonestudio/fastboot_capture_bundle.py"
       - "devices/**/profile.json"
       - "assets/**"
       - "tools/**"
@@ -32,7 +44,9 @@ on:
       - "build/windows-requirements.txt"
       - "scripts/build_windows.ps1"
       - "tests/test_windows_packaging_contract.py"
+      - "tests/test_physical_fastboot_capture.py"
       - "docs/WINDOWS_HOST_BUILD.md"
+      - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
       - ".github/workflows/windows-host-build.yml"
   workflow_dispatch:
 
@@ -69,6 +83,7 @@ jobs:
           tests/test_windows_packaging_contract.py
           tests/test_operator_diagnostics.py
           tests/test_app.py
+          tests/test_physical_fastboot_capture.py
 
       - name: Build GUI and CLI onedir artifacts
         shell: pwsh
@@ -86,6 +101,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen --recovery-guide failed: $LASTEXITCODE" }
           & $Cli --export-diagnostics "dist/operator-diagnostics.json" --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/export-result.json"
           if ($LASTEXITCODE -ne 0) { throw "Frozen --export-diagnostics failed: $LASTEXITCODE" }
+          & $Cli capture-fastboot-baseline --help | Set-Content -Encoding utf8 "dist/capture-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen physical capture help failed: $LASTEXITCODE" }
+
+          # Fail before any Fastboot/tool/device interaction when explicit profile
+          # confirmation is absent. Exit code 2 is the expected argparse refusal.
+          & $Cli capture-fastboot-baseline --profile-id oneplus/avicii --serial NEVER-CONNECTED --firmware-build TEST --firmware-fingerprint TEST --output-dir "dist/should-not-exist" 2> "dist/capture-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen capture did not fail closed without confirmation token: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-exist") { throw "Refused frozen capture created an output directory" }
 
           @'
           import json
@@ -111,6 +134,11 @@ jobs:
           assert bundle["privacy"]["absolute_tool_paths_exported"] is False
           assert bundle["hardware_verified"] is False
           assert bundle["beta_gate_credit"] is False
+          capture_help = Path("dist/capture-help.txt").read_text(encoding="utf-8-sig").lower()
+          assert "read-only" in capture_help
+          assert "--confirm-token" in capture_help
+          refusal = Path("dist/capture-refusal.txt").read_text(encoding="utf-8-sig").lower()
+          assert "--confirm-token" in refusal
           '@ | python -
 
       - name: Smoke-test frozen GUI bootstrap path
