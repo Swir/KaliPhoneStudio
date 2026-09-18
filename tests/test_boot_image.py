@@ -263,12 +263,14 @@ def test_rejects_avb_invalid_vbmeta_magic(tmp_path):
 
 
 def test_rejects_avb_vbmeta_block_size_drift(tmp_path):
-    path = append_avb_footer(image(tmp_path, "candidate.img"), auth_size=64)
-    payload = bytearray(path.read_bytes())
-    footer_offset = len(payload) - AVB_FOOTER_SIZE
-    struct.pack_into(">Q", payload, footer_offset + 32, 256)
-    path.write_bytes(payload)
-    report = inspect_boot_image(path, PROFILE)
+    report = inspect_boot_image(
+        append_avb_footer(
+            image(tmp_path, "candidate.img"),
+            auth_size=64,
+            footer_vbmeta_size=256,
+        ),
+        PROFILE,
+    )
     with pytest.raises(BootImageError, match="block sizes"):
         require_candidate_compatible(report, PROFILE)
 
