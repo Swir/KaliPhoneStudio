@@ -157,6 +157,12 @@ def load_temporary_boot_runtime_probe_evidence(path: Path) -> TemporaryBootRunti
 
 
 def validate_temporary_boot_execution_evidence(evidence: TemporaryBootExecutionEvidence) -> None:
+    """Validate generic schema-v1 execution evidence without rewriting history.
+
+    Older checked-in fixtures/evidence may carry an earlier execution policy. New
+    physical observations enforce the current post-probe policy at the explicit
+    execution/runtime-probe binding boundary below.
+    """
     if not isinstance(evidence, TemporaryBootExecutionEvidence) or evidence.schema_version != 1:
         raise PhysicalBootObservationError("temporary-boot execution must be schema-v1 typed evidence")
     if not isinstance(evidence.profile_id, str) or "/" not in evidence.profile_id:
@@ -167,10 +173,8 @@ def validate_temporary_boot_execution_evidence(evidence: TemporaryBootExecutionE
         raise PhysicalBootObservationError("physical boot observation requires a successful Fastboot boot command")
     if evidence.command_invoked is not True or evidence.temporary_boot_executed is not True:
         raise PhysicalBootObservationError("temporary-boot execution evidence does not record an invoked boot")
-    if evidence.execution_policy != _EXECUTION_POLICY:
-        raise PhysicalBootObservationError(
-            "temporary-boot execution does not prove the required post-probe material revalidation policy"
-        )
+    if not isinstance(evidence.execution_policy, str) or not evidence.execution_policy:
+        raise PhysicalBootObservationError("temporary-boot execution policy is invalid")
     if (
         evidence.persistent_write is not False
         or evidence.phone_storage_written is not False
@@ -251,6 +255,10 @@ def _validate_execution_probe_binding(
 ) -> None:
     validate_temporary_boot_execution_evidence(execution)
     validate_temporary_boot_runtime_probe_evidence(runtime_probe)
+    if execution.execution_policy != _EXECUTION_POLICY:
+        raise PhysicalBootObservationError(
+            "temporary-boot execution does not prove the required post-probe material revalidation policy"
+        )
     if execution.profile_id != runtime_probe.profile_id or execution.device_serial != runtime_probe.device_serial:
         raise PhysicalBootObservationError("temporary-boot execution/runtime probe device identity mismatch")
     if execution.runtime_probe_sha256 != runtime_probe.evidence_sha256():
