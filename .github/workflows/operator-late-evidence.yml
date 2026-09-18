@@ -9,6 +9,8 @@ on:
       - "kaliphonestudio/operator_release_evidence_cli.py"
       - "kaliphonestudio/operator_strategy_evidence_cli.py"
       - "kaliphonestudio/rootfs_handoff_strategy_review.py"
+      - "kaliphonestudio/rootfs_handoff_target_binding.py"
+      - "kaliphonestudio/rootfs_handoff_fresh_revalidation.py"
       - "kaliphonestudio/physical_bringup_session.py"
       - "kaliphonestudio/physical_bringup_dossier.py"
       - "kaliphonestudio/physical_bringup_dossier_verify.py"
@@ -16,12 +18,16 @@ on:
       - "kaliphonestudio/physical_release_gate_audit.py"
       - "scripts/prepare_rootfs_handoff_strategy_review.py"
       - "scripts/bind_rootfs_handoff_strategy_review.py"
+      - "scripts/build_rootfs_handoff_target_binding.py"
+      - "scripts/build_rootfs_handoff_fresh_revalidation.py"
       - "scripts/build_windows.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_operator_release_evidence_cli.py"
       - "tests/test_operator_strategy_evidence_cli.py"
       - "tests/test_rootfs_handoff_strategy_review.py"
+      - "tests/test_rootfs_handoff_target_binding.py"
+      - "tests/test_rootfs_handoff_fresh_revalidation.py"
       - ".github/workflows/operator-late-evidence.yml"
   pull_request:
     paths:
@@ -30,6 +36,8 @@ on:
       - "kaliphonestudio/operator_release_evidence_cli.py"
       - "kaliphonestudio/operator_strategy_evidence_cli.py"
       - "kaliphonestudio/rootfs_handoff_strategy_review.py"
+      - "kaliphonestudio/rootfs_handoff_target_binding.py"
+      - "kaliphonestudio/rootfs_handoff_fresh_revalidation.py"
       - "kaliphonestudio/physical_bringup_session.py"
       - "kaliphonestudio/physical_bringup_dossier.py"
       - "kaliphonestudio/physical_bringup_dossier_verify.py"
@@ -37,12 +45,16 @@ on:
       - "kaliphonestudio/physical_release_gate_audit.py"
       - "scripts/prepare_rootfs_handoff_strategy_review.py"
       - "scripts/bind_rootfs_handoff_strategy_review.py"
+      - "scripts/build_rootfs_handoff_target_binding.py"
+      - "scripts/build_rootfs_handoff_fresh_revalidation.py"
       - "scripts/build_windows.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_operator_release_evidence_cli.py"
       - "tests/test_operator_strategy_evidence_cli.py"
       - "tests/test_rootfs_handoff_strategy_review.py"
+      - "tests/test_rootfs_handoff_target_binding.py"
+      - "tests/test_rootfs_handoff_fresh_revalidation.py"
       - ".github/workflows/operator-late-evidence.yml"
   workflow_dispatch:
 
@@ -79,6 +91,8 @@ jobs:
           tests/test_operator_release_evidence_cli.py
           tests/test_operator_strategy_evidence_cli.py
           tests/test_rootfs_handoff_strategy_review.py
+          tests/test_rootfs_handoff_target_binding.py
+          tests/test_rootfs_handoff_fresh_revalidation.py
           tests/test_physical_bringup_session.py
           tests/test_physical_bringup_dossier.py
           tests/test_physical_bringup_dossier_verify.py
@@ -105,7 +119,10 @@ jobs:
             "bind-bringup-dossier-review",
             "build-release-gate-audit",
             "prepare-rootfs-handoff-strategy-review",
-            "bind-rootfs-handoff-strategy-review"
+            "bind-rootfs-handoff-strategy-review",
+            "prepare-rootfs-handoff-target-binding-review",
+            "bind-rootfs-handoff-target-binding-review",
+            "build-rootfs-handoff-fresh-revalidation"
           )) {
             & $Cli evidence $Command --help | Set-Content -Encoding utf8 ("dist/help-" + $Command + ".txt")
             if ($LASTEXITCODE -ne 0) { throw "Frozen help failed for $Command : $LASTEXITCODE" }
@@ -167,6 +184,35 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen strategy binder did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-strategy-evidence.json") { throw "Refused strategy binder created output" }
 
+          & $Cli evidence prepare-rootfs-handoff-target-binding-review `
+            --storage-discovery "dist/missing-storage.json" `
+            --storage-report "dist/missing-storage-report.json" `
+            --strategy-review "dist/missing-strategy-evidence.json" `
+            --reviewer reviewer-ci `
+            --record-out "dist/should-not-target-record.json" `
+            --notes-out "dist/should-not-target-notes.txt" 2> "dist/refusal-target-prepare.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen target-binding template did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-target-record.json") { throw "Refused target-binding template created record" }
+          if (Test-Path "dist/should-not-target-notes.txt") { throw "Refused target-binding template created notes" }
+
+          & $Cli evidence bind-rootfs-handoff-target-binding-review `
+            --storage-discovery "dist/missing-storage.json" `
+            --storage-report "dist/missing-storage-report.json" `
+            --strategy-review "dist/missing-strategy-evidence.json" `
+            --review-record "dist/missing-target-record.json" `
+            --review-notes "dist/missing-target-notes.txt" `
+            --out "dist/should-not-target-binding.json" 2> "dist/refusal-target-bind.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen target-binding review did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-target-binding.json") { throw "Refused target-binding review created output" }
+
+          & $Cli evidence build-rootfs-handoff-fresh-revalidation `
+            --target-binding "dist/missing-target-binding.json" `
+            --fresh-storage-discovery "dist/missing-fresh-storage.json" `
+            --fresh-storage-report "dist/missing-fresh-storage-report.json" `
+            --out "dist/should-not-fresh-revalidation.json" 2> "dist/refusal-fresh-revalidation.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen fresh revalidation did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-fresh-revalidation.json") { throw "Refused fresh revalidation created output" }
+
           @'
           from pathlib import Path
 
@@ -190,6 +236,9 @@ jobs:
               "build-release-gate-audit",
               "prepare-rootfs-handoff-strategy-review",
               "bind-rootfs-handoff-strategy-review",
+              "prepare-rootfs-handoff-target-binding-review",
+              "bind-rootfs-handoff-target-binding-review",
+              "build-rootfs-handoff-fresh-revalidation",
           ):
               assert command in root
               assert "offline" in text("help-" + command + ".txt")
@@ -200,6 +249,9 @@ jobs:
               "refusal-release-audit.txt",
               "refusal-strategy-prepare.txt",
               "refusal-strategy-bind.txt",
+              "refusal-target-prepare.txt",
+              "refusal-target-bind.txt",
+              "refusal-fresh-revalidation.txt",
           ):
               assert "evidence workflow error" in text(refusal)
           '@ | python -
