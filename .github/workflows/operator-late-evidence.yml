@@ -1,0 +1,160 @@
+name: operator-late-evidence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_workspace.py"
+      - "kaliphonestudio/operator_release_evidence_cli.py"
+      - "kaliphonestudio/physical_bringup_session.py"
+      - "kaliphonestudio/physical_bringup_dossier.py"
+      - "kaliphonestudio/physical_bringup_dossier_verify.py"
+      - "kaliphonestudio/physical_bringup_dossier_review.py"
+      - "kaliphonestudio/physical_release_gate_audit.py"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_operator_release_evidence_cli.py"
+      - ".github/workflows/operator-late-evidence.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_workspace.py"
+      - "kaliphonestudio/operator_release_evidence_cli.py"
+      - "kaliphonestudio/physical_bringup_session.py"
+      - "kaliphonestudio/physical_bringup_dossier.py"
+      - "kaliphonestudio/physical_bringup_dossier_verify.py"
+      - "kaliphonestudio/physical_bringup_dossier_review.py"
+      - "kaliphonestudio/physical_release_gate_audit.py"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_operator_release_evidence_cli.py"
+      - ".github/workflows/operator-late-evidence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-frozen-late-evidence:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install runtime and pinned Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+
+      - name: Verify late evidence contracts before freezing
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_operator_evidence_cli.py
+          tests/test_operator_release_evidence_cli.py
+          tests/test_physical_bringup_session.py
+          tests/test_physical_bringup_dossier.py
+          tests/test_physical_bringup_dossier_verify.py
+          tests/test_physical_bringup_dossier_review.py
+          tests/test_physical_release_gate_audit.py
+
+      - name: Build frozen Windows host CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Smoke-test frozen late evidence commands and fail-closed refusals
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          & $Cli evidence --help | Set-Content -Encoding utf8 "dist/late-evidence-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen unified evidence help failed: $LASTEXITCODE" }
+
+          foreach ($Command in @(
+            "bind-bringup-session",
+            "build-bringup-dossier",
+            "verify-bringup-dossier",
+            "prepare-bringup-dossier-review",
+            "bind-bringup-dossier-review",
+            "build-release-gate-audit"
+          )) {
+            & $Cli evidence $Command --help | Set-Content -Encoding utf8 ("dist/help-" + $Command + ".txt")
+            if ($LASTEXITCODE -ne 0) { throw "Frozen help failed for $Command : $LASTEXITCODE" }
+          }
+
+          & $Cli evidence bind-bringup-session `
+            --candidate-gate "dist/missing-candidate.json" `
+            --boot-observation "dist/missing-boot.json" `
+            --rescue-diagnostics "dist/missing-rescue.json" `
+            --functional-probes "dist/missing-probes.json" `
+            --storage-discovery "dist/missing-storage.json" `
+            --storage-review "dist/missing-storage-review.json" `
+            --out "dist/should-not-session.json" 2> "dist/refusal-session.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen session binder did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-session.json") { throw "Refused session binder created output" }
+
+          & $Cli evidence prepare-bringup-dossier-review `
+            --dossier "dist/missing-dossier.json" `
+            --reviewer reviewer-ci `
+            --record-out "dist/should-not-review.json" `
+            --notes-out "dist/should-not-review.txt" 2> "dist/refusal-dossier-review.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen dossier review template did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-review.json") { throw "Refused dossier review created record" }
+          if (Test-Path "dist/should-not-review.txt") { throw "Refused dossier review created notes" }
+
+          & $Cli evidence build-release-gate-audit `
+            --dossier "dist/missing-dossier.json" `
+            --dossier-verification "dist/missing-verification.json" `
+            --dossier-review "dist/missing-dossier-review.json" `
+            --functional-result-bundle "dist/missing-result-bundle.json" `
+            --test-plan "dist/missing-plan.json" `
+            --test-plan-review "dist/missing-plan-review.json" `
+            --out "dist/should-not-release-audit.json" 2> "dist/refusal-release-audit.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen release audit did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-release-audit.json") { throw "Refused release audit created output" }
+
+          @'
+          from pathlib import Path
+
+          def text(name):
+              raw = Path("dist", name).read_text(encoding="utf-8-sig").lower()
+              return " ".join(raw.split())
+
+          root = text("late-evidence-help.txt")
+          assert "offline exact-file evidence workspace" in root
+          assert "do not connect to a phone" in root
+          assert "do not run adb/fastboot" in root
+          assert "do not select storage targets" in root
+          assert "no hardware/beta credit" in root
+
+          for command in (
+              "bind-bringup-session",
+              "build-bringup-dossier",
+              "verify-bringup-dossier",
+              "prepare-bringup-dossier-review",
+              "bind-bringup-dossier-review",
+              "build-release-gate-audit",
+          ):
+              assert command in root
+              assert "offline" in text("help-" + command + ".txt")
+
+          for refusal in (
+              "refusal-session.txt",
+              "refusal-dossier-review.txt",
+              "refusal-release-audit.txt",
+          ):
+              assert "evidence workflow error" in text(refusal)
+          '@ | python -
