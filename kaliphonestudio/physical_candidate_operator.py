@@ -3,8 +3,9 @@
 The module keeps candidate binding and temporary-boot preparation available from the
 same packaged CLI used for baseline capture/stock provenance. Only the final
 ``execute-temporary-boot-once`` command performs device I/O, and it remains behind
-both the profile-specific confirmation string and an explicit execution opt-in.
-No persistent Fastboot write verb is exposed.
+exact boot identity, exact recovery-readiness material, the profile-specific
+confirmation string and an explicit execution opt-in. No persistent Fastboot write
+verb is exposed.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ from .physical_candidate_gate import (
     bind_physical_candidate_gate,
     write_physical_candidate_gate,
 )
+from .physical_recovery_readiness import PhysicalRecoveryReadinessEvidence
 from .profiles import get_profile
 from .temporary_boot_execution import (
     TemporaryBootExecutionError,
@@ -55,36 +57,20 @@ class PhysicalCandidateOperatorError(ValueError):
 def _stable_json_object(path: Path, label: str) -> dict[str, Any]:
     candidate = Path(path)
     if candidate.is_symlink() or not candidate.is_file():
-        raise PhysicalCandidateOperatorError(
-            f"{label} must be a regular non-symlink JSON file"
-        )
+        raise PhysicalCandidateOperatorError(f"{label} must be a regular non-symlink JSON file")
     before = candidate.stat()
     if before.st_size <= 0 or before.st_size > MAX_EVIDENCE_BYTES:
-        raise PhysicalCandidateOperatorError(
-            f"{label} size is outside the evidence safety bound"
-        )
+        raise PhysicalCandidateOperatorError(f"{label} size is outside the evidence safety bound")
     raw = candidate.read_bytes()
     after = candidate.stat()
-    identity_before = (
-        before.st_dev,
-        before.st_ino,
-        before.st_size,
-        before.st_mtime_ns,
-    )
-    identity_after = (
-        after.st_dev,
-        after.st_ino,
-        after.st_size,
-        after.st_mtime_ns,
-    )
+    identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
     if identity_before != identity_after:
         raise PhysicalCandidateOperatorError(f"{label} changed while being loaded")
     try:
         data = json.loads(raw.decode("utf-8", errors="strict"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PhysicalCandidateOperatorError(
-            f"{label} is not strict UTF-8 JSON"
-        ) from exc
+        raise PhysicalCandidateOperatorError(f"{label} is not strict UTF-8 JSON") from exc
     if not isinstance(data, dict):
         raise PhysicalCandidateOperatorError(f"{label} must contain one JSON object")
     return data
@@ -102,42 +88,30 @@ def _load_typed(cls: type[T], path: Path, label: str) -> T:
         if extra:
             details.append("extra=" + ",".join(extra))
         detail = "; ".join(details) if details else "field mismatch"
-        raise PhysicalCandidateOperatorError(
-            f"{label} field set does not match the typed schema ({detail})"
-        )
+        raise PhysicalCandidateOperatorError(f"{label} field set does not match the typed schema ({detail})")
     try:
         return cls(**data)
     except TypeError as exc:
-        raise PhysicalCandidateOperatorError(
-            f"{label} cannot be materialized as typed evidence"
-        ) from exc
+        raise PhysicalCandidateOperatorError(f"{label} cannot be materialized as typed evidence") from exc
 
 
 def _load_boot_plan(path: Path) -> BootBuildPlan:
     data = _stable_json_object(path, "boot build plan")
     expected = {field.name for field in fields(BootBuildPlan)}
     if set(data) != expected:
-        raise PhysicalCandidateOperatorError(
-            "boot build plan field set does not match schema"
-        )
+        raise PhysicalCandidateOperatorError("boot build plan field set does not match schema")
     inputs = data.get("inputs")
     cmdline = data.get("kernel_cmdline")
     if not isinstance(inputs, list) or not isinstance(cmdline, list):
-        raise PhysicalCandidateOperatorError(
-            "boot build plan inputs/kernel_cmdline must be arrays"
-        )
+        raise PhysicalCandidateOperatorError("boot build plan inputs/kernel_cmdline must be arrays")
     typed_inputs: list[BuildInput] = []
     for item in inputs:
         if not isinstance(item, dict):
-            raise PhysicalCandidateOperatorError(
-                "boot build plan contains non-object input evidence"
-            )
+            raise PhysicalCandidateOperatorError("boot build plan contains non-object input evidence")
         try:
             typed_inputs.append(BuildInput(**item))
         except TypeError as exc:
-            raise PhysicalCandidateOperatorError(
-                "boot build plan contains malformed input evidence"
-            ) from exc
+            raise PhysicalCandidateOperatorError("boot build plan contains malformed input evidence") from exc
     try:
         return BootBuildPlan(
             schema_version=data["schema_version"],
@@ -151,9 +125,7 @@ def _load_boot_plan(path: Path) -> BootBuildPlan:
             inputs=tuple(typed_inputs),
         )
     except (KeyError, TypeError) as exc:
-        raise PhysicalCandidateOperatorError(
-            "boot build plan cannot be materialized as typed evidence"
-        ) from exc
+        raise PhysicalCandidateOperatorError("boot build plan cannot be materialized as typed evidence") from exc
 
 
 def _require_fresh_output(path: Path, label: str) -> None:
@@ -162,9 +134,7 @@ def _require_fresh_output(path: Path, label: str) -> None:
         raise PhysicalCandidateOperatorError(f"refusing to overwrite {label}: {candidate}")
     temporary = candidate.with_name(candidate.name + ".tmp")
     if temporary.exists() or temporary.is_symlink():
-        raise PhysicalCandidateOperatorError(
-            f"refusing stale {label} temporary path: {temporary}"
-        )
+        raise PhysicalCandidateOperatorError(f"refusing stale {label} temporary path: {temporary}")
 
 
 def _preflight_execution_outputs(probe_out: Path, execution_out: Path) -> None:
@@ -172,16 +142,9 @@ def _preflight_execution_outputs(probe_out: Path, execution_out: Path) -> None:
     execution = Path(execution_out)
     probe_tmp = probe.with_name(probe.name + ".tmp")
     execution_tmp = execution.with_name(execution.name + ".tmp")
-    reserved_paths = {
-        probe.absolute(),
-        probe_tmp.absolute(),
-        execution.absolute(),
-        execution_tmp.absolute(),
-    }
+    reserved_paths = {probe.absolute(), probe_tmp.absolute(), execution.absolute(), execution_tmp.absolute()}
     if len(reserved_paths) != 4:
-        raise PhysicalCandidateOperatorError(
-            "runtime-probe/execution output and temporary paths must not overlap"
-        )
+        raise PhysicalCandidateOperatorError("runtime-probe/execution output and temporary paths must not overlap")
     for path, label in (
         (probe, "temporary-boot runtime probe evidence"),
         (execution, "temporary-boot execution evidence"),
@@ -190,9 +153,7 @@ def _preflight_execution_outputs(probe_out: Path, execution_out: Path) -> None:
         parent = path.parent
         parent.mkdir(parents=True, exist_ok=True)
         if parent.is_symlink() or not parent.is_dir():
-            raise PhysicalCandidateOperatorError(
-                f"{label} parent must be a regular directory"
-            )
+            raise PhysicalCandidateOperatorError(f"{label} parent must be a regular directory")
         try:
             with tempfile.NamedTemporaryFile(
                 mode="wb",
@@ -203,9 +164,7 @@ def _preflight_execution_outputs(probe_out: Path, execution_out: Path) -> None:
                 handle.write(b"KPS")
                 handle.flush()
         except OSError as exc:
-            raise PhysicalCandidateOperatorError(
-                f"{label} parent is not writable before physical execution"
-            ) from exc
+            raise PhysicalCandidateOperatorError(f"{label} parent is not writable before physical execution") from exc
 
 
 def bind_physical_candidate_main(argv: Sequence[str] | None = None) -> int:
@@ -230,42 +189,14 @@ def bind_physical_candidate_main(argv: Sequence[str] | None = None) -> int:
     try:
         _require_fresh_output(args.out, "physical candidate gate evidence")
         profile = get_profile(args.devices_root, args.profile_id)
-        physical = _load_typed(
-            PhysicalBaselineBundleEvidence,
-            args.physical_baseline,
-            "physical baseline bundle",
-        )
-        manifest = _load_typed(
-            FirstBootCandidateManifest,
-            args.first_boot_manifest,
-            "first-boot manifest",
-        )
-        authorities = _load_typed(
-            FirstBootAuthorityBundleEvidence,
-            args.authority_bundle,
-            "first-boot authority bundle",
-        )
-        boot = _load_typed(
-            TemporaryBootAuthorization,
-            args.boot_authorization,
-            "temporary-boot authorization",
-        )
+        physical = _load_typed(PhysicalBaselineBundleEvidence, args.physical_baseline, "physical baseline bundle")
+        manifest = _load_typed(FirstBootCandidateManifest, args.first_boot_manifest, "first-boot manifest")
+        authorities = _load_typed(FirstBootAuthorityBundleEvidence, args.authority_bundle, "first-boot authority bundle")
+        boot = _load_typed(TemporaryBootAuthorization, args.boot_authorization, "temporary-boot authorization")
         plan = _load_boot_plan(args.boot_plan)
-        evidence = bind_physical_candidate_gate(
-            profile,
-            physical,
-            manifest,
-            authorities,
-            boot,
-            plan,
-        )
+        evidence = bind_physical_candidate_gate(profile, physical, manifest, authorities, boot, plan)
         digest = write_physical_candidate_gate(evidence, args.out)
-    except (
-        PhysicalCandidateOperatorError,
-        PhysicalCandidateGateError,
-        ValueError,
-        OSError,
-    ) as exc:
+    except (PhysicalCandidateOperatorError, PhysicalCandidateGateError, ValueError, OSError) as exc:
         parser.error(str(exc))
 
     print(evidence.canonical_json(), end="")
@@ -299,21 +230,9 @@ def prepare_temporary_boot_offer_main(argv: Sequence[str] | None = None) -> int:
     try:
         _require_fresh_output(args.out, "temporary-boot offer evidence")
         profile = get_profile(args.devices_root, args.profile_id)
-        gate = _load_typed(
-            PhysicalCandidateGateEvidence,
-            args.physical_candidate_gate,
-            "physical candidate gate",
-        )
-        capture = _load_typed(
-            FastbootCaptureBundleEvidence,
-            args.capture_bundle,
-            "Fastboot capture bundle",
-        )
-        tool = _load_typed(
-            FastbootToolEvidence,
-            args.fastboot_tool_evidence,
-            "Fastboot tool evidence",
-        )
+        gate = _load_typed(PhysicalCandidateGateEvidence, args.physical_candidate_gate, "physical candidate gate")
+        capture = _load_typed(FastbootCaptureBundleEvidence, args.capture_bundle, "Fastboot capture bundle")
+        tool = _load_typed(FastbootToolEvidence, args.fastboot_tool_evidence, "Fastboot tool evidence")
         offer = prepare_temporary_boot_offer(
             profile,
             gate,
@@ -323,12 +242,7 @@ def prepare_temporary_boot_offer_main(argv: Sequence[str] | None = None) -> int:
             boot_image=args.boot_image,
         )
         digest = write_temporary_boot_offer(offer.evidence, args.out)
-    except (
-        PhysicalCandidateOperatorError,
-        TemporaryBootOfferError,
-        ValueError,
-        OSError,
-    ) as exc:
+    except (PhysicalCandidateOperatorError, TemporaryBootOfferError, ValueError, OSError) as exc:
         parser.error(str(exc))
 
     print(offer.evidence.canonical_json(), end="")
@@ -347,15 +261,19 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
         prog="execute-temporary-boot-once",
         description=(
             "Perform one serial-bound Fastboot temporary boot only after exact evidence/file "
-            "revalidation including the exact stock/candidate boot identity binding, a fresh "
-            "read-only device probe, the profile-specific confirmation text and explicit "
-            "--execute-temporary-boot opt-in. No persistent write verb is available."
+            "revalidation including stock/candidate boot identity, physical recovery-readiness "
+            "and captured slot context, then a fresh read-only device probe, profile-specific "
+            "confirmation text and explicit --execute-temporary-boot opt-in. No persistent "
+            "write verb is available."
         ),
     )
     parser.add_argument("--profile-id", required=True)
     parser.add_argument("--devices-root", type=Path, default=Path("devices"))
     parser.add_argument("--physical-candidate-gate", type=Path, required=True)
     parser.add_argument("--boot-identity-binding", type=Path, required=True)
+    parser.add_argument("--physical-baseline", type=Path, required=True)
+    parser.add_argument("--recovery-readiness", type=Path, required=True)
+    parser.add_argument("--stock-boot", type=Path, required=True)
     parser.add_argument("--capture-bundle", type=Path, required=True)
     parser.add_argument("--baseline-evidence", type=Path, required=True)
     parser.add_argument("--fastboot-tool-evidence", type=Path, required=True)
@@ -377,41 +295,19 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     if not args.execute_temporary_boot:
-        parser.error(
-            "refusing execution without explicit --execute-temporary-boot opt-in"
-        )
+        parser.error("refusing execution without explicit --execute-temporary-boot opt-in")
 
     try:
         # Validate that evidence can be persisted before any physical command runs.
-        # This prevents a successful one-shot boot from being followed by a trivial
-        # local overwrite/path failure that would discard its audit record.
         _preflight_execution_outputs(args.probe_out, args.execution_out)
         profile = get_profile(args.devices_root, args.profile_id)
-        gate = _load_typed(
-            PhysicalCandidateGateEvidence,
-            args.physical_candidate_gate,
-            "physical candidate gate",
-        )
-        binding = _load_typed(
-            PhysicalBootIdentityBindingEvidence,
-            args.boot_identity_binding,
-            "physical boot identity binding",
-        )
-        capture = _load_typed(
-            FastbootCaptureBundleEvidence,
-            args.capture_bundle,
-            "Fastboot capture bundle",
-        )
-        baseline = _load_typed(
-            FastbootBaselineEvidence,
-            args.baseline_evidence,
-            "Fastboot baseline evidence",
-        )
-        tool = _load_typed(
-            FastbootToolEvidence,
-            args.fastboot_tool_evidence,
-            "Fastboot tool evidence",
-        )
+        gate = _load_typed(PhysicalCandidateGateEvidence, args.physical_candidate_gate, "physical candidate gate")
+        binding = _load_typed(PhysicalBootIdentityBindingEvidence, args.boot_identity_binding, "physical boot identity binding")
+        physical = _load_typed(PhysicalBaselineBundleEvidence, args.physical_baseline, "physical baseline bundle")
+        recovery = _load_typed(PhysicalRecoveryReadinessEvidence, args.recovery_readiness, "physical recovery readiness")
+        capture = _load_typed(FastbootCaptureBundleEvidence, args.capture_bundle, "Fastboot capture bundle")
+        baseline = _load_typed(FastbootBaselineEvidence, args.baseline_evidence, "Fastboot baseline evidence")
+        tool = _load_typed(FastbootToolEvidence, args.fastboot_tool_evidence, "Fastboot tool evidence")
         offer = prepare_temporary_boot_offer(
             profile,
             gate,
@@ -420,11 +316,7 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
             fastboot_executable=args.fastboot_executable,
             boot_image=args.boot_image,
         )
-        authorization = authorize_temporary_boot_offer(
-            offer,
-            profile,
-            args.confirmation,
-        )
+        authorization = authorize_temporary_boot_offer(offer, profile, args.confirmation)
         probe, execution = execute_temporary_boot_once(
             profile,
             offer,
@@ -434,14 +326,14 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
             capture,
             tool,
             baseline,
+            physical,
+            recovery,
+            stock_boot=args.stock_boot,
             probe_timeout_seconds=args.probe_timeout,
             boot_timeout_seconds=args.boot_timeout,
         )
         probe_digest = write_temporary_boot_runtime_probe(probe, args.probe_out)
-        execution_digest = write_temporary_boot_execution(
-            execution,
-            args.execution_out,
-        )
+        execution_digest = write_temporary_boot_execution(execution, args.execution_out)
     except (
         PhysicalCandidateOperatorError,
         TemporaryBootOfferError,
@@ -454,12 +346,11 @@ def execute_temporary_boot_once_main(argv: Sequence[str] | None = None) -> int:
     print(f"runtime probe sha256={probe_digest}")
     print(f"temporary boot execution sha256={execution_digest}")
     print(f"returncode={execution.returncode}")
-    print(
-        "temporary_boot_command_succeeded="
-        f"{str(execution.temporary_boot_command_succeeded).lower()}"
-    )
+    print("temporary_boot_command_succeeded=" f"{str(execution.temporary_boot_command_succeeded).lower()}")
+    print("recovery_readiness_bound=true")
     print("persistent_write=false")
     print("phone_storage_written=false")
     print("kali_userspace_verified=false")
+    print("recovery_verified=false")
     print("hardware/Beta credit=false")
     return 0 if execution.temporary_boot_command_succeeded else 1
