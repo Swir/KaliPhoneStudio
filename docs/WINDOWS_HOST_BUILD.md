@@ -1,11 +1,11 @@
 # Windows Host Development Build
 
-KaliPhoneStudio has a dedicated Windows **development host build** pipeline for the Safe Operator Workspace, profile-driven CLI and an explicitly requested guarded physical Fastboot baseline capture command. It is intentionally separate from the physical-device Beta gate.
+KaliPhoneStudio has a dedicated Windows **development host build** pipeline for the Safe Operator Workspace, profile-driven CLI, guarded physical Fastboot baseline capture, exact stock-baseline ingress and the reviewed physical-candidate -> temporary-boot operator chain. It is intentionally separate from the physical-device Beta gate.
 
 The workflow produces two `onedir` applications from the same reviewed source tree:
 
 - `KaliPhoneStudio.exe` — windowed PySide6 GUI. The normal GUI remains offline and does not query a phone;
-- `KaliPhoneStudioCLI.exe` — console-enabled CLI for profile inspection, offline doctor, recovery guidance, deterministic diagnostics export and the explicit `capture-fastboot-baseline` workflow.
+- `KaliPhoneStudioCLI.exe` — console-enabled CLI for profile inspection, offline doctor, recovery guidance, deterministic diagnostics export, explicit `capture-fastboot-baseline`, exact stock/candidate binding, temporary-boot offer preparation and the guarded one-shot temporary-boot executor.
 
 These artifacts are **unsigned development builds**. They are not a Beta release, do not contain a verified Kali phone image, do not prove hardware support, and do not authorize a persistent phone write.
 
@@ -48,7 +48,7 @@ Each host build includes the exact checked-out copies of:
 - `BUILD_STATUS.json` — current project/status ledger;
 - `BETA_RELEASE_GATE.md` — current release gate.
 
-This allows frozen offline doctor/recovery commands and the explicit guarded physical capture command to use the same profile/policy state that was packaged into that CI run. It does not make a profile physically supported.
+This allows frozen offline doctor/recovery commands and explicit guarded physical commands to use the same profile/policy state that was packaged into that CI run. It does not make a profile physically supported.
 
 ## Local Windows build
 
@@ -113,6 +113,43 @@ Windows CI proves the frozen CLI contains this path by running its help text. It
 
 Full operator instructions and the evidence/privacy boundary are in [`PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md`](PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md).
 
+## Shared physical candidate and temporary-boot chain
+
+The next reviewed host stages are now available through the same frozen CLI instead of requiring separate repository scripts:
+
+```powershell
+KaliPhoneStudioCLI.exe bind-physical-candidate-gate --help
+KaliPhoneStudioCLI.exe prepare-temporary-boot-offer --help
+KaliPhoneStudioCLI.exe execute-temporary-boot-once --help
+```
+
+`bind-physical-candidate-gate` and `prepare-temporary-boot-offer` are strictly offline. They load exact typed evidence with bounded UTF-8 JSON parsing, reject schema drift and changed files, and never invoke Fastboot.
+
+`execute-temporary-boot-once` is intentionally different: it is the only command in this chain allowed to invoke the exact serial-bound `fastboot ... boot ...` argv already authorized by the reviewed offer. It still exposes **no persistent write verb** and requires all of the following before device I/O:
+
+1. every required evidence/file argument;
+2. the profile-specific `--confirmation` text;
+3. a separate explicit `--execute-temporary-boot` opt-in;
+4. distinct, unused runtime-probe and execution-evidence output paths whose parent directories pass a host writeability preflight;
+5. exact reviewed Fastboot executable and boot-image bytes;
+6. a fresh read-only serial-bound Fastboot probe matching the reviewed baseline.
+
+The output-path preflight happens before any physical Fastboot call. This closes an operator failure mode where a one-shot temporary boot could otherwise execute and only afterwards discover that the requested audit-evidence path was already occupied or trivially unwritable.
+
+A successful Fastboot return code is **not** hardware verification. The execution evidence explicitly keeps:
+
+```text
+persistent_write=false
+phone_storage_written=false
+kali_userspace_verified=false
+hardware_verified=false
+beta_gate_credit=false
+```
+
+Windows CI smoke-tests all three frozen command help surfaces, proves missing-evidence candidate/offer commands fail closed without creating outputs, and proves the temporary executor exits with code 2 **before evidence loading or device probing** when `--execute-temporary-boot` is absent. CI never supplies the opt-in and never connects a phone.
+
+See [`PHYSICAL_CANDIDATE_OPERATOR.md`](PHYSICAL_CANDIDATE_OPERATOR.md) for the exact operator sequence and evidence boundaries.
+
 ## Integrity manifest
 
 Every successful CI package creates:
@@ -124,9 +161,9 @@ The workflow artifact is retained briefly for development/testing. It is not upl
 
 ## Release boundary
 
-A successful Windows build proves only that the host application was packaged and its safety boundaries survived freezing. A successful read-only baseline capture proves only the exact captured baseline/tool/transcript provenance. Neither satisfies the complete physical AC2003 gate.
+A successful Windows build proves only that the host application was packaged and its safety boundaries survived freezing. A successful read-only baseline capture proves only the exact captured baseline/tool/transcript provenance. Successful offline candidate/offer binding proves only exact host evidence consistency. Even a successful one-shot `fastboot boot` command proves only that Fastboot accepted that exact temporary command; it does not prove the kernel reached Kali userspace or that hardware is functional.
 
-In particular, they do not replace matching stock `boot.img` provenance, an exact reviewed physical candidate, successful temporary boot with phone-side evidence, usable rescue logs, real hardware/storage evidence, Kali early-userspace proof, charging/power validation or exercised rollback.
+These host results do not replace matching stock `boot.img` provenance, phone-side temporary-boot observation, usable rescue logs, real hardware/storage evidence, Kali early-userspace proof, charging/power validation or exercised rollback.
 
 Until the complete physical gate is reviewed, the authoritative state remains:
 
