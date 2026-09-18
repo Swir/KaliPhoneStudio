@@ -255,6 +255,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "and never authorizes project support or Beta release."
         ),
     )
+    result_review_template.add_argument("--boot-observation", type=Path, required=True)
     result_review_template.add_argument("--observation-evidence", type=Path, required=True)
     result_review_template.add_argument("--reviewer", required=True)
     _add_output(result_review_template)
@@ -267,6 +268,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Project support/hardware/Beta promotion remains forbidden."
         ),
     )
+    result_review_bind.add_argument("--boot-observation", type=Path, required=True)
     result_review_bind.add_argument("--observation-evidence", type=Path, required=True)
     result_review_bind.add_argument("--review-record", type=Path, required=True)
     result_review_bind.add_argument("--review-notes", type=Path, required=True)
@@ -574,8 +576,11 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "prepare-functional-test-result-review":
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
         observation = load_physical_hardware_test_observation_evidence(args.observation_evidence)
-        record = make_rejected_physical_hardware_test_review_record(observation, args.reviewer)
+        record = make_current_rejected_physical_hardware_test_review_record(
+            boot_observation, observation, args.reviewer
+        )
         digest = _write_text_exclusive(args.out, record.canonical_json())
         return _safe_result(
             command,
@@ -589,7 +594,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     if command == "bind-functional-test-result-review":
-        evidence = bind_physical_hardware_test_review_from_files(
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
+        evidence = bind_current_physical_hardware_test_review_from_files(
+            boot_observation,
             args.observation_evidence,
             args.review_record,
             args.review_notes,
