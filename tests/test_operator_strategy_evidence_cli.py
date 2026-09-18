@@ -3,6 +3,9 @@ from __future__ import annotations
 import ast
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from kaliphonestudio import operator_evidence_workspace
 from kaliphonestudio import operator_strategy_evidence_cli
@@ -82,6 +85,57 @@ def test_missing_strategy_inputs_fail_closed_without_outputs(tmp_path: Path) -> 
             "--candidate-partition-role", "userdata",
             "--staging-subpath", "kaliphonestudio/rootfs-stage",
             "--required-free-bytes", "1",
+            "--record-out", str(record),
+            "--notes-out", str(notes),
+        ]
+    )
+    assert rc == 2
+    assert not record.exists()
+    assert not notes.exists()
+
+
+@pytest.mark.parametrize(
+    ("candidate_role", "required_free_bytes", "staging_subpath"),
+    [
+        ("boot", 100, "kaliphonestudio/rootfs-stage"),
+        ("userdata", 99, "kaliphonestudio/rootfs-stage"),
+        ("userdata", 100, "/dev/block/sda"),
+    ],
+)
+def test_prepare_rejects_unsafe_or_drifted_strategy_template_inputs(
+    monkeypatch,
+    tmp_path: Path,
+    candidate_role: str,
+    required_free_bytes: int,
+    staging_subpath: str,
+) -> None:
+    discovery = SimpleNamespace(
+        profile_id="oneplus/avicii",
+        device_serial="SERIAL-CI",
+        partition_hint="userdata",
+        forbidden_partitions=("boot", "vendor_boot", "dtbo", "vbmeta", "super", "metadata"),
+        evidence_sha256=lambda: "1" * 64,
+    )
+    storage_review = SimpleNamespace(
+        physical_storage_discovery_sha256="1" * 64,
+        accepted_for_strategy_design=True,
+        rootfs_artifact_size=100,
+        rootfs_artifact_sha256="a" * 64,
+        recovery_plan_sha256="b" * 64,
+    )
+    monkeypatch.setattr(operator_strategy_evidence_cli, "load_physical_storage_discovery_evidence", lambda path: discovery)
+    monkeypatch.setattr(operator_strategy_evidence_cli, "load_physical_storage_review_evidence", lambda path: storage_review)
+    record = tmp_path / "record.json"
+    notes = tmp_path / "notes.txt"
+    rc = operator_evidence_workspace.main(
+        [
+            "prepare-rootfs-handoff-strategy-review",
+            "--storage-discovery", str(tmp_path / "discovery.json"),
+            "--storage-review", str(tmp_path / "review.json"),
+            "--reviewer", "reviewer-ci",
+            "--candidate-partition-role", candidate_role,
+            "--staging-subpath", staging_subpath,
+            "--required-free-bytes", str(required_free_bytes),
             "--record-out", str(record),
             "--notes-out", str(notes),
         ]
