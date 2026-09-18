@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-pro",
+    "commit": "8460a1faca1a00c2faf61d30c0f8354ea55cb518"
+  },
+  "target": {
+    "architecture": "arm64",
+    "environment": "phosh",
+    "family": "qcom"
+  },
+  "rootfs_template": {
+    "path": "rootfs.yaml",
+    "sha256": "7fb677032f308763a6a019c77e8d5aac9d2d89a4321445a38964910b2f7ef5e2"
+  },
+  "recipes": [
+    {
+      "path": "include/packages-phosh.yaml",
+      "sha256": "8b4cf5cf06a4967e60936bc43b88783d18330674401662114556b9596d56b705",
+      "packages": [
+        "mobian-phosh",
+        "firefox-esr",
+        "gnome-sound-recorder",
+        "loupe",
+        "powersupply-gtk",
+        "webext-ublock-origin-firefox",
+        "squeekboard",
+        "nethunter",
+        "hijacker",
+        "kalitorify"
+      ],
+      "disabled_services": ["getty@.service"]
+    },
+    {
+      "path": "devices/qcom/packages-phosh.yaml",
+      "sha256": "2cb259f9026fd1d79b96a07e61f1a614fcad6929b53918991a01199ff0986efd",
+      "packages": [
+        "gnome-snapshot",
+        "firefox-esr-mobile-config",
+        "mobian-phosh-phone"
+      ],
+      "disabled_services": []
+    }
+  ],
+  "policy": {
+    "physical_validation_required": true,
+    "hardware_verified": false,
+    "beta_gate_credit": false
+  }
+}
