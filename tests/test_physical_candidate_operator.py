@@ -47,9 +47,7 @@ def test_execution_output_preflight_rejects_existing_output(tmp_path: Path) -> N
     assert not execution.exists()
 
 
-def test_execution_output_preflight_checks_writable_parent_without_residue(
-    tmp_path: Path,
-) -> None:
+def test_execution_output_preflight_checks_writable_parent_without_residue(tmp_path: Path) -> None:
     probe = tmp_path / "nested" / "probe.json"
     execution = tmp_path / "nested" / "execution.json"
     _preflight_execution_outputs(probe, execution)
@@ -67,6 +65,12 @@ def _missing_execution_argv(tmp_path: Path) -> list[str]:
         str(tmp_path / "missing-gate.json"),
         "--boot-identity-binding",
         str(tmp_path / "missing-boot-identity.json"),
+        "--physical-baseline",
+        str(tmp_path / "missing-physical-baseline.json"),
+        "--recovery-readiness",
+        str(tmp_path / "missing-recovery-readiness.json"),
+        "--stock-boot",
+        str(tmp_path / "missing-stock-boot.img"),
         "--capture-bundle",
         str(tmp_path / "missing-capture.json"),
         "--baseline-evidence",
@@ -86,24 +90,32 @@ def _missing_execution_argv(tmp_path: Path) -> list[str]:
     ]
 
 
-def test_execution_cli_refuses_before_evidence_or_device_io_without_opt_in(
-    tmp_path: Path,
-) -> None:
+def test_execution_cli_refuses_before_evidence_or_device_io_without_opt_in(tmp_path: Path) -> None:
     argv = _missing_execution_argv(tmp_path)
     with pytest.raises(SystemExit) as exc:
         execute_temporary_boot_once_main(argv)
     assert exc.value.code == 2
     assert not (tmp_path / "probe.json").exists()
     assert not (tmp_path / "execution.json").exists()
-    # The parser accepted the mandatory identity argument, so this exercises the
-    # explicit execution opt-in boundary rather than failing argument parsing.
+    # All exact identity/recovery arguments parsed; refusal is the explicit opt-in boundary.
     assert not (tmp_path / "missing-boot-identity.json").exists()
+    assert not (tmp_path / "missing-recovery-readiness.json").exists()
+    assert not (tmp_path / "missing-stock-boot.img").exists()
 
 
-def test_execution_cli_refuses_missing_exact_identity_after_explicit_opt_in(
-    tmp_path: Path,
-) -> None:
+def test_execution_cli_refuses_missing_evidence_after_explicit_opt_in(tmp_path: Path) -> None:
     argv = _missing_execution_argv(tmp_path) + ["--execute-temporary-boot"]
+    with pytest.raises(SystemExit) as exc:
+        execute_temporary_boot_once_main(argv)
+    assert exc.value.code == 2
+    assert not (tmp_path / "probe.json").exists()
+    assert not (tmp_path / "execution.json").exists()
+
+
+def test_execution_cli_requires_recovery_readiness_argument(tmp_path: Path) -> None:
+    argv = _missing_execution_argv(tmp_path)
+    index = argv.index("--recovery-readiness")
+    del argv[index:index + 2]
     with pytest.raises(SystemExit) as exc:
         execute_temporary_boot_once_main(argv)
     assert exc.value.code == 2
