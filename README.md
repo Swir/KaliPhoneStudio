@@ -74,6 +74,7 @@ The progress SVG is generated deterministically from [`BUILD_STATUS.json`](BUILD
 - **Schema-v2 functional observations** — every physical test observation cryptographically carries the accepted exact plan-review identity and cannot promote hardware or Beta state by itself.
 - **Exact functional-result bundle** — the exact plan, accepted plan review, schema-v2 observations, independent result reviews and freshly recomputed summary are frozen into one canonical audit artifact before release-gate review.
 - **Cross-campaign release-gate audit** — the accepted bring-up dossier/review and exact functional-result bundle must resolve to the same profile, serial, boot observation, rescue diagnostics, transcript and probe before they can be presented together for manual gate review.
+- **Fail-closed logical target binding** — after an accepted reversible rootfs strategy review, KaliPhoneStudio can bind the exact logical partition role/kernel/filesystem/unlock/free-space/staging identity from the original reviewed storage report while deliberately carrying no raw `/dev` path, mount target, trial execution or write authorization.
 - **Source locking** — host builds bind exact upstream commits, tool versions and relevant source/blob identities instead of floating branches.
 - **SWIR Progress SVG PRO** — deterministic card/mini assets derive geometry from the same authoritative status source while showing project progress and Beta readiness separately.
 
@@ -180,6 +181,10 @@ exact bring-up dossier/review ↔ functional campaign cross-audit
                 ↓
 manual release-gate review + reversible rootfs handoff strategy review
                 ↓
+exact logical target-binding review (no raw path / mount / write)
+                ↓
+fresh-device revalidation + separately gated manual trial
+                ↓
 Kali early-userspace proof + subsystem validation
                 ↓
 full Beta release-gate review
@@ -238,6 +243,8 @@ Detailed operator contracts live in:
 - [`docs/PHYSICAL_BRINGUP_SESSION.md`](docs/PHYSICAL_BRINGUP_SESSION.md)
 - [`docs/PHYSICAL_BRINGUP_DOSSIER.md`](docs/PHYSICAL_BRINGUP_DOSSIER.md)
 - [`docs/PHYSICAL_RELEASE_GATE_AUDIT.md`](docs/PHYSICAL_RELEASE_GATE_AUDIT.md)
+- [`docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md`](docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md)
+- [`docs/ROOTFS_HANDOFF_TARGET_BINDING.md`](docs/ROOTFS_HANDOFF_TARGET_BINDING.md)
 - [`docs/KALI_EARLY_USERSPACE_PROOF.md`](docs/KALI_EARLY_USERSPACE_PROOF.md)
 
 ## Build and reproducibility model
@@ -262,7 +269,7 @@ These authority records intentionally keep `hardware_verified=false` and `beta_g
 
 The detailed roadmap is in [`ROADMAP.md`](ROADMAP.md). The release checklist is [`BETA_RELEASE_GATE.md`](BETA_RELEASE_GATE.md).
 
-A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker, a synthetic evidence record, a complete host-side functional result bundle or a cross-campaign audit packet is not enough.
+A first GitHub Beta will be created only after the complete mandatory physical AC2003 gate has been reviewed. A green CI run, a reproducible host build, an SVG progress card, a successful Fastboot process return code, a rescue marker, a synthetic evidence record, a complete host-side functional result bundle, a cross-campaign audit packet or a logical target-binding review is not enough.
 
 The first Beta must include real candidate binaries/images, exact commit identity, installation/test instructions, compatibility matrix, known issues and SHA-256 checksums. Stable will require a later, higher threshold.
 
@@ -275,6 +282,7 @@ The first Beta must include real candidate binaries/images, exact commit identit
 - Prefer a non-persistent temporary boot and recovery-first validation.
 - Keep firmware, stock `boot.img`, candidate, serial and profile identities tied together.
 - Never guess a UFS/block-device path from a host-side layout hint.
+- A logical target-binding review is evidence only: it must not be translated into a raw `/dev` path, mount or write until a later fresh-device/manual execution gate revalidates the exact phone and context.
 - Do not promote bounded sysfs presence, a 4 KiB read, battery telemetry, a host-side result bundle or an audit packet into a functional-hardware claim.
 - Keep project progress distinct from release readiness; `58%` does not mean Beta is 58% ready.
 - Real recovery/rollback must be exercised before public Beta publication.
