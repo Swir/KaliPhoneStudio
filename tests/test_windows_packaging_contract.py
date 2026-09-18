@@ -47,6 +47,10 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
     assert "tests/test_windows_packaging_contract.py" in workflow
     assert "tests/test_physical_fastboot_capture.py" in workflow
     assert "tests/test_stock_baseline_ingress.py" in workflow
+    assert "tests/test_physical_candidate_operator.py" in workflow
+    assert "tests/test_physical_candidate_gate.py" in workflow
+    assert "tests/test_temporary_boot_offer.py" in workflow
+    assert "tests/test_temporary_boot_execution.py" in workflow
     for command in (
         "--list-profiles --json",
         "--doctor --profile-id oneplus/avicii --json",
@@ -55,6 +59,9 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
         "capture-fastboot-baseline --help",
         "prepare-stock-provenance --help",
         "bind-physical-stock-baseline --help",
+        "bind-physical-candidate-gate --help",
+        "prepare-temporary-boot-offer --help",
+        "execute-temporary-boot-once --help",
     ):
         assert command in workflow
     for invariant in (
@@ -74,13 +81,27 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
         'assert "--payload" in stock_help',
         'assert "offline" in bind_help',
         'assert "--baseline-evidence" in bind_help',
+        'assert "offline" in candidate_help',
+        'assert "--physical-baseline" in candidate_help',
+        'assert "offline" in offer_help',
+        'assert "not authorize execution" in offer_help',
+        'assert "--execute-temporary-boot" in execution_help',
+        'assert "no persistent write verb" in execution_help',
         'assert "--confirm-token" in refusal',
+        'assert "--execute-temporary-boot" in execution_refusal',
     ):
         assert invariant in workflow
     assert "$LASTEXITCODE -ne 2" in workflow
-    assert "dist/should-not-exist" in workflow
-    assert "dist/should-not-stock.json" in workflow
-    assert "dist/should-not-bind.json" in workflow
+    for refused in (
+        "dist/should-not-exist",
+        "dist/should-not-stock.json",
+        "dist/should-not-bind.json",
+        "dist/should-not-candidate.json",
+        "dist/should-not-offer.json",
+        "dist/should-not-probe.json",
+        "dist/should-not-execute.json",
+    ):
+        assert refused in workflow
     assert "WINDOWS_HOST_BUILD_SHA256.txt" in workflow
     assert "WINDOWS_HOST_BUILD_INFO.json" in workflow
     assert "signed = $false" in workflow
@@ -100,5 +121,9 @@ def test_windows_build_documentation_keeps_release_gate_separate() -> None:
     assert "beta_gate_credit=false" in documentation
     assert "onedir" in documentation
     assert "capture-fastboot-baseline" in documentation
+    assert "bind-physical-candidate-gate" in documentation
+    assert "prepare-temporary-boot-offer" in documentation
+    assert "execute-temporary-boot-once" in documentation
+    assert "--execute-temporary-boot" in documentation
     assert "--confirm-token" in documentation
     assert "never performs a persistent phone write" in documentation
