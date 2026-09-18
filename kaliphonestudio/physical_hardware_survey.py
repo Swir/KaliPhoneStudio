@@ -5,6 +5,10 @@ signals already emitted by the rescue init and never turns those signals into a 
 that display, touch, USB, networking, Bluetooth, audio, thermal, power or any other
 hardware function actually works. Real hardware verification remains a separate manual
 physical gate.
+
+New hardware-survey records require the current schema-v2 physical boot observation.
+Historical schema-v1 observations remain readable for audit, but cannot seed a new
+presence survey after the runtime/recovery-bound observation contract became current.
 """
 from __future__ import annotations
 
@@ -18,12 +22,11 @@ from typing import Any
 from .physical_boot_observation import (
     MAX_TRANSCRIPT_BYTES,
     PhysicalBootObservationEvidence,
-    PhysicalBootObservationError,
-    validate_physical_boot_observation_evidence,
 )
 from .physical_rescue_diagnostics import (
     PhysicalRescueDiagnosticsEvidence,
     PhysicalRescueDiagnosticsError,
+    require_current_physical_boot_observation_for_rescue,
     validate_physical_rescue_diagnostics_evidence,
 )
 from .profiles import DeviceProfile
@@ -261,9 +264,12 @@ def record_physical_hardware_survey(
 ) -> PhysicalHardwareSurveyEvidence:
     """Bind one read-only hardware-presence survey to an already proven rescue transcript."""
     try:
-        validate_physical_boot_observation_evidence(observation)
+        require_current_physical_boot_observation_for_rescue(observation)
+    except PhysicalRescueDiagnosticsError as exc:
+        raise PhysicalHardwareSurveyError(str(exc)) from exc
+    try:
         validate_physical_rescue_diagnostics_evidence(diagnostics)
-    except (PhysicalBootObservationError, PhysicalRescueDiagnosticsError) as exc:
+    except PhysicalRescueDiagnosticsError as exc:
         raise PhysicalHardwareSurveyError(str(exc)) from exc
     if not isinstance(profile, DeviceProfile) or profile.profile_id != observation.profile_id:
         raise PhysicalHardwareSurveyError("profile does not match physical boot observation")
