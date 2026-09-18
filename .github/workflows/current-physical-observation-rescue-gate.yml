@@ -7,22 +7,26 @@ on:
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_rescue_functional_probes.py"
+      - "kaliphonestudio/physical_hardware_survey.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "tests/test_current_physical_observation_rescue_gate.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
       - "tests/test_physical_rescue_functional_probes.py"
+      - "tests/test_physical_hardware_survey.py"
       - ".github/workflows/current-physical-observation-rescue-gate.yml"
   pull_request:
     paths:
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_rescue_functional_probes.py"
+      - "kaliphonestudio/physical_hardware_survey.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "tests/test_current_physical_observation_rescue_gate.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
       - "tests/test_physical_rescue_functional_probes.py"
+      - "tests/test_physical_hardware_survey.py"
       - ".github/workflows/current-physical-observation-rescue-gate.yml"
 
 permissions:
@@ -50,38 +54,39 @@ jobs:
           tests/test_physical_boot_observation.py
           tests/test_physical_rescue_diagnostics.py
           tests/test_physical_rescue_functional_probes.py
+          tests/test_physical_hardware_survey.py
       - name: Compile changed safety modules
         run: >-
           python -m compileall -q
           kaliphonestudio/physical_boot_observation.py
           kaliphonestudio/physical_rescue_diagnostics.py
           kaliphonestudio/physical_rescue_functional_probes.py
+          kaliphonestudio/physical_hardware_survey.py
           scripts/record_physical_rescue_diagnostics.py
       - name: Safety surface guard
         shell: python
         run: |
           from pathlib import Path
 
-          diagnostics = Path("kaliphonestudio/physical_rescue_diagnostics.py").read_text(encoding="utf-8")
-          probes = Path("kaliphonestudio/physical_rescue_functional_probes.py").read_text(encoding="utf-8")
+          sources = {
+              "rescue diagnostics": Path("kaliphonestudio/physical_rescue_diagnostics.py").read_text(encoding="utf-8"),
+              "functional probes": Path("kaliphonestudio/physical_rescue_functional_probes.py").read_text(encoding="utf-8"),
+              "hardware survey": Path("kaliphonestudio/physical_hardware_survey.py").read_text(encoding="utf-8"),
+          }
           required_diagnostics = (
               "requires schema-v2 physical boot observation",
               "require_current_physical_boot_observation_for_rescue",
           )
-          missing = [item for item in required_diagnostics if item not in diagnostics]
+          missing = [item for item in required_diagnostics if item not in sources["rescue diagnostics"]]
           if missing:
               raise SystemExit(f"missing rescue admission guard markers: {missing}")
-          required_probes = (
-              "require_current_physical_boot_observation_for_rescue",
-              "Historical schema-v1 observations",
-          )
-          missing = [item for item in required_probes if item not in probes]
-          if missing:
-              raise SystemExit(f"missing functional-probe admission guard markers: {missing}")
+          for label in ("functional probes", "hardware survey"):
+              if "require_current_physical_boot_observation_for_rescue" not in sources[label]:
+                  raise SystemExit(f"{label} is not gated by the current physical observation contract")
           forbidden = ("subprocess.", " fastboot ", " adb ", "set_active", "erase ", "flash ")
-          for label, source in (("rescue diagnostics", diagnostics), ("functional probes", probes)):
+          for label, source in sources.items():
               lowered = source.lower()
               hits = [item for item in forbidden if item.lower() in lowered]
               if hits:
                   raise SystemExit(f"offline {label} acquired forbidden device-I/O surface: {hits}")
-          print("current physical observation rescue/functional-probe admission gate: PASS")
+          print("current physical observation rescue/functional/survey admission gate: PASS")
