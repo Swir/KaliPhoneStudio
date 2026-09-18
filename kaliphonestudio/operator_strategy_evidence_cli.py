@@ -23,6 +23,7 @@ from .rootfs_handoff_strategy_review import (
     RootfsHandoffStrategyReviewRecord,
     bind_rootfs_handoff_strategy_review,
     load_rootfs_handoff_strategy_review_record,
+    parse_rootfs_handoff_strategy_review_record,
     read_rootfs_handoff_strategy_review_notes,
     write_rootfs_handoff_strategy_review_evidence,
 )
@@ -138,6 +139,12 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError("storage review is detached from supplied discovery")
         if storage_review.accepted_for_strategy_design is not True:
             raise ValueError("strategy template requires an accepted physical storage review")
+        if args.candidate_partition_role != discovery.partition_hint:
+            raise ValueError("candidate partition role must match the reviewed profile-driven discovery hint")
+        if args.candidate_partition_role in set(discovery.forbidden_partitions):
+            raise ValueError("candidate partition role is forbidden by the reviewed discovery contract")
+        if args.required_free_bytes < storage_review.rootfs_artifact_size:
+            raise ValueError("required free bytes cannot be smaller than the reviewed rootfs artifact")
         record = RootfsHandoffStrategyReviewRecord(
             schema_version=1,
             review_policy="reversible-rootfs-handoff-strategy-review-v1",
@@ -163,6 +170,9 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             write_authorized=False,
             phone_storage_written=False,
         )
+        # Run the canonical parser before writing any template so malformed roles,
+        # paths, digests or size values cannot be emitted even in rejected state.
+        record = parse_rootfs_handoff_strategy_review_record(json.loads(record.canonical_json()))
         notes = (
             "Rootfs handoff strategy review notes\n\n"
             "Record the exact physical capacity/filesystem/encryption evidence, rollback reasoning, "
