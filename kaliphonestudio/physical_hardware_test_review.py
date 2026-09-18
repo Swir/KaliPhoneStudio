@@ -453,6 +453,8 @@ def make_current_rejected_physical_hardware_test_review_record(
 ) -> PhysicalHardwareTestReviewRecord:
     """Prepare result review only for an observation rooted in the current campaign."""
     try:
+        # Reject stale/legacy provenance before dereferencing downstream evidence.
+        require_current_physical_campaign_observation(boot_observation)
         require_current_physical_campaign_observation(
             boot_observation,
             expected_profile_id=observation.profile_id,

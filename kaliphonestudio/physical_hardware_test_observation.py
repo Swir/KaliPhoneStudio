@@ -587,6 +587,8 @@ def make_current_inconclusive_physical_hardware_test_observation_record(
 ) -> PhysicalHardwareTestObservationRecord:
     """Create a safe template only for a plan rooted in the current physical campaign."""
     try:
+        # Reject stale/legacy provenance before dereferencing downstream evidence.
+        require_current_physical_campaign_observation(observation)
         require_current_physical_campaign_observation(
             observation,
             expected_profile_id=plan.profile_id,
