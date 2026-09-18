@@ -13,6 +13,10 @@ on:
       - "kaliphonestudio/fastboot_tool.py"
       - "kaliphonestudio/fastboot_capture_bundle.py"
       - "kaliphonestudio/stock_baseline_ingress.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/physical_candidate_gate.py"
+      - "kaliphonestudio/temporary_boot_offer.py"
+      - "kaliphonestudio/temporary_boot_execution.py"
       - "kaliphonestudio/ota_import.py"
       - "kaliphonestudio/payload.py"
       - "kaliphonestudio/boot_image.py"
@@ -26,12 +30,20 @@ on:
       - "requirements.txt"
       - "build/windows-requirements.txt"
       - "scripts/build_windows.ps1"
+      - "scripts/bind_physical_candidate_gate.py"
+      - "scripts/prepare_temporary_boot_offer.py"
+      - "scripts/execute_temporary_boot_once.py"
       - "tests/test_windows_packaging_contract.py"
       - "tests/test_physical_fastboot_capture.py"
       - "tests/test_stock_baseline_ingress.py"
+      - "tests/test_physical_candidate_operator.py"
+      - "tests/test_physical_candidate_gate.py"
+      - "tests/test_temporary_boot_offer.py"
+      - "tests/test_temporary_boot_execution.py"
       - "docs/WINDOWS_HOST_BUILD.md"
       - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
       - "docs/STOCK_BASELINE_INGRESS.md"
+      - "docs/PHYSICAL_CANDIDATE_OPERATOR.md"
       - ".github/workflows/windows-host-build.yml"
   pull_request:
     paths:
@@ -44,6 +56,10 @@ on:
       - "kaliphonestudio/fastboot_tool.py"
       - "kaliphonestudio/fastboot_capture_bundle.py"
       - "kaliphonestudio/stock_baseline_ingress.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/physical_candidate_gate.py"
+      - "kaliphonestudio/temporary_boot_offer.py"
+      - "kaliphonestudio/temporary_boot_execution.py"
       - "kaliphonestudio/ota_import.py"
       - "kaliphonestudio/payload.py"
       - "kaliphonestudio/boot_image.py"
@@ -57,12 +73,20 @@ on:
       - "requirements.txt"
       - "build/windows-requirements.txt"
       - "scripts/build_windows.ps1"
+      - "scripts/bind_physical_candidate_gate.py"
+      - "scripts/prepare_temporary_boot_offer.py"
+      - "scripts/execute_temporary_boot_once.py"
       - "tests/test_windows_packaging_contract.py"
       - "tests/test_physical_fastboot_capture.py"
       - "tests/test_stock_baseline_ingress.py"
+      - "tests/test_physical_candidate_operator.py"
+      - "tests/test_physical_candidate_gate.py"
+      - "tests/test_temporary_boot_offer.py"
+      - "tests/test_temporary_boot_execution.py"
       - "docs/WINDOWS_HOST_BUILD.md"
       - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
       - "docs/STOCK_BASELINE_INGRESS.md"
+      - "docs/PHYSICAL_CANDIDATE_OPERATOR.md"
       - ".github/workflows/windows-host-build.yml"
   workflow_dispatch:
 
@@ -101,6 +125,10 @@ jobs:
           tests/test_app.py
           tests/test_physical_fastboot_capture.py
           tests/test_stock_baseline_ingress.py
+          tests/test_physical_candidate_operator.py
+          tests/test_physical_candidate_gate.py
+          tests/test_temporary_boot_offer.py
+          tests/test_temporary_boot_execution.py
 
       - name: Build GUI and CLI onedir artifacts
         shell: pwsh
@@ -118,12 +146,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen --recovery-guide failed: $LASTEXITCODE" }
           & $Cli --export-diagnostics "dist/operator-diagnostics.json" --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/export-result.json"
           if ($LASTEXITCODE -ne 0) { throw "Frozen --export-diagnostics failed: $LASTEXITCODE" }
+
           & $Cli capture-fastboot-baseline --help | Set-Content -Encoding utf8 "dist/capture-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen physical capture help failed: $LASTEXITCODE" }
           & $Cli prepare-stock-provenance --help | Set-Content -Encoding utf8 "dist/stock-provenance-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen stock provenance help failed: $LASTEXITCODE" }
           & $Cli bind-physical-stock-baseline --help | Set-Content -Encoding utf8 "dist/stock-bind-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen stock baseline bind help failed: $LASTEXITCODE" }
+          & $Cli bind-physical-candidate-gate --help | Set-Content -Encoding utf8 "dist/candidate-bind-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen candidate bind help failed: $LASTEXITCODE" }
+          & $Cli prepare-temporary-boot-offer --help | Set-Content -Encoding utf8 "dist/temporary-offer-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen temporary offer help failed: $LASTEXITCODE" }
+          & $Cli execute-temporary-boot-once --help | Set-Content -Encoding utf8 "dist/temporary-execution-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen temporary execution help failed: $LASTEXITCODE" }
 
           # Fail before any Fastboot/tool/device interaction when explicit profile
           # confirmation is absent. Exit code 2 is the expected argparse refusal.
@@ -131,14 +166,28 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen capture did not fail closed without confirmation token: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-exist") { throw "Refused frozen capture created an output directory" }
 
-          # Offline stock commands must fail closed on missing evidence and must
-          # never create an output record in that case.
+          # Offline stock/candidate/offer commands must fail closed on missing evidence
+          # and must never create output records in that case.
           & $Cli prepare-stock-provenance --profile-id oneplus/avicii --ota "dist/missing-ota.zip" --payload "dist/missing-payload.bin" --stock-boot "dist/missing-boot.img" --out "dist/should-not-stock.json" 2> "dist/stock-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen stock provenance did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-stock.json") { throw "Refused stock provenance created output" }
           & $Cli bind-physical-stock-baseline --profile-id oneplus/avicii --baseline-evidence "dist/missing-baseline.json" --capture-evidence "dist/missing-capture.json" --stock-provenance "dist/missing-stock.json" --out "dist/should-not-bind.json" 2> "dist/bind-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen stock bind did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-bind.json") { throw "Refused stock bind created output" }
+          & $Cli bind-physical-candidate-gate --profile-id oneplus/avicii --physical-baseline "dist/missing-physical.json" --first-boot-manifest "dist/missing-manifest.json" --authority-bundle "dist/missing-authority.json" --boot-authorization "dist/missing-authorization.json" --boot-plan "dist/missing-plan.json" --out "dist/should-not-candidate.json" 2> "dist/candidate-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen candidate bind did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-candidate.json") { throw "Refused candidate bind created output" }
+          & $Cli prepare-temporary-boot-offer --profile-id oneplus/avicii --physical-candidate-gate "dist/missing-gate.json" --capture-bundle "dist/missing-capture.json" --fastboot-tool-evidence "dist/missing-tool.json" --fastboot-executable "dist/missing-fastboot.exe" --boot-image "dist/missing-boot.img" --out "dist/should-not-offer.json" 2> "dist/offer-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen temporary offer did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-offer.json") { throw "Refused temporary offer created output" }
+
+          # The only command that could invoke `fastboot boot` must refuse before
+          # evidence loading or device probing unless the explicit execution opt-in
+          # is present, even when every other required argument is supplied.
+          & $Cli execute-temporary-boot-once --profile-id oneplus/avicii --physical-candidate-gate "dist/missing-gate.json" --capture-bundle "dist/missing-capture.json" --baseline-evidence "dist/missing-baseline.json" --fastboot-tool-evidence "dist/missing-tool.json" --fastboot-executable "dist/missing-fastboot.exe" --boot-image "dist/missing-boot.img" --confirmation "WRONG-ON-PURPOSE" --probe-out "dist/should-not-probe.json" --execution-out "dist/should-not-execute.json" 2> "dist/execution-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen temporary execution did not fail closed without opt-in: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-probe.json") { throw "Refused temporary execution created probe evidence" }
+          if (Test-Path "dist/should-not-execute.json") { throw "Refused temporary execution created execution evidence" }
 
           @'
           import json
@@ -146,6 +195,13 @@ jobs:
 
           def load(name):
               return json.loads(Path("dist", name).read_text(encoding="utf-8-sig"))
+
+          def text(name):
+              # argparse wraps help according to the console width. Normalize
+              # whitespace so safety assertions verify words/meaning rather than
+              # a platform-specific line break.
+              raw = Path("dist", name).read_text(encoding="utf-8-sig").lower()
+              return " ".join(raw.split())
 
           profiles = load("profiles.json")
           assert any(item["profile_id"] == "oneplus/avicii" for item in profiles)
@@ -164,18 +220,30 @@ jobs:
           assert bundle["privacy"]["absolute_tool_paths_exported"] is False
           assert bundle["hardware_verified"] is False
           assert bundle["beta_gate_credit"] is False
-          capture_help = Path("dist/capture-help.txt").read_text(encoding="utf-8-sig").lower()
+
+          capture_help = text("capture-help.txt")
           assert "read-only" in capture_help
           assert "--confirm-token" in capture_help
-          stock_help = Path("dist/stock-provenance-help.txt").read_text(encoding="utf-8-sig").lower()
+          stock_help = text("stock-provenance-help.txt")
           assert "offline" in stock_help
           assert "--ota" in stock_help
           assert "--payload" in stock_help
-          bind_help = Path("dist/stock-bind-help.txt").read_text(encoding="utf-8-sig").lower()
+          bind_help = text("stock-bind-help.txt")
           assert "offline" in bind_help
           assert "--baseline-evidence" in bind_help
-          refusal = Path("dist/capture-refusal.txt").read_text(encoding="utf-8-sig").lower()
+          candidate_help = text("candidate-bind-help.txt")
+          assert "offline" in candidate_help
+          assert "--physical-baseline" in candidate_help
+          offer_help = text("temporary-offer-help.txt")
+          assert "offline" in offer_help
+          assert "not authorize execution" in offer_help
+          execution_help = text("temporary-execution-help.txt")
+          assert "--execute-temporary-boot" in execution_help
+          assert "no persistent write verb" in execution_help
+          refusal = text("capture-refusal.txt")
           assert "--confirm-token" in refusal
+          execution_refusal = text("execution-refusal.txt")
+          assert "--execute-temporary-boot" in execution_refusal
           '@ | python -
 
       - name: Smoke-test frozen GUI bootstrap path
