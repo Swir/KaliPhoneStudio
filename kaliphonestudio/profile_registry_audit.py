@@ -1,10 +1,10 @@
 """Fail-closed cross-profile registry audit for KaliPhoneStudio.
 
-The runtime profile loader validates each profile independently and the device
-identifier already refuses ambiguous matches. This module adds the registry-wide
-contract needed for a growing multi-device catalogue: profile-specific
-confirmation tokens must remain unique and every declared identity token must
-resolve back to exactly one profile under the current matching semantics.
+The runtime profile loader validates each profile independently. This module adds
+registry-wide guarantees for a growing multi-device catalogue: profile-specific
+confirmation tokens remain unique, every declared strong identity signal resolves
+back to exactly one profile, and weak contextual signals can be shared without
+becoming sufficient to identify a device by themselves.
 
 The audit is host-only. It never invokes ADB/Fastboot, never talks to a phone,
 never selects a partition or storage target, and grants no hardware/Beta credit.
@@ -12,6 +12,7 @@ never selects a partition or storage target, and grants no hardware/Beta credit.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
@@ -49,7 +50,11 @@ class ProfileRegistryAuditResult:
     profile_ids: tuple[str, ...]
     confirmation_tokens_unique: bool
     identity_probe_count: int
+    strong_identity_probe_count: int
+    weak_identity_probe_count: int
+    shared_weak_identity_value_count: int
     canonical_identity_bundle_count: int
+    weak_identity_alone_allowed: bool
     ambiguous_identity_allowed: bool
     physical_interaction_performed: bool
     external_device_command_executed: bool
@@ -67,23 +72,6 @@ def _normalized_token(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ProfileRegistryAuditError(f"{label} must be a non-empty string")
     return value.strip().casefold()
-
-
-def _aliases(profile: DeviceProfile) -> tuple[str, ...]:
-    raw = profile.data.get("aliases", [])
-    if not isinstance(raw, list):
-        raise ProfileRegistryAuditError(f"{profile.profile_id}: aliases must be a list")
-    aliases: list[str] = []
-    normalized: set[str] = set()
-    for index, value in enumerate(raw):
-        token = _normalized_token(value, f"{profile.profile_id}: aliases[{index}]")
-        if token in normalized:
-            raise ProfileRegistryAuditError(
-                f"{profile.profile_id}: aliases contain a duplicate after normalization: {value!r}"
-            )
-        normalized.add(token)
-        aliases.append(value.strip())
-    return tuple(aliases)
 
 
 def _check_confirmation_tokens(profiles: Sequence[DeviceProfile]) -> None:
@@ -104,34 +92,20 @@ def _check_confirmation_tokens(profiles: Sequence[DeviceProfile]) -> None:
         owners[token] = profile.profile_id
 
 
-def _identity_probes(profile: DeviceProfile) -> tuple[tuple[str, str], ...]:
-    probes: list[tuple[str, str]] = [
-        ("product", str(profile.data["codename"]).strip()),
-        ("model", str(profile.data["model"]).strip()),
-    ]
-    board = profile.data.get("bootloader_board_name")
-    if board is not None:
-        probes.append(("board", str(board).strip()))
-    # DeviceProfile.matches intentionally accepts legacy aliases for every signal.
-    # Probe aliases through product because any cross-profile collision would be
-    # ambiguous for at least one accepted signal under the same matching logic.
-    probes.extend(("product", alias) for alias in _aliases(profile))
-
-    deduped: list[tuple[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for signal, value in probes:
-        if not value:
-            raise ProfileRegistryAuditError(
-                f"{profile.profile_id}: {signal} identity token must be non-empty"
-            )
-        key = (signal, value.casefold())
-        if key not in seen:
-            seen.add(key)
-            deduped.append((signal, value))
-    return tuple(deduped)
+def _identity_probes(profile: DeviceProfile) -> tuple[tuple[str, str, str], ...]:
+    probes: list[tuple[str, str, str]] = []
+    contract = profile.data["identity_signals"]
+    for signal in ("product", "model", "board"):
+        signal_contract = contract.get(signal)
+        if signal_contract is None:
+            continue
+        strength = str(signal_contract["strength"])
+        for value in signal_contract["values"]:
+            probes.append((signal, str(value).strip(), strength))
+    return tuple(probes)
 
 
-def _resolve_probe(
+def _resolve_strong_probe(
     profiles: Sequence[DeviceProfile],
     *,
     expected_profile_id: str,
@@ -144,16 +118,35 @@ def _resolve_probe(
         resolved = identify_profile(profiles, **kwargs)
     except ProfileError as exc:
         raise ProfileRegistryAuditError(
-            f"identity probe {signal}={value!r} for {expected_profile_id} is ambiguous or unresolved: {exc}"
+            f"strong identity probe {signal}={value!r} for {expected_profile_id} "
+            f"is ambiguous or unresolved: {exc}"
         ) from exc
     if resolved.profile_id != expected_profile_id:
         raise ProfileRegistryAuditError(
-            f"identity probe {signal}={value!r} resolved {resolved.profile_id}, expected {expected_profile_id}"
+            f"strong identity probe {signal}={value!r} resolved {resolved.profile_id}, "
+            f"expected {expected_profile_id}"
         )
 
 
+def _assert_weak_probe_cannot_identify(
+    profiles: Sequence[DeviceProfile],
+    *,
+    signal: str,
+    value: str,
+) -> None:
+    kwargs = {"product": "", "model": "", "board": ""}
+    kwargs[signal] = value
+    try:
+        resolved = identify_profile(profiles, **kwargs)
+    except ProfileError:
+        return
+    raise ProfileRegistryAuditError(
+        f"weak identity probe {signal}={value!r} unexpectedly identified {resolved.profile_id}"
+    )
+
+
 def audit_profile_registry(root: Path) -> ProfileRegistryAuditResult:
-    """Validate the complete registry as one fail-closed identity namespace."""
+    """Validate the complete registry as one fail-closed typed identity namespace."""
     profiles = tuple(discover_profiles(Path(root)))
     if not profiles:
         raise ProfileRegistryAuditError("device profile registry is empty")
@@ -161,24 +154,48 @@ def audit_profile_registry(root: Path) -> ProfileRegistryAuditResult:
     _check_confirmation_tokens(profiles)
 
     identity_probe_count = 0
+    strong_identity_probe_count = 0
+    weak_identity_probe_count = 0
+    weak_tokens: list[tuple[str, str]] = []
     canonical_bundle_count = 0
-    for profile in profiles:
-        for signal, value in _identity_probes(profile):
-            _resolve_probe(
-                profiles,
-                expected_profile_id=profile.profile_id,
-                signal=signal,
-                value=value,
-            )
-            identity_probe_count += 1
 
-        board = profile.data.get("bootloader_board_name")
+    for profile in profiles:
+        for signal, value, strength in _identity_probes(profile):
+            identity_probe_count += 1
+            if strength == "strong":
+                _resolve_strong_probe(
+                    profiles,
+                    expected_profile_id=profile.profile_id,
+                    signal=signal,
+                    value=value,
+                )
+                strong_identity_probe_count += 1
+            elif strength == "weak":
+                _assert_weak_probe_cannot_identify(
+                    profiles,
+                    signal=signal,
+                    value=value,
+                )
+                weak_identity_probe_count += 1
+                weak_tokens.append((signal, value.casefold()))
+            else:  # per-profile validation should make this unreachable
+                raise ProfileRegistryAuditError(
+                    f"{profile.profile_id}: unsupported identity strength {strength!r}"
+                )
+
+        contract = profile.data["identity_signals"]
+        product_values = contract.get("product", {}).get("values", [])
+        model_values = contract.get("model", {}).get("values", [])
+        board_values = contract.get("board", {}).get("values", [])
+        product = str(product_values[0]).strip() if product_values else ""
+        model = str(model_values[0]).strip() if model_values else ""
+        board = str(board_values[0]).strip() if board_values else ""
         try:
             resolved = identify_profile(
                 profiles,
-                product=str(profile.data["codename"]).strip(),
-                model=str(profile.data["model"]).strip(),
-                board=str(board).strip() if board is not None else "",
+                product=product,
+                model=model,
+                board=board,
             )
         except ProfileError as exc:
             raise ProfileRegistryAuditError(
@@ -190,14 +207,21 @@ def audit_profile_registry(root: Path) -> ProfileRegistryAuditResult:
             )
         canonical_bundle_count += 1
 
+    weak_counts = Counter(weak_tokens)
+    shared_weak_identity_value_count = sum(1 for count in weak_counts.values() if count > 1)
+
     return ProfileRegistryAuditResult(
-        schema_version=1,
+        schema_version=2,
         status="pass",
         profile_count=len(profiles),
         profile_ids=tuple(profile.profile_id for profile in profiles),
         confirmation_tokens_unique=True,
         identity_probe_count=identity_probe_count,
+        strong_identity_probe_count=strong_identity_probe_count,
+        weak_identity_probe_count=weak_identity_probe_count,
+        shared_weak_identity_value_count=shared_weak_identity_value_count,
         canonical_identity_bundle_count=canonical_bundle_count,
+        weak_identity_alone_allowed=False,
         ambiguous_identity_allowed=False,
         physical_interaction_performed=False,
         external_device_command_executed=False,
@@ -213,8 +237,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="KaliPhoneStudio audit-profile-registry",
         description=(
-            "Validate the complete multi-device profile registry for unique confirmation tokens and "
-            "unambiguous declared identity probes. Host-only; grants no hardware/Beta credit."
+            "Validate the complete multi-device profile registry for unique confirmation tokens, "
+            "unique strong identity signals and non-identifying weak context signals. Host-only; "
+            "grants no hardware/Beta credit."
         ),
     )
     parser.add_argument(
@@ -240,9 +265,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print("profile registry audit: PASS")
         print(f"profiles: {result.profile_count}")
-        print(f"identity probes: {result.identity_probe_count}")
+        print(f"strong identity probes: {result.strong_identity_probe_count}")
+        print(f"weak identity probes: {result.weak_identity_probe_count}")
+        print(f"shared weak identity values: {result.shared_weak_identity_value_count}")
         print("confirmation tokens: unique and profile-specific")
-        print("ambiguous identity: forbidden")
+        print("weak-only identification: forbidden")
+        print("ambiguous strong identity: forbidden")
         print("physical interaction/device commands: no")
         print("hardware/Beta credit: no")
     return 0

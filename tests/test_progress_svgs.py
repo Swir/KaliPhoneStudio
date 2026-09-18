@@ -123,3 +123,11 @@ def test_committed_assets_and_text_fallback_match_authoritative_status():
     assert "project_progress_percent" in status["progress_svg_calculation"]
     verify_outputs(build_model(status))
     assert CARD_PATH.is_file() and MINI_PATH.is_file() and TEMPLATE_PATH.is_file()
+
+
+def test_readme_and_active_roadmap_do_not_reintroduce_legacy_text_art_progress_meters():
+    legacy_fragments = ("████", "░░░", "[====", "[####")
+    for relative in ("README.md", "ROADMAP.md"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        for fragment in legacy_fragments:
+            assert fragment not in text, f"{relative} reintroduced legacy text-art progress meter: {fragment!r}"

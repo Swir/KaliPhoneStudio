@@ -37,10 +37,6 @@ Current development line: `0.6.66-dev`
 
 **58% complete**
 
-```text
-[█████████████████████████████---------------------] 58%
-```
-
 <div align="center">
   <img src="assets/readme/progress-card.svg" alt="KaliPhoneStudio current roadmap progress dashboard" width="100%" />
 </div>
@@ -52,6 +48,8 @@ The progress SVG is generated deterministically from [`BUILD_STATUS.json`](BUILD
 | Area | Current verified state |
 |---|---|
 | Multi-device host core | Implemented and covered by CI |
+| Device-profile contract | Schema v3 + Draft 2020-12 structural schema + runtime semantic validation |
+| Typed identity safety | Strong product/model signals; weak board context cannot identify a device by itself |
 | Kali ARM64 rootfs authority | `passed-reviewed` |
 | Kernel authority | `passed-reviewed` |
 | DTB/DTBO authority | `passed-reviewed` |
@@ -65,6 +63,9 @@ The progress SVG is generated deterministically from [`BUILD_STATUS.json`](BUILD
 ## Highlights
 
 - **Profile-driven multi-device core** — phone-specific identity, boot constraints, sources, recovery notes and test contracts live under `devices/<vendor>/<codename>/profile.json` instead of global AC2003 hard-coding.
+- **Formal profile schema v3** — `devices/profile.schema.json` provides Draft 2020-12 structural validation while the runtime validator enforces cross-field safety semantics.
+- **Strong/weak identity model** — product/model identifiers can be strong; shared board identifiers can be weak context and are forbidden from identifying a phone by themselves.
+- **Registry-wide identity audit** — every strong value must resolve exactly one profile; shared weak values remain allowed only while weak-only resolution fails closed, including through the frozen Windows CLI.
 - **Reviewed reproducibility authorities** — exact Kali ARM64 rootfs, kernel and DTB/DTBO build authorities are recorded separately from physical-device claims.
 - **Recovery-first temporary boot** — the host path prefers non-persistent `fastboot boot`, exact serial/profile/firmware/candidate binding and explicit confirmation rather than silent flashing.
 - **Deterministic rescue userspace** — reproducible rescue ramdisk, exact probe identity, bounded read-only diagnostics and evidence binding.
@@ -95,6 +96,16 @@ python -m pip install pytest
 python -m pytest -q
 python -m compileall -q kaliphonestudio scripts
 ```
+
+### Validate device profiles
+
+```bash
+python -m pip install -r build/profile-schema-requirements.txt
+python scripts/validate_device_profiles_jsonschema.py
+python -m kaliphonestudio.profile_registry_audit --devices-root devices --json
+```
+
+The first command set validates the formal Draft 2020-12 schema and runtime semantic contract. The registry audit then verifies the complete typed identity namespace, including unique strong signals and non-identifying weak signals.
 
 ### Verify the deterministic progress presentation
 
@@ -127,6 +138,7 @@ Adding a profile JSON does **not** automatically create hardware support. A devi
 KaliPhoneStudio/
 ├── kaliphonestudio/                 # device-independent host core where practical
 ├── devices/
+│   ├── profile.schema.json           # structural profile schema v3 contract
 │   └── oneplus/
 │       └── avicii/
 │           └── profile.json         # AC2003 identity + device-specific constraints/contracts
@@ -137,7 +149,7 @@ KaliPhoneStudio/
 └── .github/workflows/               # CI / reproducibility / focused safety workflows
 ```
 
-Global device detection and destructive-action policy should remain profile-driven. Device-specific assumptions belong in the selected profile or its related device documentation/modules, not scattered through the core.
+Global device detection and destructive-action policy should remain profile-driven. Device-specific assumptions belong in the selected profile or its related device documentation/modules, not scattered through the core. See [`docs/MULTI_DEVICE_PROFILE_REGISTRY.md`](docs/MULTI_DEVICE_PROFILE_REGISTRY.md) for the schema-v3 and strong/weak identity contract.
 
 ## Physical bring-up flow
 
@@ -215,6 +227,7 @@ Even a bundle in which every Beta-required functional test is a reviewed pass, a
 
 Detailed operator contracts live in:
 
+- [`docs/MULTI_DEVICE_PROFILE_REGISTRY.md`](docs/MULTI_DEVICE_PROFILE_REGISTRY.md)
 - [`docs/FASTBOOT_BASELINE.md`](docs/FASTBOOT_BASELINE.md)
 - [`docs/RESCUE_PHYSICAL_PROOF.md`](docs/RESCUE_PHYSICAL_PROOF.md)
 - [`docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md`](docs/PHYSICAL_HARDWARE_SURVEY_REVIEW.md)
@@ -273,13 +286,14 @@ Contributions should preserve the fail-closed, profile-driven architecture:
 - keep generic behavior in `kaliphonestudio/` where practical;
 - put hardware-specific facts in the appropriate device profile/module/docs;
 - pin upstream source identities used by build or safety decisions;
+- declare strong/weak identity signals explicitly and never promote a shared weak board value into sufficient device identity;
 - add tests for every new safety/evidence contract;
 - do not mark a subsystem as working without real physical evidence;
 - update status/roadmap/changelog only for verified milestones.
 
 ## 🔎 Search Keywords
 
-`KaliPhoneStudio` `Kali Linux phone` `Linux on phone` `bare metal Linux phone` `NetHunter Pro porting` `supported device porting` `OnePlus Nord AC2003` `avicii Linux` `ARM64 rootfs` `Android boot image` `fastboot boot` `phone recovery` `DTB DTBO` `initramfs rescue` `UFS storage` `reproducible builds` `device profile schema` `mobile Linux bring-up`
+`KaliPhoneStudio` `Kali Linux phone` `Linux on phone` `bare metal Linux phone` `NetHunter Pro porting` `supported device porting` `OnePlus Nord AC2003` `avicii Linux` `ARM64 rootfs` `Android boot image` `fastboot boot` `phone recovery` `DTB DTBO` `initramfs rescue` `UFS storage` `reproducible builds` `device profile schema` `multi-device phone porting` `mobile Linux bring-up`
 
 ---
 

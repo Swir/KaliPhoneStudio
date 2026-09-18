@@ -11,7 +11,7 @@ from kaliphonestudio.fastboot_baseline import (
     require_device_matches_baseline,
     write_fastboot_baseline_evidence,
 )
-from kaliphonestudio.profiles import ProfileError, get_profile, validate_profile
+from kaliphonestudio.profiles import PROFILE_SCHEMA_VERSION, ProfileError, get_profile, validate_profile
 from kaliphonestudio.safety import SafetyError, VerifiedDevice
 
 
@@ -123,9 +123,9 @@ def test_evidence_is_canonical_refuses_overwrite_and_binds_serial(tmp_path):
         )
 
 
-def test_profile_schema_v2_requires_complete_fastboot_probe_contract():
+def test_current_profile_schema_requires_complete_fastboot_probe_contract():
     data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == PROFILE_SCHEMA_VERSION
 
     broken = deepcopy(data)
     del broken["fastboot_probe"]
