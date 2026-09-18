@@ -47,11 +47,13 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
     assert 'python-version: "3.12"' in workflow
     assert "./scripts/build_windows.ps1" in workflow
     assert "tests/test_windows_packaging_contract.py" in workflow
+    assert "tests/test_physical_fastboot_capture.py" in workflow
     for command in (
         "--list-profiles --json",
         "--doctor --profile-id oneplus/avicii --json",
         "--recovery-guide --profile-id oneplus/avicii --json",
         "--export-diagnostics",
+        "capture-fastboot-baseline --help",
     ):
         assert command in workflow
     for invariant in (
@@ -64,8 +66,13 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
         'bundle["privacy"]["absolute_tool_paths_exported"] is False',
         'bundle["hardware_verified"] is False',
         'bundle["beta_gate_credit"] is False',
+        'assert "read-only" in capture_help',
+        'assert "--confirm-token" in capture_help',
+        'assert "--confirm-token" in refusal',
     ):
         assert invariant in workflow
+    assert "$LASTEXITCODE -ne 2" in workflow
+    assert "dist/should-not-exist" in workflow
     assert "WINDOWS_HOST_BUILD_SHA256.txt" in workflow
     assert "WINDOWS_HOST_BUILD_INFO.json" in workflow
     assert "signed = $false" in workflow
@@ -84,3 +91,6 @@ def test_windows_build_documentation_keeps_release_gate_separate() -> None:
     assert "hardware_verified=false" in documentation
     assert "beta_gate_credit=false" in documentation
     assert "onedir" in documentation
+    assert "capture-fastboot-baseline" in documentation
+    assert "--confirm-token" in documentation
+    assert "never performs a persistent phone write" in documentation
