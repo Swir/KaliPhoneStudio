@@ -127,6 +127,27 @@ def test_missing_hardware_review_fails_closed_without_functional_plan(tmp_path: 
     assert not destination.exists()
 
 
+def test_missing_current_observation_fails_closed_without_plan_review_binding(tmp_path: Path) -> None:
+    destination = tmp_path / "should-not-plan-review.json"
+    rc = operator_evidence_cli.main(
+        [
+            "bind-functional-test-plan-review",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
+            "--test-plan",
+            str(tmp_path / "missing-plan.json"),
+            "--review-record",
+            str(tmp_path / "missing-review-record.json"),
+            "--review-notes",
+            str(tmp_path / "missing-review-notes.txt"),
+            "--out",
+            str(destination),
+        ]
+    )
+    assert rc == 2
+    assert not destination.exists()
+
+
 def test_missing_exact_plan_review_fails_closed_without_observation_template(tmp_path: Path) -> None:
     destination = tmp_path / "should-not-observation-template.json"
     rc = operator_evidence_cli.main(
