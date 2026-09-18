@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from kaliphonestudio.physical_campaign_admission import load_current_physical_campaign_observation
 from kaliphonestudio.physical_hardware_test_plan_review import (
-    bind_physical_hardware_test_plan_review_from_files,
+    bind_current_physical_hardware_test_plan_review_from_files,
     write_physical_hardware_test_plan_review_evidence,
 )
 
@@ -15,13 +16,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Bind exact canonical test-plan bytes, review record and notes into immutable review evidence."
     )
+    parser.add_argument("--boot-observation", required=True, type=Path)
     parser.add_argument("--test-plan", required=True, type=Path)
     parser.add_argument("--review-record", required=True, type=Path)
     parser.add_argument("--review-notes", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
-    evidence = bind_physical_hardware_test_plan_review_from_files(
+    observation = load_current_physical_campaign_observation(args.boot_observation)
+    evidence = bind_current_physical_hardware_test_plan_review_from_files(
+        observation,
         args.test_plan,
         args.review_record,
         args.review_notes,
