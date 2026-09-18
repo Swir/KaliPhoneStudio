@@ -1,0 +1,35 @@
+name: boot-image-structural
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/boot_image.py"
+      - "tests/test_boot_image.py"
+      - "docs/BOOT_IMAGE_PREFLIGHT.md"
+      - ".github/workflows/boot-image-structural.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/boot_image.py"
+      - "tests/test_boot_image.py"
+      - "docs/BOOT_IMAGE_PREFLIGHT.md"
+      - ".github/workflows/boot-image-structural.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  structural-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run focused boot image structural tests
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q tests/test_boot_image.py
+          python -m compileall -q kaliphonestudio/boot_image.py
