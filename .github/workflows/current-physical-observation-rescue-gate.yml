@@ -6,19 +6,23 @@ on:
     paths:
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "tests/test_current_physical_observation_rescue_gate.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
+      - "tests/test_physical_rescue_functional_probes.py"
       - ".github/workflows/current-physical-observation-rescue-gate.yml"
   pull_request:
     paths:
       - "kaliphonestudio/physical_boot_observation.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "kaliphonestudio/physical_rescue_functional_probes.py"
       - "scripts/record_physical_rescue_diagnostics.py"
       - "tests/test_current_physical_observation_rescue_gate.py"
       - "tests/test_physical_boot_observation.py"
       - "tests/test_physical_rescue_diagnostics.py"
+      - "tests/test_physical_rescue_functional_probes.py"
       - ".github/workflows/current-physical-observation-rescue-gate.yml"
 
 permissions:
@@ -26,7 +30,7 @@ permissions:
 
 jobs:
   rescue-admission-gate:
-    name: rescue admission / Python ${{ matrix.python-version }}
+    name: rescue chain admission / Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -45,27 +49,39 @@ jobs:
           tests/test_current_physical_observation_rescue_gate.py
           tests/test_physical_boot_observation.py
           tests/test_physical_rescue_diagnostics.py
+          tests/test_physical_rescue_functional_probes.py
       - name: Compile changed safety modules
         run: >-
           python -m compileall -q
           kaliphonestudio/physical_boot_observation.py
           kaliphonestudio/physical_rescue_diagnostics.py
+          kaliphonestudio/physical_rescue_functional_probes.py
           scripts/record_physical_rescue_diagnostics.py
       - name: Safety surface guard
         shell: python
         run: |
           from pathlib import Path
-          source = Path("kaliphonestudio/physical_rescue_diagnostics.py").read_text(encoding="utf-8")
-          required = (
+
+          diagnostics = Path("kaliphonestudio/physical_rescue_diagnostics.py").read_text(encoding="utf-8")
+          probes = Path("kaliphonestudio/physical_rescue_functional_probes.py").read_text(encoding="utf-8")
+          required_diagnostics = (
               "requires schema-v2 physical boot observation",
               "require_current_physical_boot_observation_for_rescue",
           )
-          missing = [item for item in required if item not in source]
+          missing = [item for item in required_diagnostics if item not in diagnostics]
           if missing:
               raise SystemExit(f"missing rescue admission guard markers: {missing}")
+          required_probes = (
+              "require_current_physical_boot_observation_for_rescue",
+              "Historical schema-v1 observations",
+          )
+          missing = [item for item in required_probes if item not in probes]
+          if missing:
+              raise SystemExit(f"missing functional-probe admission guard markers: {missing}")
           forbidden = ("subprocess.", " fastboot ", " adb ", "set_active", "erase ", "flash ")
-          lowered = source.lower()
-          hits = [item for item in forbidden if item.lower() in lowered]
-          if hits:
-              raise SystemExit(f"offline rescue diagnostics acquired forbidden device-I/O surface: {hits}")
-          print("current physical observation rescue admission gate: PASS")
+          for label, source in (("rescue diagnostics", diagnostics), ("functional probes", probes)):
+              lowered = source.lower()
+              hits = [item for item in forbidden if item.lower() in lowered]
+              if hits:
+                  raise SystemExit(f"offline {label} acquired forbidden device-I/O surface: {hits}")
+          print("current physical observation rescue/functional-probe admission gate: PASS")
