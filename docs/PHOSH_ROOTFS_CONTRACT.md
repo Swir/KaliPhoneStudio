@@ -38,13 +38,26 @@ that the parsed package/service contract still matches the lock.
 It reports exact installed versions and missing packages. Even when every package is
 present, the result only means **host userspace package contract satisfied**.
 
+## Rootfs authority binding
+
+`kaliphonestudio.phosh_rootfs_binding` closes the next host-side identity gap. It re-runs
+the Phosh package check over the exact normalized package-manifest bytes and requires the
+manifest SHA-256 and package count to match one reviewed `RootfsAuthorityRecord`. It then
+emits canonical non-authorizing binding evidence that freezes the Phosh source-lock,
+reviewed rootfs authority, accepted rootfs artifact and package-manifest identity together.
+
+See [`PHOSH_ROOTFS_AUTHORITY_BINDING.md`](PHOSH_ROOTFS_AUTHORITY_BINDING.md) for the CLI,
+claim boundary and failure rules. The binding still performs no phone I/O and cannot
+select, mount or write a storage target.
+
 ## Required separation of claims
 
-A successful source/package check keeps all of these false:
+A successful source/package/binding check keeps all of these false:
 
 - `display_verified`
 - `touch_verified`
 - `hardware_verified`
+- `beta_release_authorized`
 - `beta_gate_credit`
 
 Physical AC2003 work is still mandatory. In particular, Phosh cannot be declared usable
@@ -54,7 +67,8 @@ power and recovery requirements are physically exercised.
 
 ## Next integration step
 
-After real storage evidence selects and reviews a reversible rootfs handoff target, build
-the Phosh-enabled ARM64 userspace from an explicitly reviewed repository snapshot, freeze
-its rootfs/package-manifest identity, bind it to the existing rootfs/candidate authority,
-and only then test it through the physical bring-up evidence chain.
+After a future Phosh-enabled ARM64 rootfs has a reviewed reproducibility authority and
+passes the host-only authority binding, bind that exact userspace identity into the
+reviewed physical candidate/evidence chain. Only then exercise it through the real
+AC2003 temporary-boot, early-userspace, storage/recovery and subsystem tests. A successful
+host binding alone does not increase project progress or Beta readiness.
