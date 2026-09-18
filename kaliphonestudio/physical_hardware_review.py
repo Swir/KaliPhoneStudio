@@ -14,6 +14,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_hardware_survey import (
     PhysicalHardwareSurveyError,
     PhysicalHardwareSurveyEvidence,
@@ -461,3 +466,63 @@ def review_physical_hardware_survey_files(
         review_notes_sha256=notes_sha,
         review_notes_size=notes_size,
     )
+
+def bind_current_physical_hardware_review(
+    observation: PhysicalBootObservationEvidence,
+    survey: PhysicalHardwareSurveyEvidence,
+    review: PhysicalHardwareReviewRecord,
+    *,
+    review_record_sha256: str,
+    review_record_size: int,
+    review_notes_sha256: str,
+    review_notes_size: int,
+) -> PhysicalHardwareReviewEvidence:
+    """Bind a new review only when the survey belongs to the current physical campaign."""
+    try:
+        require_current_physical_campaign_observation(
+            observation,
+            expected_profile_id=survey.profile_id,
+            expected_device_serial=survey.device_serial,
+            expected_observation_sha256=survey.physical_boot_observation_sha256,
+            expected_transcript_sha256=survey.transcript_sha256,
+            expected_rescue_probe_id=survey.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareReviewError(str(exc)) from exc
+    return bind_physical_hardware_review(
+        survey,
+        review,
+        review_record_sha256=review_record_sha256,
+        review_record_size=review_record_size,
+        review_notes_sha256=review_notes_sha256,
+        review_notes_size=review_notes_size,
+    )
+
+
+def review_current_physical_hardware_survey_files(
+    observation: PhysicalBootObservationEvidence,
+    survey_evidence_path: Path,
+    review_record_path: Path,
+    review_notes_path: Path,
+) -> PhysicalHardwareReviewEvidence:
+    """Current-only file boundary used by operator tooling for new hardware reviews."""
+    try:
+        require_current_physical_campaign_observation(observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareReviewError(str(exc)) from exc
+    try:
+        survey = load_physical_hardware_survey_evidence(survey_evidence_path)
+    except PhysicalHardwareSurveyError as exc:
+        raise PhysicalHardwareReviewError(str(exc)) from exc
+    record, record_sha, record_size = load_physical_hardware_review_record(review_record_path)
+    notes_sha, notes_size = read_physical_hardware_review_notes(review_notes_path)
+    return bind_current_physical_hardware_review(
+        observation,
+        survey,
+        record,
+        review_record_sha256=record_sha,
+        review_record_size=record_size,
+        review_notes_sha256=notes_sha,
+        review_notes_size=notes_size,
+    )
+
