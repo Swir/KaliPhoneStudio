@@ -6,6 +6,7 @@ on:
     paths:
       - "main.py"
       - "kaliphonestudio/operator_evidence_cli.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_hardware_survey.py"
       - "kaliphonestudio/physical_hardware_review.py"
@@ -28,6 +29,7 @@ on:
     paths:
       - "main.py"
       - "kaliphonestudio/operator_evidence_cli.py"
+      - "kaliphonestudio/physical_campaign_admission.py"
       - "kaliphonestudio/physical_rescue_diagnostics.py"
       - "kaliphonestudio/physical_hardware_survey.py"
       - "kaliphonestudio/physical_hardware_review.py"
@@ -78,6 +80,7 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_operator_evidence_cli.py
+          tests/test_current_physical_observation_downstream_gate.py
           tests/test_physical_rescue_diagnostics.py
           tests/test_physical_hardware_survey.py
           tests/test_physical_hardware_review.py
@@ -119,7 +122,7 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen storage review did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-storage.json") { throw "Refused storage review created output" }
 
-          & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
+          & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --boot-observation "dist/missing-boot-observation.json" --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-plan.json") { throw "Refused functional plan created output" }
 
