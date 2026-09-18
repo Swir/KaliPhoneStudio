@@ -12,11 +12,17 @@ on:
       - "kaliphonestudio/physical_storage_review.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "kaliphonestudio/physical_hardware_test_observation.py"
+      - "kaliphonestudio/physical_hardware_test_review.py"
+      - "kaliphonestudio/physical_hardware_test_summary.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
       - "devices/**/profile.json"
       - "scripts/build_windows.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_operator_evidence_cli.py"
+      - "tests/test_physical_hardware_functional_results.py"
+      - "tests/test_physical_hardware_result_bundle.py"
       - ".github/workflows/operator-evidence-workspace.yml"
   pull_request:
     paths:
@@ -28,11 +34,17 @@ on:
       - "kaliphonestudio/physical_storage_review.py"
       - "kaliphonestudio/physical_hardware_test_plan.py"
       - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "kaliphonestudio/physical_hardware_test_observation.py"
+      - "kaliphonestudio/physical_hardware_test_review.py"
+      - "kaliphonestudio/physical_hardware_test_summary.py"
+      - "kaliphonestudio/physical_hardware_result_bundle.py"
       - "devices/**/profile.json"
       - "scripts/build_windows.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_operator_evidence_cli.py"
+      - "tests/test_physical_hardware_functional_results.py"
+      - "tests/test_physical_hardware_result_bundle.py"
       - ".github/workflows/operator-evidence-workspace.yml"
   workflow_dispatch:
 
@@ -72,6 +84,8 @@ jobs:
           tests/test_physical_storage_review.py
           tests/test_physical_hardware_test_plan.py
           tests/test_physical_hardware_test_plan_review.py
+          tests/test_physical_hardware_functional_results.py
+          tests/test_physical_hardware_result_bundle.py
 
       - name: Build frozen Windows host CLI
         shell: pwsh
@@ -90,6 +104,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen storage-review help failed: $LASTEXITCODE" }
           & $Cli evidence build-functional-test-plan --help | Set-Content -Encoding utf8 "dist/evidence-functional-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan help failed: $LASTEXITCODE" }
+          & $Cli evidence prepare-functional-test-observation --help | Set-Content -Encoding utf8 "dist/evidence-observation-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-observation help failed: $LASTEXITCODE" }
+          & $Cli evidence prepare-functional-test-result-review --help | Set-Content -Encoding utf8 "dist/evidence-result-review-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-review help failed: $LASTEXITCODE" }
+          & $Cli evidence build-functional-result-bundle --help | Set-Content -Encoding utf8 "dist/evidence-result-bundle-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-result-bundle help failed: $LASTEXITCODE" }
 
           & $Cli evidence record-rescue-diagnostics --profile-id oneplus/avicii --observation-evidence "dist/missing-observation.json" --console-transcript "dist/missing-transcript.txt" --out "dist/should-not-rescue.json" 2> "dist/evidence-rescue-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen rescue evidence did not fail closed: $LASTEXITCODE" }
@@ -102,6 +122,18 @@ jobs:
           & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-plan.json") { throw "Refused functional plan created output" }
+
+          & $Cli evidence prepare-functional-test-observation --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --test-id display --operator operator-ci --out "dist/should-not-observation.json" 2> "dist/evidence-observation-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen observation template did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-observation.json") { throw "Refused observation template created output" }
+
+          & $Cli evidence prepare-functional-test-result-review --observation-evidence "dist/missing-functional-observation.json" --reviewer reviewer-ci --out "dist/should-not-result-review.json" 2> "dist/evidence-result-review-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen result review template did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-result-review.json") { throw "Refused result review template created output" }
+
+          & $Cli evidence build-functional-result-bundle --test-plan "dist/missing-plan.json" --test-plan-review-evidence "dist/missing-plan-review.json" --summary-evidence "dist/missing-summary.json" --out "dist/should-not-result-bundle.json" 2> "dist/evidence-result-bundle-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen result bundle did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-result-bundle.json") { throw "Refused result bundle created output" }
 
           @'
           from pathlib import Path
@@ -126,6 +158,12 @@ jobs:
               "build-functional-test-plan",
               "prepare-functional-test-plan-review",
               "bind-functional-test-plan-review",
+              "prepare-functional-test-observation",
+              "bind-functional-test-observation",
+              "prepare-functional-test-result-review",
+              "bind-functional-test-result-review",
+              "summarize-functional-test-results",
+              "build-functional-result-bundle",
           ):
               assert command in root
 
@@ -136,11 +174,22 @@ jobs:
           assert "cannot select a /dev path or authorize writes" in storage
           functional = text("evidence-functional-help.txt")
           assert "checklist, not hardware verification" in functional
+          observation = text("evidence-observation-help.txt")
+          assert "starts not executed/inconclusive" in observation
+          assert "no hardware/beta credit" in observation
+          result_review = text("evidence-result-review-help.txt")
+          assert "never authorizes project support or beta release" in result_review
+          result_bundle = text("evidence-result-bundle-help.txt")
+          assert "manual release-gate input" in result_bundle
+          assert "no hardware/beta credit" in result_bundle
 
           for refusal in (
               "evidence-rescue-refusal.txt",
               "evidence-storage-refusal.txt",
               "evidence-functional-refusal.txt",
+              "evidence-observation-refusal.txt",
+              "evidence-result-review-refusal.txt",
+              "evidence-result-bundle-refusal.txt",
           ):
               assert "evidence workflow error" in text(refusal)
           '@ | python -
