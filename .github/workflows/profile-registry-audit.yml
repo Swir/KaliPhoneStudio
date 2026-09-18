@@ -11,6 +11,8 @@ on:
       - "tests/test_multi_device_core.py"
       - "tests/test_profile_registry_audit.py"
       - "docs/MULTI_DEVICE_PROFILE_REGISTRY.md"
+      - "build/windows-requirements.txt"
+      - "scripts/build_windows.ps1"
       - ".github/workflows/profile-registry-audit.yml"
   pull_request:
     paths:
@@ -21,6 +23,8 @@ on:
       - "tests/test_multi_device_core.py"
       - "tests/test_profile_registry_audit.py"
       - "docs/MULTI_DEVICE_PROFILE_REGISTRY.md"
+      - "build/windows-requirements.txt"
+      - "scripts/build_windows.ps1"
       - ".github/workflows/profile-registry-audit.yml"
   workflow_dispatch:
 
@@ -43,3 +47,46 @@ jobs:
         run: |
           python -m pip install pytest
           PYTHONPATH=. pytest -q tests/test_profile_registry_audit.py tests/test_multi_device_core.py
+
+  windows-frozen-registry:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install pinned Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+      - name: Build frozen Windows CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Audit bundled registry through frozen CLI
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+          & $Cli audit-profile-registry --json | Set-Content -Encoding utf8 "dist/profile-registry-audit.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen profile registry audit failed: $LASTEXITCODE" }
+          @'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("dist/profile-registry-audit.json").read_text(encoding="utf-8-sig"))
+          assert payload["status"] == "pass"
+          assert payload["profile_count"] >= 1
+          assert "oneplus/avicii" in payload["profile_ids"]
+          assert payload["confirmation_tokens_unique"] is True
+          assert payload["ambiguous_identity_allowed"] is False
+          assert payload["physical_interaction_performed"] is False
+          assert payload["external_device_command_executed"] is False
+          assert payload["storage_target_selected"] is False
+          assert payload["persistent_write_authorized"] is False
+          assert payload["phone_storage_written"] is False
+          assert payload["hardware_verified"] is False
+          assert payload["beta_gate_credit"] is False
+          '@ | python -
