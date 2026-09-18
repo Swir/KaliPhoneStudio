@@ -1,0 +1,79 @@
+name: physical-boot-identity-binding
+on:
+  push:
+    paths:
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/boot_image.py"
+      - "kaliphonestudio/boot_builder.py"
+      - "kaliphonestudio/provenance.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
+      - "kaliphonestudio/physical_candidate_gate.py"
+      - "scripts/bind_physical_boot_identity.py"
+      - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_boot_image.py"
+      - "tests/test_physical_candidate_gate.py"
+      - "tests/test_stock_baseline_ingress.py"
+      - "devices/**"
+      - ".github/workflows/physical-boot-identity-binding.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/boot_image.py"
+      - "kaliphonestudio/boot_builder.py"
+      - "kaliphonestudio/provenance.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
+      - "kaliphonestudio/physical_candidate_gate.py"
+      - "scripts/bind_physical_boot_identity.py"
+      - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_boot_image.py"
+      - "tests/test_physical_candidate_gate.py"
+      - "tests/test_stock_baseline_ingress.py"
+      - "devices/**"
+      - ".github/workflows/physical-boot-identity-binding.yml"
+
+jobs:
+  exact-byte-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install pytest
+      - name: Exact boot identity and related safety tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_physical_boot_identity_binding.py
+          tests/test_boot_image.py
+          tests/test_physical_candidate_gate.py
+          tests/test_stock_baseline_ingress.py
+      - name: Compile binding sources
+        run: >-
+          python -m compileall -q
+          kaliphonestudio/physical_boot_identity_binding.py
+          scripts/bind_physical_boot_identity.py
+      - name: Enforce host-only import boundary
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          forbidden = {"subprocess", "adb", "fastboot"}
+          for path in (
+              Path("kaliphonestudio/physical_boot_identity_binding.py"),
+              Path("scripts/bind_physical_boot_identity.py"),
+          ):
+              tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+              imports = set()
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      imports.update(alias.name.split(".")[0] for alias in node.names)
+                  elif isinstance(node, ast.ImportFrom) and node.module:
+                      imports.add(node.module.split(".")[0])
+              blocked = sorted(imports & forbidden)
+              if blocked:
+                  raise SystemExit(f"{path}: forbidden device-I/O imports: {blocked}")
+          PY
