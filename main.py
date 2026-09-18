@@ -4,7 +4,7 @@ import sys
 from typing import Sequence
 
 from kaliphonestudio.app import main as app_main
-from kaliphonestudio.operator_evidence_cli import main as operator_evidence_main
+from kaliphonestudio.operator_evidence_dispatch import main as operator_evidence_main
 from kaliphonestudio.physical_candidate_operator import (
     bind_physical_candidate_main,
     execute_temporary_boot_once_main,
