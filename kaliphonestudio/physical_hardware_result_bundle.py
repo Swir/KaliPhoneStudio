@@ -15,6 +15,11 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from .physical_boot_observation import PhysicalBootObservationEvidence
+from .physical_campaign_admission import (
+    PhysicalCampaignAdmissionError,
+    require_current_physical_campaign_observation,
+)
 from .physical_hardware_test_observation import (
     PhysicalHardwareTestObservationError,
     PhysicalHardwareTestObservationEvidence,
@@ -562,3 +567,40 @@ def write_physical_hardware_result_bundle_evidence(
     except OSError as exc:
         raise PhysicalHardwareResultBundleError(f"cannot write physical functional result bundle: {exc}") from exc
     return evidence.evidence_sha256()
+
+def build_current_physical_hardware_result_bundle_from_files(
+    boot_observation: PhysicalBootObservationEvidence,
+    plan_path: Path,
+    plan_review_path: Path,
+    observation_paths: Iterable[Path],
+    result_review_paths: Iterable[Path],
+    summary_path: Path,
+) -> PhysicalHardwareResultBundleEvidence:
+    """Freeze a new functional campaign only when its exact plan is current-provenance rooted."""
+    try:
+        require_current_physical_campaign_observation(boot_observation)
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareResultBundleError(str(exc)) from exc
+    try:
+        plan = load_physical_hardware_test_plan(Path(plan_path))
+    except PhysicalHardwareTestPlanError as exc:
+        raise PhysicalHardwareResultBundleError(str(exc)) from exc
+    try:
+        require_current_physical_campaign_observation(
+            boot_observation,
+            expected_profile_id=plan.profile_id,
+            expected_device_serial=plan.device_serial,
+            expected_observation_sha256=plan.physical_boot_observation_sha256,
+            expected_transcript_sha256=plan.transcript_sha256,
+            expected_rescue_probe_id=plan.rescue_probe_id,
+        )
+    except PhysicalCampaignAdmissionError as exc:
+        raise PhysicalHardwareResultBundleError(str(exc)) from exc
+    return build_physical_hardware_result_bundle_from_files(
+        plan_path,
+        plan_review_path,
+        observation_paths,
+        result_review_paths,
+        summary_path,
+    )
+
