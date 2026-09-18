@@ -1,0 +1,57 @@
+name: physical-recovery-readiness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/physical_recovery_readiness.py"
+      - "scripts/build_physical_recovery_readiness.py"
+      - "tests/test_physical_recovery_readiness.py"
+      - "docs/PHYSICAL_RECOVERY_READINESS.md"
+      - ".github/workflows/physical-recovery-readiness.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/physical_recovery_readiness.py"
+      - "scripts/build_physical_recovery_readiness.py"
+      - "tests/test_physical_recovery_readiness.py"
+      - "docs/PHYSICAL_RECOVERY_READINESS.md"
+      - ".github/workflows/physical-recovery-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-stock-and-slot-recovery-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install pytest jsonschema
+      - name: Compile recovery-readiness path
+        run: >-
+          python -m compileall -q
+          kaliphonestudio/physical_recovery_readiness.py
+          scripts/build_physical_recovery_readiness.py
+          tests/test_physical_recovery_readiness.py
+      - name: Run recovery-readiness safety tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_physical_recovery_readiness.py
+      - name: Prove recovery-readiness layer has no device-command executor
+        shell: python
+        run: |
+          from pathlib import Path
+          for path in (
+              Path("kaliphonestudio/physical_recovery_readiness.py"),
+              Path("scripts/build_physical_recovery_readiness.py"),
+          ):
+              text = path.read_text(encoding="utf-8")
+              forbidden = ("subprocess.run", "Popen(", "fastboot -s", "adb shell", " set_active ", " flash ", " erase ")
+              hits = [token for token in forbidden if token in text]
+              if hits:
+                  raise SystemExit(f"{path}: forbidden execution token(s): {hits}")
+          print("recovery-readiness path is offline-only")
