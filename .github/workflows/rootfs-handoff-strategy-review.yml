@@ -1,0 +1,47 @@
+name: rootfs-handoff-strategy-review
+
+on:
+  push:
+    paths:
+      - "kaliphonestudio/rootfs_handoff_strategy_review.py"
+      - "scripts/prepare_rootfs_handoff_strategy_review.py"
+      - "scripts/bind_rootfs_handoff_strategy_review.py"
+      - "tests/test_rootfs_handoff_strategy_review.py"
+      - "docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md"
+      - ".github/workflows/rootfs-handoff-strategy-review.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/rootfs_handoff_strategy_review.py"
+      - "scripts/prepare_rootfs_handoff_strategy_review.py"
+      - "scripts/bind_rootfs_handoff_strategy_review.py"
+      - "tests/test_rootfs_handoff_strategy_review.py"
+      - "docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md"
+      - ".github/workflows/rootfs-handoff-strategy-review.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile strategy review boundary
+        run: python -m compileall -q kaliphonestudio scripts tests
+      - name: Exercise fail-closed strategy review and upstream contracts
+        run: >-
+          python -m pytest -q
+          tests/test_rootfs_handoff_strategy_review.py
+          tests/test_physical_storage_review.py
+          tests/test_physical_release_gate_audit.py
+      - name: Verify offline operator entry points
+        run: |
+          python scripts/prepare_rootfs_handoff_strategy_review.py --help >/dev/null
+          python scripts/bind_rootfs_handoff_strategy_review.py --help >/dev/null
