@@ -2,7 +2,7 @@
 
 **Status: BLOCKED**
 
-A green CI run, device profile, successful host build, reviewed reproducibility authority, progress SVG, Fastboot return code, rescue marker, bounded hardware-presence signal, accepted contextual hardware-survey review, generated or accepted host-side functional-test plan/review, complete host-side functional-result bundle, cross-campaign release-gate audit packet, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle or exact-file dossier does not by itself authorize a Beta release.
+A green CI run, device profile, successful host build, reviewed reproducibility authority, progress SVG, Fastboot return code, recovery-readiness record, rescue marker, bounded hardware-presence signal, accepted contextual hardware-survey review, generated or accepted host-side functional-test plan/review, complete host-side functional-result bundle, cross-campaign release-gate audit packet, early-userspace marker, source-pinned storage-layout hint, storage-discovery contract, syntactically valid manual-review record, host-only evidence-session bundle or exact-file dossier does not by itself authorize a Beta release.
 
 The first public Beta may be published only when the exact release candidate passes every applicable item below and the evidence is reviewed.
 
@@ -18,6 +18,8 @@ The first public Beta may be published only when the exact release candidate pas
 - [x] Exact first-boot candidate binds kernel/rootfs/DT authorities and firmware/boot provenance without claiming hardware success.
 - [x] Boot image assembly/round-trip and partition-size checks are fail-closed.
 - [x] Temporary boot is serial/profile/firmware/candidate bound and cannot silently become a flash/write action.
+- [x] Exact physical recovery-readiness evidence binds the same physical baseline, Fastboot baseline, stock/candidate boot identity, candidate gate, boot plan, locally re-hashed stock `boot.img` and captured A/B slot context while keeping slot-switch/write/rollback/recovery/hardware/Beta claims false.
+- [x] The one-shot temporary-boot executor requires that exact recovery-readiness record, physical baseline and local stock `boot.img` before any fresh Fastboot probe; for A/B profiles it rechecks fresh active-slot/slot-count state before the single permitted `fastboot boot` command. Source and frozen Windows CI exercise the same fail-closed boundary.
 - [x] Rescue initramfs/payload is deterministic, network/SSH disabled by default, and has an exact probe identity.
 - [x] Bounded rescue hardware-presence survey is sysfs-only, exact-transcript/probe/diagnostics bound and cannot activate a subsystem or promote observed presence to functional hardware/Beta verification.
 - [x] Manual hardware-survey review can bind one exact survey to canonical review-record bytes and separate notes; contextual acceptance requires all explicit presence/limitations checks and still cannot promote any subsystem to functional/hardware/Beta verification.
@@ -50,6 +52,7 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] Exact OxygenOS build and firmware fingerprint captured read-only.
 - [ ] Matching stock `boot.img` extracted from the exact OTA and validated against that physical baseline.
 - [ ] Recovery path is documented before risky testing begins.
+- [ ] Exact recovery-readiness evidence is created from that real baseline, exact boot-identity chain and the locally present matching stock `boot.img`; this is preparation only and grants no physical credit.
 - [ ] Exact reviewed physical candidate is instantiated from that baseline and reviewed authorities.
 - [ ] Bounded rescue hardware-presence survey is captured from that exact candidate/transcript and an exact manual review is bound with `accepted_as_context=true`; that acceptance remains contextual evidence only.
 - [ ] The exact profile-driven functional-test plan is generated from that real accepted survey review, and the original canonical plan bytes pass an independent manual review with `accepted_for_physical_execution=true` before any plan item is treated as a valid test attempt.
@@ -61,7 +64,7 @@ These must come from the exact physical phone/firmware intended for support.
 - [ ] The canonical real session and its original evidence/transcript/report/recovery/review bytes are frozen into one exact-file dossier and reviewed for completeness before target-strategy approval.
 - [ ] The accepted exact dossier/review and exact functional-result bundle/accepted test-plan review are cross-bound into one release-gate audit packet for the same profile, serial, boot observation, rescue diagnostics, transcript and rescue probe; the packet itself grants no Beta credit.
 - [ ] A reversible rootfs handoff target is explicitly reviewed after accepted discovery review and dossier audit; no guessed UFS/userdata path is accepted.
-- [ ] `fastboot boot` succeeds on the exact phone after explicit user confirmation.
+- [ ] Recovery-gated `fastboot boot` succeeds on the exact phone after explicit user confirmation, with the fresh slot context matching the reviewed recovery-readiness evidence.
 - [ ] Rescue/logging path is usable and exact rescue probe markers are manually reviewed.
 - [ ] The selected rootfs handoff makes the exact reviewed Kali rootfs available without violating the approved storage/recovery policy.
 - [ ] Exact `KPS_KALI_STAGE=rootfs-systemd-early-v1` plus matching probe/manifest/rootfs-authority/rootfs-artifact markers are captured from the physical run and manually reviewed.
@@ -80,6 +83,7 @@ The following remain useful diagnostics but **cannot** satisfy a physical functi
 - profile JSON presence;
 - reproducible kernel/rootfs/DT artifacts without phone testing;
 - deterministic progress SVGs or their project percentage/counter;
+- an exact physical recovery-readiness record or a runtime probe that binds it, without an exercised and reviewed recovery/rollback path;
 - a `fastboot boot` process return code without observed phone-side evidence;
 - rescue `init-reached` marker without Kali-rootfs proof;
 - bounded USB/network/rfkill/sound/thermal/input/graphics/power sysfs presence records without separate functional verification;
