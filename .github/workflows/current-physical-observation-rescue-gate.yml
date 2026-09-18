@@ -1,0 +1,71 @@
+name: current-physical-observation-rescue-gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/physical_boot_observation.py"
+      - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "scripts/record_physical_rescue_diagnostics.py"
+      - "tests/test_current_physical_observation_rescue_gate.py"
+      - "tests/test_physical_boot_observation.py"
+      - "tests/test_physical_rescue_diagnostics.py"
+      - ".github/workflows/current-physical-observation-rescue-gate.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/physical_boot_observation.py"
+      - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "scripts/record_physical_rescue_diagnostics.py"
+      - "tests/test_current_physical_observation_rescue_gate.py"
+      - "tests/test_physical_boot_observation.py"
+      - "tests/test_physical_rescue_diagnostics.py"
+      - ".github/workflows/current-physical-observation-rescue-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rescue-admission-gate:
+    name: rescue admission / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test runner
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Focused fail-closed regression tests
+        run: >-
+          python -m pytest -q
+          tests/test_current_physical_observation_rescue_gate.py
+          tests/test_physical_boot_observation.py
+          tests/test_physical_rescue_diagnostics.py
+      - name: Compile changed safety modules
+        run: >-
+          python -m compileall -q
+          kaliphonestudio/physical_boot_observation.py
+          kaliphonestudio/physical_rescue_diagnostics.py
+          scripts/record_physical_rescue_diagnostics.py
+      - name: Safety surface guard
+        shell: python
+        run: |
+          from pathlib import Path
+          source = Path("kaliphonestudio/physical_rescue_diagnostics.py").read_text(encoding="utf-8")
+          required = (
+              "requires schema-v2 physical boot observation",
+              "require_current_physical_boot_observation_for_rescue",
+          )
+          missing = [item for item in required if item not in source]
+          if missing:
+              raise SystemExit(f"missing rescue admission guard markers: {missing}")
+          forbidden = ("subprocess.", " fastboot ", " adb ", "set_active", "erase ", "flash ")
+          lowered = source.lower()
+          hits = [item for item in forbidden if item.lower() in lowered]
+          if hits:
+              raise SystemExit(f"offline rescue diagnostics acquired forbidden device-I/O surface: {hits}")
+          print("current physical observation rescue admission gate: PASS")
