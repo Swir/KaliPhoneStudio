@@ -4,6 +4,11 @@ The rescue init emits a bounded machine-readable inventory between one BEGIN/END
 pair after its exact candidate probe markers. This module only parses a transcript
 already bound by PhysicalBootObservationEvidence; it performs no phone I/O and
 never converts inventory signals into hardware/Beta verification.
+
+New rescue-diagnostic records are admitted only from schema-v2 physical boot
+observations, which carry the exact runtime-probe, recovery-readiness and
+post-probe material-revalidation chain. Historical schema-v1 observations remain
+loadable and validatable for audit/readback, but cannot seed a new rescue campaign.
 """
 from __future__ import annotations
 
@@ -178,12 +183,29 @@ def _contains_battery(records: tuple[RescueDiagnosticRecord, ...]) -> bool:
     return any(record.kind == "POWER" and ("battery" in record.values[0].lower() or "battery" in record.values[1].lower()) for record in records)
 
 
-def record_physical_rescue_diagnostics(profile: DeviceProfile, observation: PhysicalBootObservationEvidence, console_transcript: Path) -> PhysicalRescueDiagnosticsEvidence:
-    """Bind read-only inventory to one already-bound physical transcript."""
+def require_current_physical_boot_observation_for_rescue(
+    observation: PhysicalBootObservationEvidence,
+) -> None:
+    """Require the current exact runtime/recovery-bound physical observation.
+
+    Generic observation validation intentionally remains backward compatible with
+    schema-v1 evidence so historical campaigns stay auditable. New rescue evidence
+    must not be created from that legacy shape because it predates the exact
+    runtime-probe, recovery-readiness and post-probe revalidation binding.
+    """
     try:
         validate_physical_boot_observation_evidence(observation)
     except PhysicalBootObservationError as exc:
         raise PhysicalRescueDiagnosticsError(str(exc)) from exc
+    if observation.schema_version != 2:
+        raise PhysicalRescueDiagnosticsError(
+            "new rescue evidence requires schema-v2 physical boot observation with exact runtime/recovery binding"
+        )
+
+
+def record_physical_rescue_diagnostics(profile: DeviceProfile, observation: PhysicalBootObservationEvidence, console_transcript: Path) -> PhysicalRescueDiagnosticsEvidence:
+    """Bind read-only inventory to one current exact physical transcript."""
+    require_current_physical_boot_observation_for_rescue(observation)
     if not isinstance(profile, DeviceProfile) or profile.profile_id != observation.profile_id:
         raise PhysicalRescueDiagnosticsError("profile does not match physical boot observation")
     payload = _read_transcript(console_transcript, observation)
@@ -276,7 +298,7 @@ def load_physical_boot_observation_for_diagnostics(path: Path) -> PhysicalBootOb
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PhysicalRescueDiagnosticsError("physical boot observation evidence is not valid UTF-8 JSON") from exc
     if not isinstance(raw, dict) or set(raw) != {item.name for item in fields(PhysicalBootObservationEvidence)}:
-        raise PhysicalRescueDiagnosticsError("physical boot observation evidence fields do not match schema-v1")
+        raise PhysicalRescueDiagnosticsError("physical boot observation evidence fields do not match schema-v1/v2")
     try:
         evidence = PhysicalBootObservationEvidence(**raw)
         validate_physical_boot_observation_evidence(evidence)

@@ -75,7 +75,7 @@ def _transcript(path: Path, *, empty_survey: bool = False) -> bytes:
 
 def _observation(raw: bytes) -> PhysicalBootObservationEvidence:
     return PhysicalBootObservationEvidence(
-        schema_version=1,
+        schema_version=2,
         profile_id="vendor/test",
         device_serial="SERIAL-001",
         execution_evidence_sha256=_digest("1"),
@@ -87,7 +87,7 @@ def _observation(raw: bytes) -> PhysicalBootObservationEvidence:
         transcript_size=len(raw),
         stage_marker_count=1,
         probe_marker_count=1,
-        observation_policy="exact-rescue-probe-console-binding-v1",
+        observation_policy="exact-rescue-probe+runtime-preexec-integrity-binding-v2",
         physical_observation_recorded=True,
         temporary_boot_command_succeeded=True,
         rescue_init_observed=True,
@@ -100,6 +100,16 @@ def _observation(raw: bytes) -> PhysicalBootObservationEvidence:
         phone_storage_written=False,
         hardware_verified=False,
         beta_gate_credit=False,
+        runtime_probe_evidence_sha256=_digest("5"),
+        authorization_sha256=_digest("6"),
+        physical_baseline_bundle_sha256=_digest("7"),
+        boot_identity_binding_sha256=_digest("8"),
+        recovery_readiness_sha256=_digest("9"),
+        recovery_stock_boot_sha256=_digest("b"),
+        fresh_fastboot_transcript_sha256=_digest("c"),
+        captured_active_slot="a",
+        expected_inactive_slot="b",
+        post_probe_material_revalidation_required=True,
     )
 
 
