@@ -44,6 +44,8 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [x] Read-only Fastboot baseline capture/import tooling, now exposed through one shared profile-token-guarded host/Windows CLI path with exact tool/transcript/evidence binding.
 - [x] Exact physical stock-baseline/candidate gate contracts.
 - [x] Serial/profile/firmware/candidate-bound one-shot temporary-boot execution path with explicit confirmation.
+- [x] Exact physical recovery-readiness evidence binds the captured slot context and locally re-hashed stock `boot.img` to the same physical baseline, boot-identity binding, candidate gate and boot plan while keeping rollback/recovery/hardware/Beta credit false.
+- [x] The one-shot temporary-boot executor now requires that exact recovery-readiness record, exact physical baseline and exact local stock `boot.img` before any fresh Fastboot probe, then rechecks A/B slot context before the single allowed `fastboot boot`; frozen Windows CI exercises the same fail-closed boundary.
 - [x] Physical rescue observation, exact rescue probe markers and bounded read-only diagnostics.
 - [x] Bounded hardware-presence survey with no subsystem activation.
 - [x] Exact manual contextual review of the hardware survey.
@@ -61,7 +63,8 @@ Host-side contracts are prepared, but **none of the items below may be promoted 
 - [ ] Capture a real AC2003 Fastboot/OxygenOS baseline and exact firmware fingerprint.
 - [ ] Extract/validate matching stock `boot.img` from the exact OTA.
 - [ ] Review/instantiate the exact physical candidate for that real baseline.
-- [ ] Complete real temporary `fastboot boot` and capture the phone-side rescue markers.
+- [ ] Build and review the exact recovery-readiness record from that real baseline and exact local stock `boot.img`.
+- [ ] Complete real recovery-gated temporary `fastboot boot` and capture the phone-side rescue markers.
 - [ ] Capture and accept a real hardware survey review from the exact candidate.
 - [ ] Generate and accept the exact functional-test plan review for that physical context.
 - [ ] Execute and independently review every applicable Beta-required schema-v2 functional test observation.
@@ -111,7 +114,7 @@ Each subsystem requires real physical evidence before it can be called working.
 - [x] Clear offline diagnostics export and profile-driven guided recovery workflow.
 - [x] Reproducible unsigned Windows development GUI/CLI package is built and smoke-tested from the same safety contracts; this is not a Beta artifact.
 - [x] Guarded physical Fastboot baseline capture is routed through the shared host/Windows CLI, requires the exact profile confirmation token before external commands, re-verifies the exact Fastboot tool identity after capture and performs no persistent phone write.
-- [x] Candidate-gate binding, exact temporary-boot offer preparation and explicitly opted-in one-shot temporary boot are routed through the shared source/frozen Windows CLI. Frozen CI proves missing evidence/opt-in fails closed and never supplies the physical execution opt-in.
+- [x] Candidate-gate binding, exact temporary-boot offer preparation and explicitly opted-in one-shot temporary boot are routed through the shared source/frozen Windows CLI. Execution now additionally requires the exact physical baseline, exact recovery-readiness evidence and exact local stock `boot.img`; source and frozen Windows CI prove missing/detached recovery inputs fail closed before the physical boot command.
 - [x] Shared offline `evidence` CLI consolidates rescue diagnostics, hardware survey/review, storage review, exact functional test plan/review, schema-v2 observation preparation/binding, independent result review, exact-plan summary and exact functional-result bundling; dedicated Windows CI freezes the same CLI and checks representative fail-closed refusals without granting physical/Beta credit.
 - [x] Shared source/frozen Windows `evidence` namespace now also covers physical bring-up session binding, exact dossier construction/reverification, fail-closed dossier review templates/binding and the cross-campaign release-gate audit. These late stages remain offline, create-only/exact-file bound, and cannot select storage, authorize writes, claim hardware support or authorize Beta.
 
@@ -144,4 +147,4 @@ KaliPhoneStudio follows `SWIR-PROGRESS-SVG-PRO:v1` for the README/roadmap visual
 
 ## Immediate next work
 
-The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, use the guarded profile-token capture CLI for the exact baseline, then continue through the now-shared stock baseline → candidate-gate → temporary-boot offer → explicitly opted-in one-shot temporary rescue boot chain. The unified offline `evidence` namespace can then carry the exact campaign through rescue diagnostics → survey/review → functional plan/review → schema-v2 observations/result reviews → exact-plan summary → functional result bundle → bring-up session → exact dossier/reverification/review → cross-campaign release-gate audit, while keeping filenames and manual-review boundaries visible. Only after the real physical storage/dossier evidence is accepted should a reversible rootfs handoff target be designed and reviewed for that exact device state.
+The highest-value next step is **real physical AC2003 evidence**, not another guessed block-device target. With the physical phone available, use the guarded profile-token capture CLI for the exact baseline, then continue through exact stock baseline → candidate gate → boot-identity binding → physical recovery-readiness from the matching stock `boot.img` → temporary-boot offer → explicitly opted-in recovery-gated one-shot temporary rescue boot. The unified offline `evidence` namespace can then carry the exact campaign through rescue diagnostics → survey/review → functional plan/review → schema-v2 observations/result reviews → exact-plan summary → functional result bundle → bring-up session → exact dossier/reverification/review → cross-campaign release-gate audit, while keeping filenames and manual-review boundaries visible. Only after the real physical storage/dossier evidence is accepted should a reversible rootfs handoff target be designed and reviewed for that exact device state.
