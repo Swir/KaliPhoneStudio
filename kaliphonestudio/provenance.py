@@ -64,10 +64,17 @@ def build_stock_boot_provenance(
     payload: PayloadHeaderReport,
     boot: BootImageReport,
 ) -> StockBootProvenance:
-    """Bind an extracted stock boot image to exact OTA/payload evidence."""
+    """Bind an extracted stock boot image to exact OTA/payload evidence.
+
+    The OTA report carries the SHA-256 of its exact embedded payload.bin. The
+    external payload inspected by ``inspect_payload`` must match that digest,
+    not merely the uncompressed size. This prevents a same-size payload from a
+    different OTA from being bound into stock provenance.
+    """
     if not profile_id or "/" not in profile_id:
         raise ProvenanceError("profile_id must be an explicit vendor/codename identifier")
     _require_sha("OTA hash", ota.sha256)
+    _require_sha("OTA embedded payload hash", ota.payload_sha256)
     _require_sha("payload hash", payload.payload_sha256)
     _require_sha("payload metadata hash", payload.metadata_sha256)
     _require_sha("boot hash", boot.sha256)
@@ -75,7 +82,9 @@ def build_stock_boot_provenance(
     _require_positive_int("payload size", payload.file_size)
     _require_positive_int("boot size", boot.size)
     if ota.payload_size != payload.file_size:
-        raise ProvenanceError("OTA payload size does not match inspected payload bytes")
+        raise ProvenanceError("payload size does not match exact OTA member")
+    if ota.payload_sha256 != payload.payload_sha256:
+        raise ProvenanceError("payload SHA-256 does not match exact OTA payload.bin")
     if not isinstance(boot.header_version, int) or isinstance(boot.header_version, bool) or boot.header_version < 0:
         raise ProvenanceError("boot image has no validated header version")
     metadata: dict[str, str] = {}

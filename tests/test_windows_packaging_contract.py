@@ -22,8 +22,6 @@ def test_windows_build_is_onedir_and_bundles_offline_safety_inputs() -> None:
     assert '"--console"' in script
     assert '"KaliPhoneStudio"' in script
     assert '"KaliPhoneStudioCLI"' in script
-    # Data sources must be absolute so --specpath cannot redirect resolution into
-    # build/pyinstaller/spec; destinations stay stable inside PyInstaller _MEIPASS.
     for variable, destination in (
         ("$DevicesPath", "devices"),
         ("$AssetsPath", "assets"),
@@ -48,12 +46,15 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
     assert "./scripts/build_windows.ps1" in workflow
     assert "tests/test_windows_packaging_contract.py" in workflow
     assert "tests/test_physical_fastboot_capture.py" in workflow
+    assert "tests/test_stock_baseline_ingress.py" in workflow
     for command in (
         "--list-profiles --json",
         "--doctor --profile-id oneplus/avicii --json",
         "--recovery-guide --profile-id oneplus/avicii --json",
         "--export-diagnostics",
         "capture-fastboot-baseline --help",
+        "prepare-stock-provenance --help",
+        "bind-physical-stock-baseline --help",
     ):
         assert command in workflow
     for invariant in (
@@ -68,11 +69,18 @@ def test_windows_ci_executes_frozen_safety_smoke_tests_before_artifact_upload() 
         'bundle["beta_gate_credit"] is False',
         'assert "read-only" in capture_help',
         'assert "--confirm-token" in capture_help',
+        'assert "offline" in stock_help',
+        'assert "--ota" in stock_help',
+        'assert "--payload" in stock_help',
+        'assert "offline" in bind_help',
+        'assert "--baseline-evidence" in bind_help',
         'assert "--confirm-token" in refusal',
     ):
         assert invariant in workflow
     assert "$LASTEXITCODE -ne 2" in workflow
     assert "dist/should-not-exist" in workflow
+    assert "dist/should-not-stock.json" in workflow
+    assert "dist/should-not-bind.json" in workflow
     assert "WINDOWS_HOST_BUILD_SHA256.txt" in workflow
     assert "WINDOWS_HOST_BUILD_INFO.json" in workflow
     assert "signed = $false" in workflow

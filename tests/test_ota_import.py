@@ -1,3 +1,4 @@
+from hashlib import sha256
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -18,10 +19,12 @@ def _ota(path: Path, *, metadata: str | bytes = "pre-device=avicii\npost-build=O
     return path
 
 
-def test_inspect_ota_finds_payload_and_metadata(tmp_path: Path):
+def test_inspect_ota_finds_payload_metadata_and_exact_payload_digest(tmp_path: Path):
     report = inspect_ota_zip(_ota(tmp_path / "ota.zip"))
+    expected_payload = b"CrAU" + b"x" * 64
     assert report.payload_member == "payload.bin"
     assert report.payload_size == 68
+    assert report.payload_sha256 == sha256(expected_payload).hexdigest()
     assert report.metadata["pre-device"] == "avicii"
     assert len(report.sha256) == 64
 
@@ -83,3 +86,19 @@ def test_profile_firmware_hints_are_required(tmp_path: Path):
     require_firmware_hint(report, ["avicii", "AC2003"])
     with pytest.raises(OTAImportError):
         require_firmware_hint(report, ["different-device"])
+
+
+def test_ota_report_payload_digest_changes_for_same_size_different_bytes(tmp_path: Path):
+    first = tmp_path / "first.zip"
+    second = tmp_path / "second.zip"
+    metadata = "pre-device=avicii\npost-build=OnePlus/avicii/AC2003\n"
+    with ZipFile(first, "w") as zf:
+        zf.writestr("payload.bin", b"A" * 128)
+        zf.writestr("META-INF/com/android/metadata", metadata)
+    with ZipFile(second, "w") as zf:
+        zf.writestr("payload.bin", b"B" * 128)
+        zf.writestr("META-INF/com/android/metadata", metadata)
+    a = inspect_ota_zip(first)
+    b = inspect_ota_zip(second)
+    assert a.payload_size == b.payload_size == 128
+    assert a.payload_sha256 != b.payload_sha256

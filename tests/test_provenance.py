@@ -13,7 +13,13 @@ H = "a" * 64
 
 
 def _evidence():
-    ota = SimpleNamespace(sha256=H, size=2000, payload_size=1000, metadata={"post-build": "AC2003_11.F.22"})
+    ota = SimpleNamespace(
+        sha256=H,
+        size=2000,
+        payload_size=1000,
+        payload_sha256="b" * 64,
+        metadata={"post-build": "AC2003_11.F.22"},
+    )
     payload = SimpleNamespace(payload_sha256="b" * 64, metadata_sha256="c" * 64, file_size=1000)
     boot = SimpleNamespace(sha256="d" * 64, size=500, header_version=2)
     return ota, payload, boot
@@ -35,6 +41,13 @@ def test_rejects_payload_not_from_reported_ota():
     ota, payload, boot = _evidence()
     payload.file_size = 999
     with pytest.raises(ProvenanceError, match="payload size"):
+        build_stock_boot_provenance("oneplus/avicii", ota, payload, boot)
+
+
+def test_rejects_same_size_payload_with_different_ota_digest():
+    ota, payload, boot = _evidence()
+    ota.payload_sha256 = "e" * 64
+    with pytest.raises(ProvenanceError, match="payload SHA-256"):
         build_stock_boot_provenance("oneplus/avicii", ota, payload, boot)
 
 
