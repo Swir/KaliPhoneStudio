@@ -1,205 +1,209 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from hashlib import sha256
 import json
 from pathlib import Path
 
 import pytest
 
-from kaliphonestudio.physical_boot_observation import PhysicalBootObservationEvidence
 from kaliphonestudio.physical_hardware_review import (
     PhysicalHardwareReviewError,
     PhysicalHardwareReviewRecord,
-    bind_physical_hardware_review,
     load_physical_hardware_review_evidence,
     load_physical_hardware_review_record,
     make_rejected_hardware_review_record,
     read_physical_hardware_review_notes,
+    review_physical_hardware_survey,
     review_physical_hardware_survey_files,
     validate_physical_hardware_review_evidence,
     write_physical_hardware_review_evidence,
 )
 from kaliphonestudio.physical_hardware_survey import (
-    record_physical_hardware_survey,
+    PhysicalHardwareSurveyEvidence,
     write_physical_hardware_survey_evidence,
 )
-from kaliphonestudio.physical_rescue_diagnostics import record_physical_rescue_diagnostics
-from kaliphonestudio.profiles import DeviceProfile
 
 
-def _digest(ch: str) -> str:
-    return ch * 64
-
-
-def _profile(tmp_path: Path) -> DeviceProfile:
-    return DeviceProfile(path=tmp_path / "profile.json", data={"profile_id": "vendor/test"})
-
-
-def _transcript(path: Path, *, empty_survey: bool = False) -> bytes:
-    probe = _digest("a")
-    lines = [
-        b"KPS_RESCUE_STAGE=init-reached-v1",
-        b"KPS_RESCUE_PROBE_ID=" + probe.encode(),
-        b"KPS_DIAG_BEGIN=readonly-sysfs-inventory-v1",
-        b"KPS_DIAG_BLOCK=sda|122142720|0",
-        b"KPS_DIAG_SCSI_HOST=host0|ufshcd",
-        b"KPS_DIAG_POWER=battery|Battery|Charging|73|-|4012000|-325000|312",
-        b"KPS_DIAG_INPUT=event2|goodix_ts",
-        b"KPS_DIAG_GRAPHICS=fb0|msm_drm",
-        b"KPS_DIAG_DRM=card0-DSI-1|connected",
-        b"KPS_DIAG_END=readonly-sysfs-inventory-v1",
-        b"KPS_SURVEY_BEGIN=readonly-hardware-presence-v1",
-    ]
-    if not empty_survey:
-        lines.extend(
-            [
-                b"KPS_SURVEY_USB_UDC=a600000.dwc3",
-                b"KPS_SURVEY_USB_DEVICE=1-1|18d1|4ee7|00",
-                b"KPS_SURVEY_NET=wlan0|1|down",
-                b"KPS_SURVEY_RFKILL=phy0|wlan|1|0|0",
-                b"KPS_SURVEY_RFKILL=hci0|bluetooth|1|0|0",
-                b"KPS_SURVEY_SOUND=card0|sm7250",
-                b"KPS_SURVEY_THERMAL=thermal_zone0|cpu-0-0|34000",
-                b"KPS_SURVEY_INPUT=event2|goodix_ts",
-                b"KPS_SURVEY_GRAPHICS=fb0|msm_drm",
-                b"KPS_SURVEY_DRM=card0-DSI-1|connected",
-                b"KPS_SURVEY_POWER=battery|Battery|Charging|73",
-            ]
-        )
-    lines.append(b"KPS_SURVEY_END=readonly-hardware-presence-v1")
-    raw = b"\r\n".join(lines) + b"\r\n"
-    path.write_bytes(raw)
-    return raw
-
-
-def _observation(raw: bytes) -> PhysicalBootObservationEvidence:
-    return PhysicalBootObservationEvidence(
+def _survey(tmp_path: Path | None = None) -> PhysicalHardwareSurveyEvidence:
+    del tmp_path
+    return PhysicalHardwareSurveyEvidence(
         schema_version=1,
-        profile_id="vendor/test",
-        device_serial="SERIAL-001",
-        execution_evidence_sha256=_digest("1"),
-        offer_sha256=_digest("2"),
-        rescue_candidate_evidence_sha256=_digest("3"),
-        rescue_ramdisk_sha256=_digest("4"),
-        rescue_probe_id=_digest("a"),
-        transcript_sha256=sha256(raw).hexdigest(),
-        transcript_size=len(raw),
-        stage_marker_count=1,
-        probe_marker_count=1,
-        observation_policy="exact-rescue-probe-console-binding-v1",
-        physical_observation_recorded=True,
-        temporary_boot_command_succeeded=True,
-        rescue_init_observed=True,
-        kali_early_userspace_verified=False,
-        storage_verified=False,
-        display_touch_verified=False,
-        charging_battery_verified=False,
-        recovery_verified=False,
-        manual_review_required=True,
-        phone_storage_written=False,
+        profile_id="oneplus/avicii",
+        device_serial="SERIAL-HW",
+        candidate_id="candidate-physical-hw",
+        boot_observation_sha256="1" * 64,
+        rescue_diagnostics_sha256="2" * 64,
+        rescue_probe_id="probe-hw",
+        console_transcript_sha256="3" * 64,
+        hardware_survey_marker_id="kaliphonestudio-hardware-survey-v1",
+        survey_record_count=8,
+        usb_records=("usb_device=1d6b:0002",),
+        netdev_records=("netdev=wlan0",),
+        rfkill_records=("rfkill=wlan0|wlan|unblocked|unblocked",),
+        sound_records=("sound_card=card0|some-codec",),
+        input_records=("input_name=touchscreen",),
+        display_records=("drm_status=card0-DSI-1|connected|1080x2400",),
+        thermal_records=("thermal_zone=thermal_zone0|soc|42000",),
+        power_records=("power_supply=battery|Battery|Discharging|77|3890000|250",),
+        hardware_survey_recorded=True,
+        survey_only=True,
+        functional_tests_executed=False,
+        display_verified=False,
+        touch_verified=False,
+        usb_verified=False,
+        wifi_verified=False,
+        bluetooth_verified=False,
+        audio_verified=False,
+        modem_verified=False,
+        charging_verified=False,
+        power_verified=False,
+        thermal_verified=False,
         hardware_verified=False,
         beta_gate_credit=False,
+        manual_review_required=True,
     )
 
 
-def _survey(tmp_path: Path, *, empty: bool = False):
-    transcript = tmp_path / "console.log"
-    raw = _transcript(transcript, empty_survey=empty)
-    observation = _observation(raw)
-    profile = _profile(tmp_path)
-    diagnostics = record_physical_rescue_diagnostics(profile, observation, transcript)
-    return record_physical_hardware_survey(profile, observation, diagnostics, transcript)
+def _record(survey: PhysicalHardwareSurveyEvidence, **overrides: object) -> PhysicalHardwareReviewRecord:
+    data: dict[str, object] = {
+        "schema_version": 1,
+        "profile_id": survey.profile_id,
+        "device_serial": survey.device_serial,
+        "candidate_id": survey.candidate_id,
+        "hardware_survey_sha256": survey.evidence_sha256(),
+        "hardware_survey_marker_id": survey.hardware_survey_marker_id,
+        "boot_observation_sha256": survey.boot_observation_sha256,
+        "rescue_diagnostics_sha256": survey.rescue_diagnostics_sha256,
+        "rescue_probe_id": survey.rescue_probe_id,
+        "console_transcript_sha256": survey.console_transcript_sha256,
+        "review_policy": "manual-physical-hardware-survey-review-v1",
+        "reviewer": "reviewer-1",
+        "decision": "accepted",
+        "physical_context_reviewed": True,
+        "survey_integrity_reviewed": True,
+        "usb_context_reviewed": True,
+        "network_radio_context_reviewed": True,
+        "audio_context_reviewed": True,
+        "input_display_context_reviewed": True,
+        "thermal_power_context_reviewed": True,
+        "limitations_acknowledged": True,
+        "accepted_as_context": True,
+        "functional_tests_executed": False,
+        "display_verified": False,
+        "touch_verified": False,
+        "usb_verified": False,
+        "wifi_verified": False,
+        "bluetooth_verified": False,
+        "audio_verified": False,
+        "modem_verified": False,
+        "charging_verified": False,
+        "power_verified": False,
+        "thermal_verified": False,
+        "hardware_verified": False,
+        "beta_gate_credit": False,
+    }
+    data.update(overrides)
+    return PhysicalHardwareReviewRecord(**data)
 
 
-def _record(survey, **overrides) -> PhysicalHardwareReviewRecord:
-    values = dict(
-        schema_version=1,
-        review_policy="manual-physical-hardware-survey-review-v1",
-        profile_id=survey.profile_id,
-        device_serial=survey.device_serial,
-        reviewer="operator-1",
-        decision="accepted_as_context",
-        physical_context_reviewed=True,
-        survey_integrity_reviewed=True,
-        usb_presence_reviewed=True,
-        network_radio_presence_reviewed=True,
-        audio_presence_reviewed=True,
-        input_display_presence_reviewed=True,
-        thermal_power_presence_reviewed=True,
-        limitations_understood=True,
-        functional_hardware_verified=False,
-        beta_gate_credit=False,
-    )
-    values.update(overrides)
-    return PhysicalHardwareReviewRecord(**values)
+def _bind(
+    survey: PhysicalHardwareSurveyEvidence,
+    record: PhysicalHardwareReviewRecord,
+    *,
+    notes: bytes = b"Reviewed as presence-only context. Functional tests remain pending.\n",
+):
+    return review_physical_hardware_survey(survey, record, notes, review_notes_name="notes.txt")
 
 
-def _bind(survey, record):
-    return bind_physical_hardware_review(
-        survey,
-        record,
-        review_record_sha256=_digest("b"),
-        review_record_size=200,
-        review_notes_sha256=_digest("c"),
-        review_notes_size=100,
-    )
-
-
-def test_complete_review_accepts_context_but_never_functionality(tmp_path: Path) -> None:
-    survey = _survey(tmp_path)
-    evidence = _bind(survey, _record(survey))
-    assert evidence.accepted_as_context is True
-    assert evidence.review_checks_complete is True
-    assert evidence.functional_testing_required is True
-    assert evidence.wifi_signal_observed is True
-    assert evidence.bluetooth_signal_observed is True
-    assert evidence.display_signal_observed is True
-    assert evidence.usb_verified is False
-    assert evidence.wifi_verified is False
-    assert evidence.bluetooth_verified is False
-    assert evidence.display_verified is False
-    assert evidence.power_charging_verified is False
-    assert evidence.hardware_verified is False
-    assert evidence.beta_gate_credit is False
-
-
-def test_accepted_review_requires_every_manual_check(tmp_path: Path) -> None:
-    survey = _survey(tmp_path)
-    with pytest.raises(PhysicalHardwareReviewError, match="every review check"):
-        _bind(survey, _record(survey, limitations_understood=False))
-
-
-def test_empty_survey_cannot_be_accepted_as_context(tmp_path: Path) -> None:
-    survey = _survey(tmp_path, empty=True)
-    with pytest.raises(PhysicalHardwareReviewError, match="non-empty exact survey"):
-        _bind(survey, _record(survey))
-
-
-def test_rejected_template_is_safe_by_default(tmp_path: Path) -> None:
-    survey = _survey(tmp_path)
-    record = make_rejected_hardware_review_record(survey, "operator-1")
+def test_rejected_template_is_fail_closed_and_profile_bound() -> None:
+    survey = _survey()
+    record = make_rejected_hardware_review_record(survey, "reviewer-1")
+    assert record.profile_id == survey.profile_id
+    assert record.device_serial == survey.device_serial
+    assert record.candidate_id == survey.candidate_id
+    assert record.hardware_survey_sha256 == survey.evidence_sha256()
     assert record.decision == "rejected"
-    assert record.physical_context_reviewed is False
-    assert record.limitations_understood is False
-    assert record.functional_hardware_verified is False
+    assert record.accepted_as_context is False
+    assert record.functional_tests_executed is False
+    assert record.hardware_verified is False
     assert record.beta_gate_credit is False
+    assert all(
+        value is False
+        for value in (
+            record.physical_context_reviewed,
+            record.survey_integrity_reviewed,
+            record.usb_context_reviewed,
+            record.network_radio_context_reviewed,
+            record.audio_context_reviewed,
+            record.input_display_context_reviewed,
+            record.thermal_power_context_reviewed,
+            record.limitations_acknowledged,
+        )
+    )
 
 
-def test_review_identity_mismatch_fails_closed(tmp_path: Path) -> None:
-    survey = _survey(tmp_path)
-    with pytest.raises(PhysicalHardwareReviewError, match="identity does not match"):
-        _bind(survey, _record(survey, device_serial="OTHER"))
+def test_accepted_review_requires_every_context_check() -> None:
+    survey = _survey()
+    record = _record(survey, thermal_power_context_reviewed=False)
+    with pytest.raises(PhysicalHardwareReviewError, match="all context checks"):
+        _bind(survey, record)
 
 
-def test_review_record_cannot_claim_functional_credit(tmp_path: Path) -> None:
-    survey = _survey(tmp_path)
-    raw = json.loads(_record(survey).canonical_json())
-    raw["functional_hardware_verified"] = True
-    record_path = tmp_path / "review.json"
-    record_path.write_text(json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n")
+def test_acceptance_cannot_claim_functional_or_beta_credit() -> None:
+    survey = _survey()
     with pytest.raises(PhysicalHardwareReviewError, match="cannot grant functional/Beta credit"):
-        load_physical_hardware_review_record(record_path)
+        _bind(survey, _record(survey, wifi_verified=True))
+    with pytest.raises(PhysicalHardwareReviewError, match="cannot grant functional/Beta credit"):
+        _bind(survey, _record(survey, hardware_verified=True))
+    with pytest.raises(PhysicalHardwareReviewError, match="cannot grant functional/Beta credit"):
+        _bind(survey, _record(survey, beta_gate_credit=True))
+
+
+def test_rejected_review_cannot_be_context_ready() -> None:
+    survey = _survey()
+    record = _record(survey, decision="rejected", accepted_as_context=True)
+    with pytest.raises(PhysicalHardwareReviewError, match="rejected reviews cannot be accepted as context"):
+        _bind(survey, record)
+
+
+def test_review_must_match_exact_survey_identity() -> None:
+    survey = _survey()
+    with pytest.raises(PhysicalHardwareReviewError, match="survey digest"):
+        _bind(survey, _record(survey, hardware_survey_sha256="9" * 64))
+    with pytest.raises(PhysicalHardwareReviewError, match="profile/device identity"):
+        _bind(survey, _record(survey, device_serial="OTHER"))
+    with pytest.raises(PhysicalHardwareReviewError, match="candidate identity"):
+        _bind(survey, _record(survey, candidate_id="other-candidate"))
+
+
+def test_review_record_parser_rejects_unknown_fields(tmp_path: Path) -> None:
+    survey = _survey(tmp_path)
+    path = tmp_path / "review.json"
+    raw = json.loads(_record(survey).canonical_json())
+    raw["unexpected"] = True
+    path.write_text(json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n")
+    with pytest.raises(PhysicalHardwareReviewError, match="unexpected fields"):
+        load_physical_hardware_review_record(path)
+
+
+def test_review_record_parser_rejects_wrong_boolean_types(tmp_path: Path) -> None:
+    survey = _survey(tmp_path)
+    path = tmp_path / "review.json"
+    raw = json.loads(_record(survey).canonical_json())
+    raw["wifi_verified"] = 0
+    path.write_text(json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n")
+    with pytest.raises(PhysicalHardwareReviewError, match="wifi_verified must be a boolean"):
+        load_physical_hardware_review_record(path)
+
+
+def test_review_record_parser_rejects_functional_claims_before_binding(tmp_path: Path) -> None:
+    survey = _survey(tmp_path)
+    path = tmp_path / "review.json"
+    raw = json.loads(_record(survey).canonical_json())
+    raw["wifi_verified"] = True
+    path.write_text(json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n")
+    with pytest.raises(PhysicalHardwareReviewError, match="cannot grant functional/Beta credit"):
+        load_physical_hardware_review_record(path)
 
 
 def test_review_record_must_be_canonical_json(tmp_path: Path) -> None:
@@ -222,7 +226,7 @@ def test_exact_file_binding_round_trip_and_write_once(tmp_path: Path) -> None:
     survey_path = tmp_path / "survey.json"
     write_physical_hardware_survey_evidence(survey, survey_path)
     record_path = tmp_path / "review.json"
-    record_path.write_text(_record(survey).canonical_json(), encoding="utf-8")
+    record_path.write_bytes(_record(survey).canonical_json().encode("utf-8"))
     notes_path = tmp_path / "notes.txt"
     notes_path.write_text("Reviewed as presence-only context. Functional tests remain pending.\n")
     evidence = review_physical_hardware_survey_files(survey_path, record_path, notes_path)
