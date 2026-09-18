@@ -4,10 +4,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from kaliphonestudio.physical_campaign_admission import load_current_physical_campaign_observation
 from kaliphonestudio.physical_hardware_test_observation import load_physical_hardware_test_observation_evidence
 from kaliphonestudio.physical_hardware_test_review import (
     PhysicalHardwareTestReviewError,
-    make_rejected_physical_hardware_test_review_record,
+    make_current_rejected_physical_hardware_test_review_record,
 )
 
 
@@ -15,13 +16,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create a rejected-by-default review template for one exact physical functional-test observation"
     )
+    parser.add_argument("--boot-observation", type=Path, required=True)
     parser.add_argument("--observation-evidence", type=Path, required=True)
     parser.add_argument("--reviewer", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     try:
+        boot_observation = load_current_physical_campaign_observation(args.boot_observation)
         observation = load_physical_hardware_test_observation_evidence(args.observation_evidence)
-        record = make_rejected_physical_hardware_test_review_record(observation, args.reviewer)
+        record = make_current_rejected_physical_hardware_test_review_record(
+            boot_observation, observation, args.reviewer
+        )
         if args.out.exists() or args.out.is_symlink():
             raise PhysicalHardwareTestReviewError("refusing to overwrite existing functional test review template")
         args.out.parent.mkdir(parents=True, exist_ok=True)
