@@ -24,9 +24,18 @@ def test_shared_typed_loader_rejects_schema_drift(tmp_path: Path) -> None:
 
 def test_execution_output_preflight_rejects_same_path(tmp_path: Path) -> None:
     path = tmp_path / "physical.json"
-    with pytest.raises(PhysicalCandidateOperatorError, match="different output paths"):
+    with pytest.raises(PhysicalCandidateOperatorError, match="must not overlap"):
         _preflight_execution_outputs(path, path)
     assert not path.exists()
+
+
+def test_execution_output_preflight_rejects_cross_temp_collision(tmp_path: Path) -> None:
+    execution = tmp_path / "execution.json"
+    probe = tmp_path / "execution.json.tmp"
+    with pytest.raises(PhysicalCandidateOperatorError, match="must not overlap"):
+        _preflight_execution_outputs(probe, execution)
+    assert not probe.exists()
+    assert not execution.exists()
 
 
 def test_execution_output_preflight_rejects_existing_output(tmp_path: Path) -> None:
