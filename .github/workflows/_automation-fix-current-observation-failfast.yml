@@ -22,18 +22,19 @@ jobs:
           from pathlib import Path
           patches = {
               Path('kaliphonestudio/physical_hardware_test_observation.py'): (
-                  "    try:\n        require_current_physical_campaign_observation(\n            observation,\n            expected_profile_id=plan.profile_id,\n",
-                  "    try:\n        # Reject stale/legacy provenance before dereferencing downstream evidence.\n        require_current_physical_campaign_observation(observation)\n        require_current_physical_campaign_observation(\n            observation,\n            expected_profile_id=plan.profile_id,\n",
+                  '    """Create a safe template only for a plan rooted in the current physical campaign."""\n    try:\n        require_current_physical_campaign_observation(\n            observation,\n',
+                  '    """Create a safe template only for a plan rooted in the current physical campaign."""\n    try:\n        # Reject stale/legacy provenance before dereferencing downstream evidence.\n        require_current_physical_campaign_observation(observation)\n        require_current_physical_campaign_observation(\n            observation,\n',
               ),
               Path('kaliphonestudio/physical_hardware_test_review.py'): (
-                  "    try:\n        require_current_physical_campaign_observation(\n            boot_observation,\n            expected_profile_id=observation.profile_id,\n",
-                  "    try:\n        # Reject stale/legacy provenance before dereferencing downstream evidence.\n        require_current_physical_campaign_observation(boot_observation)\n        require_current_physical_campaign_observation(\n            boot_observation,\n            expected_profile_id=observation.profile_id,\n",
+                  '    """Prepare result review only for an observation rooted in the current campaign."""\n    try:\n        require_current_physical_campaign_observation(\n            boot_observation,\n',
+                  '    """Prepare result review only for an observation rooted in the current campaign."""\n    try:\n        # Reject stale/legacy provenance before dereferencing downstream evidence.\n        require_current_physical_campaign_observation(boot_observation)\n        require_current_physical_campaign_observation(\n            boot_observation,\n',
               ),
           }
           for path, (old, new) in patches.items():
               text = path.read_text(encoding='utf-8')
-              if text.count(old) != 1:
-                  raise SystemExit(f'{path}: patch anchor mismatch')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one patch anchor, found {count}')
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
       - name: Verify focused fail-closed tests
         run: |
