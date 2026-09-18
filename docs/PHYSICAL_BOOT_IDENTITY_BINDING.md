@@ -2,7 +2,7 @@
 
 `PhysicalBootIdentityBindingEvidence` is a host-side, fail-closed evidence layer between the exact stock-firmware baseline and the reviewed physical candidate gate.
 
-It exists because a whole-file `boot.img` SHA-256 is necessary but not sufficient for a useful bring-up audit. KaliPhoneStudio now also records the exact declared boot payload identities that were actually inspected: kernel, ramdisk, optional second stage, optional recovery DTBO, embedded DTB, optional AOSP AVB footer/vbmeta layout, and — for profiles that use it — the separate candidate DTBO file.
+It exists because a whole-file `boot.img` SHA-256 is necessary but not sufficient for a useful bring-up audit. KaliPhoneStudio also records the exact declared boot payload identities that were actually inspected: kernel, ramdisk, optional second stage, optional recovery DTBO, embedded DTB, optional AOSP AVB footer/vbmeta layout, and — for profiles that use it — the separate candidate DTBO file.
 
 ## What is bound
 
@@ -33,20 +33,38 @@ The underlying boot preflight must already accept the footer/vbmeta byte layout.
 
 If no AVB footer exists, the evidence records that absence explicitly and rejects contradictory leftover AVB fields.
 
+## Physical execution prerequisite
+
+The exact binding is now a hard prerequisite for the physical temporary-boot executor, not merely a detached audit artifact. Before KaliPhoneStudio is allowed to run even the fresh read-only Fastboot probe preceding `fastboot boot`, it requires `--boot-identity-binding` and checks that the binding still matches the exact:
+
+- physical candidate gate and physical baseline bundle;
+- stock provenance and stock `boot.img` SHA-256;
+- boot build plan;
+- candidate `boot.img` SHA-256 and size in both the gate and the prepared offer;
+- candidate kernel, embedded DTB and profile-driven external DTBO identities;
+- exact-byte/component/AVB-completeness flags;
+- host-only safety state (`temporary_boot_executed=false`, `phone_storage_written=false`, `hardware_verified=false`, `beta_gate_credit=false`).
+
+A detached binding or component drift therefore fails **before any Fastboot device probe**. The successful pre-execution runtime probe records the exact binding SHA-256 in schema-v2 evidence, and the subsequent execution record commits to that probe digest.
+
+This does not make the binding a hardware-success record: it is an execution precondition that prevents a reviewed exact-byte identity record from being silently bypassed when the real temporary boot is attempted.
+
 ## Safety boundary
 
 This layer:
 
-- executes no ADB command;
-- executes no Fastboot command;
+- executes no ADB command while the binding itself is produced;
+- executes no Fastboot command while the binding itself is produced;
 - never selects or writes a phone partition;
-- never performs a temporary boot;
+- never performs a temporary boot by itself;
 - never converts host-side consistency into hardware verification;
-- always keeps `temporary_boot_executed=false`, `phone_storage_written=false`, `hardware_verified=false`, and `beta_gate_credit=false`.
+- always keeps `temporary_boot_executed=false`, `phone_storage_written=false`, `hardware_verified=false`, and `beta_gate_credit=false` in the binding record.
 
-A successful record means only that the reviewed physical-candidate chain is cryptographically tied to the exact stock/candidate boot-chain bytes supplied to the command.
+A successful record means only that the reviewed physical-candidate chain is cryptographically tied to the exact stock/candidate boot-chain bytes supplied to the command. A separate execution layer may consume that record only after all of its independent confirmation/probe safeguards also pass.
 
 ## CLI
+
+Create the exact identity binding offline:
 
 ```bash
 python scripts/bind_physical_boot_identity.py \
@@ -62,6 +80,14 @@ python scripts/bind_physical_boot_identity.py \
 ```
 
 `--candidate-dtbo` is profile-driven: it is required when the active profile declares `separate_dtbo`, rejected when that profile does not permit an external DTBO, and is never inferred from a device name in global code.
+
+The physical execution command must then receive the same immutable record:
+
+```text
+KaliPhoneStudioCLI execute-temporary-boot-once ... \
+  --boot-identity-binding evidence/physical-boot-identity.json \
+  --execute-temporary-boot
+```
 
 The output path is create-only. Existing files, symlink inputs, detached evidence, whole-image drift, component drift, DTBO drift and invalid AVB layout are rejected.
 
