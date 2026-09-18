@@ -9,6 +9,7 @@ on:
       - "kaliphonestudio/physical_boot_identity_binding.py"
       - "kaliphonestudio/physical_recovery_readiness.py"
       - "tests/test_temporary_boot_execution.py"
+      - "tests/test_temporary_boot_preexecution_revalidation.py"
       - "tests/test_physical_boot_identity_binding.py"
       - "tests/test_physical_recovery_readiness.py"
       - "tests/test_physical_candidate_operator.py"
@@ -20,6 +21,7 @@ on:
       - "kaliphonestudio/physical_boot_identity_binding.py"
       - "kaliphonestudio/physical_recovery_readiness.py"
       - "tests/test_temporary_boot_execution.py"
+      - "tests/test_temporary_boot_preexecution_revalidation.py"
       - "tests/test_physical_boot_identity_binding.py"
       - "tests/test_physical_recovery_readiness.py"
       - "tests/test_physical_candidate_operator.py"
@@ -54,6 +56,7 @@ jobs:
           tests/test_physical_boot_identity_binding.py
           tests/test_physical_recovery_readiness.py
           tests/test_temporary_boot_execution.py
+          tests/test_temporary_boot_preexecution_revalidation.py
           tests/test_physical_candidate_operator.py
       - name: Assert temporary boot surface exposes no persistent Fastboot verb
         shell: bash
@@ -67,6 +70,8 @@ jobs:
           for forbidden in ('"flash"', '"erase"', '"set_active"'):
               assert forbidden not in source.replace('("flash", "erase", "set_active", "reboot")', '')
           assert "recovery_readiness" in source
+          assert "post-probe-exact-material-revalidation" in source
+          assert "_revalidate_pre_execution_material" in source
           assert "--recovery-readiness" in operator
           assert "--stock-boot" in operator
           assert "--physical-baseline" in operator
