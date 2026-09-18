@@ -11,6 +11,7 @@ from kaliphonestudio.physical_candidate_operator import (
     prepare_temporary_boot_offer_main,
 )
 from kaliphonestudio.physical_fastboot_capture import main as physical_capture_main
+from kaliphonestudio.profile_registry_audit import main as profile_registry_audit_main
 from kaliphonestudio.stock_baseline_ingress import (
     bind_physical_stock_main,
     prepare_stock_provenance_main,
@@ -23,6 +24,7 @@ BIND_PHYSICAL_CANDIDATE_COMMAND = "bind-physical-candidate-gate"
 PREPARE_TEMPORARY_BOOT_OFFER_COMMAND = "prepare-temporary-boot-offer"
 EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND = "execute-temporary-boot-once"
 EVIDENCE_WORKSPACE_COMMAND = "evidence"
+PROFILE_REGISTRY_AUDIT_COMMAND = "audit-profile-registry"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -41,6 +43,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return execute_temporary_boot_once_main(args[1:])
     if args and args[0] == EVIDENCE_WORKSPACE_COMMAND:
         return operator_evidence_main(args[1:])
+    if args and args[0] == PROFILE_REGISTRY_AUDIT_COMMAND:
+        return profile_registry_audit_main(args[1:])
     return app_main(args)
 
 
