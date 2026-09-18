@@ -1,0 +1,54 @@
+name: beta-release-artifact-inventory
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/beta_release_artifact_inventory.py"
+      - "scripts/build_beta_release_artifact_inventory.py"
+      - "tests/test_beta_release_artifact_inventory.py"
+      - ".github/workflows/beta-release-artifact-inventory.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/beta_release_artifact_inventory.py"
+      - "scripts/build_beta_release_artifact_inventory.py"
+      - "tests/test_beta_release_artifact_inventory.py"
+      - ".github/workflows/beta-release-artifact-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile contract and CLI
+        run: |
+          python -m py_compile \
+            kaliphonestudio/beta_release_artifact_inventory.py \
+            scripts/build_beta_release_artifact_inventory.py \
+            tests/test_beta_release_artifact_inventory.py
+      - name: Run focused fail-closed tests
+        run: python -m unittest -v tests.test_beta_release_artifact_inventory
+      - name: Verify CLI remains offline and non-publishing
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          python scripts/build_beta_release_artifact_inventory.py --help >/dev/null
+          if grep -Ein '\b(adb|fastboot|subprocess|requests|urllib|gh[[:space:]]+release|create_release|upload_asset)\b' \
+            kaliphonestudio/beta_release_artifact_inventory.py \
+            scripts/build_beta_release_artifact_inventory.py \
+            | grep -Evi 'fastboot_(capture|baseline|transcript)|Fastboot'; then
+            echo "Forbidden device/network/release surface detected" >&2
+            exit 1
+          fi
