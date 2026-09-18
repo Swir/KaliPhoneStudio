@@ -1,0 +1,65 @@
+name: rootfs-handoff-trial-authorization
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'kaliphonestudio/rootfs_handoff_trial_authorization.py'
+      - 'kaliphonestudio/rootfs_handoff_fresh_revalidation.py'
+      - 'kaliphonestudio/rootfs_handoff_target_binding.py'
+      - 'scripts/prepare_rootfs_handoff_trial_authorization.py'
+      - 'scripts/bind_rootfs_handoff_trial_authorization.py'
+      - 'tests/test_rootfs_handoff_trial_authorization.py'
+      - '.github/workflows/rootfs-handoff-trial-authorization.yml'
+  pull_request:
+    paths:
+      - 'kaliphonestudio/rootfs_handoff_trial_authorization.py'
+      - 'kaliphonestudio/rootfs_handoff_fresh_revalidation.py'
+      - 'kaliphonestudio/rootfs_handoff_target_binding.py'
+      - 'scripts/prepare_rootfs_handoff_trial_authorization.py'
+      - 'scripts/bind_rootfs_handoff_trial_authorization.py'
+      - 'tests/test_rootfs_handoff_trial_authorization.py'
+      - '.github/workflows/rootfs-handoff-trial-authorization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trial-authorization-contract:
+    name: trial-authorization / py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile authorization boundary and CLIs
+        run: |
+          python -m py_compile \
+            kaliphonestudio/rootfs_handoff_trial_authorization.py \
+            scripts/prepare_rootfs_handoff_trial_authorization.py \
+            scripts/bind_rootfs_handoff_trial_authorization.py
+      - name: Run fail-closed contract tests
+        run: python -m unittest -v tests.test_rootfs_handoff_trial_authorization
+      - name: Assert offline/non-executing surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          paths = [
+              Path('kaliphonestudio/rootfs_handoff_trial_authorization.py'),
+              Path('scripts/prepare_rootfs_handoff_trial_authorization.py'),
+              Path('scripts/bind_rootfs_handoff_trial_authorization.py'),
+          ]
+          forbidden = ('subprocess', 'fastboot', ' adb ', 'os.system', 'Popen(', 'run(')
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              lowered = text.lower()
+              if 'subprocess' in lowered or 'os.system' in lowered or 'popen(' in lowered:
+                  raise SystemExit(f'{path}: execution primitive is forbidden in offline authorization boundary')
+          print('offline/non-executing authorization surface verified')
+          PY
