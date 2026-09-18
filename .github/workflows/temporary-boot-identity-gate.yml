@@ -9,6 +9,7 @@ on:
       - "kaliphonestudio/physical_boot_identity_binding.py"
       - "tests/test_temporary_boot_execution.py"
       - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_candidate_operator.py"
       - ".github/workflows/temporary-boot-identity-gate.yml"
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - "kaliphonestudio/physical_boot_identity_binding.py"
       - "tests/test_temporary_boot_execution.py"
       - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_candidate_operator.py"
       - ".github/workflows/temporary-boot-identity-gate.yml"
   workflow_dispatch:
 
@@ -46,3 +48,4 @@ jobs:
           python -m pytest -q
           tests/test_physical_boot_identity_binding.py
           tests/test_temporary_boot_execution.py
+          tests/test_physical_candidate_operator.py
