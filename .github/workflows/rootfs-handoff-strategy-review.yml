@@ -54,6 +54,6 @@ jobs:
         run: |
           python scripts/prepare_rootfs_handoff_strategy_review.py --help >/dev/null
           python scripts/bind_rootfs_handoff_strategy_review.py --help >/dev/null
-          python -m kaliphonestudio.app evidence --help >/dev/null
-          python -m kaliphonestudio.app evidence prepare-rootfs-handoff-strategy-review --help >/dev/null
-          python -m kaliphonestudio.app evidence bind-rootfs-handoff-strategy-review --help >/dev/null
+          python main.py evidence --help >/dev/null
+          python main.py evidence prepare-rootfs-handoff-strategy-review --help >/dev/null
+          python main.py evidence bind-rootfs-handoff-strategy-review --help >/dev/null
