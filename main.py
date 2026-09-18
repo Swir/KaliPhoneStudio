@@ -4,12 +4,12 @@ import sys
 from typing import Sequence
 
 from kaliphonestudio.app import main as app_main
-from kaliphonestudio.operator_evidence_workspace import main as operator_evidence_main
-from kaliphonestudio.physical_candidate_operator import (
-    bind_physical_candidate_main,
+from kaliphonestudio.exact_bound_temporary_boot_operator import (
     execute_temporary_boot_once_main,
     prepare_temporary_boot_offer_main,
 )
+from kaliphonestudio.operator_evidence_workspace import main as operator_evidence_main
+from kaliphonestudio.physical_candidate_operator import bind_physical_candidate_main
 from kaliphonestudio.physical_fastboot_capture import main as physical_capture_main
 from kaliphonestudio.profile_registry_audit import main as profile_registry_audit_main
 from kaliphonestudio.stock_baseline_ingress import (
