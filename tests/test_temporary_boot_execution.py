@@ -10,6 +10,7 @@ import pytest
 from kaliphonestudio.fastboot_baseline import FastbootBaselineEvidence
 from kaliphonestudio.fastboot_capture_bundle import FastbootCaptureBundleEvidence
 from kaliphonestudio.fastboot_tool import FastbootToolEvidence
+from kaliphonestudio.physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from kaliphonestudio.physical_candidate_gate import PhysicalCandidateGateEvidence
 from kaliphonestudio.profiles import DeviceProfile
 from kaliphonestudio.temporary_boot_execution import (
@@ -47,6 +48,68 @@ def _transcript(*, serial: str = "SERIAL123", unlocked: str = "yes", slot: str =
         "version-baseband": "BB1",
     }
     return "".join(f"(bootloader) {key}: {value}\n" for key, value in values.items()).encode("utf-8")
+
+
+def _binding(gate: PhysicalCandidateGateEvidence) -> PhysicalBootIdentityBindingEvidence:
+    return PhysicalBootIdentityBindingEvidence(
+        schema_version=1,
+        profile_id=gate.profile_id,
+        device_serial=gate.device_serial,
+        physical_baseline_bundle_sha256=gate.physical_baseline_bundle_sha256,
+        physical_candidate_gate_sha256=gate.evidence_sha256(),
+        stock_provenance_sha256=gate.stock_provenance_sha256,
+        boot_plan_sha256=gate.boot_plan_sha256,
+        stock_boot_sha256=gate.stock_boot_sha256,
+        stock_boot_size=4096,
+        stock_boot_header_version=2,
+        stock_kernel_sha256=_h("stock-kernel"),
+        stock_kernel_size=64,
+        stock_ramdisk_sha256=_h("stock-ramdisk"),
+        stock_ramdisk_size=64,
+        stock_second_sha256=None,
+        stock_second_size=0,
+        stock_recovery_dtbo_sha256=None,
+        stock_recovery_dtbo_size=0,
+        stock_dtb_sha256=_h("stock-dtb"),
+        stock_dtb_size=64,
+        stock_avb_footer_present=False,
+        stock_avb_footer_version_major=None,
+        stock_avb_footer_version_minor=None,
+        stock_avb_original_image_size=None,
+        stock_avb_vbmeta_offset=None,
+        stock_avb_vbmeta_size=None,
+        stock_avb_vbmeta_sha256=None,
+        candidate_boot_sha256=gate.boot_image_sha256,
+        candidate_boot_size=gate.boot_image_size,
+        candidate_boot_header_version=2,
+        candidate_kernel_sha256=gate.kernel_image_sha256,
+        candidate_kernel_size=64,
+        candidate_ramdisk_sha256=_h("candidate-ramdisk"),
+        candidate_ramdisk_size=64,
+        candidate_second_sha256=None,
+        candidate_second_size=0,
+        candidate_recovery_dtbo_sha256=None,
+        candidate_recovery_dtbo_size=0,
+        candidate_dtb_sha256=gate.dtb_sha256,
+        candidate_dtb_size=64,
+        candidate_external_dtbo_sha256=gate.dtbo_image_sha256,
+        candidate_external_dtbo_size=64,
+        candidate_avb_footer_present=False,
+        candidate_avb_footer_version_major=None,
+        candidate_avb_footer_version_minor=None,
+        candidate_avb_original_image_size=None,
+        candidate_avb_vbmeta_offset=None,
+        candidate_avb_vbmeta_size=None,
+        candidate_avb_vbmeta_sha256=None,
+        stock_exact_bytes_verified=True,
+        candidate_exact_bytes_verified=True,
+        component_identity_bound=True,
+        avb_layout_bound=True,
+        temporary_boot_executed=False,
+        phone_storage_written=False,
+        hardware_verified=False,
+        beta_gate_credit=False,
+    )
 
 
 def _fixture(tmp_path: Path):
@@ -178,11 +241,12 @@ def _fixture(tmp_path: Path):
         hardware_verified=False,
         beta_gate_credit=False,
     )
+    binding = _binding(gate)
     offer = prepare_temporary_boot_offer(
         profile, gate, capture, tool, fastboot_executable=fastboot, boot_image=image
     )
     authorization = authorize_temporary_boot_offer(offer, profile, "DEMO-PHONE")
-    return profile, baseline, capture, tool, gate, offer, authorization, fastboot, image
+    return profile, baseline, capture, tool, gate, binding, offer, authorization, fastboot, image
 
 
 def _runner(*, transcript: bytes | None = None, devices: bytes | None = None, boot_rc: int = 0):
@@ -209,11 +273,13 @@ def _runner(*, transcript: bytes | None = None, devices: bytes | None = None, bo
 
 
 def test_probe_revalidates_exact_device_read_only(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
     runner, calls = _runner()
     probe = probe_temporary_boot_runtime(
-        profile, offer, auth, gate, capture, tool, baseline, runner=runner
+        profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner
     )
+    assert probe.schema_version == 2
+    assert probe.boot_identity_binding_sha256 == binding.evidence_sha256()
     assert probe.device_serial == "SERIAL123"
     assert probe.product == "demo"
     assert probe.current_slot == "a"
@@ -228,10 +294,10 @@ def test_probe_revalidates_exact_device_read_only(tmp_path: Path) -> None:
 
 
 def test_execute_invokes_only_serial_bound_boot_after_probe(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, fastboot, image = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, fastboot, image = _fixture(tmp_path)
     runner, calls = _runner()
     probe, execution = execute_temporary_boot_once(
-        profile, offer, auth, gate, capture, tool, baseline, runner=runner
+        profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner
     )
     assert calls[-1] == (str(fastboot.resolve()), "-s", "SERIAL123", "boot", str(image.resolve()))
     assert len(calls) == 3
@@ -247,46 +313,70 @@ def test_execute_invokes_only_serial_bound_boot_after_probe(tmp_path: Path) -> N
     assert all(not any(verb in call for verb in ("flash", "erase", "set_active", "reboot")) for call in calls)
 
 
+def test_detached_boot_identity_binding_fails_before_fastboot(tmp_path: Path) -> None:
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
+    runner, calls = _runner()
+    detached = replace(binding, physical_candidate_gate_sha256=_h("other-gate"))
+    with pytest.raises(TemporaryBootExecutionError, match="detached"):
+        execute_temporary_boot_once(
+            profile, offer, auth, gate, detached, capture, tool, baseline, runner=runner
+        )
+    assert calls == []
+
+
+def test_candidate_component_binding_drift_fails_before_fastboot(tmp_path: Path) -> None:
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
+    runner, calls = _runner()
+    drifted = replace(binding, candidate_kernel_sha256=_h("other-kernel"))
+    with pytest.raises(TemporaryBootExecutionError, match="kernel differs"):
+        execute_temporary_boot_once(
+            profile, offer, auth, gate, drifted, capture, tool, baseline, runner=runner
+        )
+    assert calls == []
+
+
 def test_device_swap_fails_before_boot(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
     runner, calls = _runner(devices=b"OTHER\tfastboot\n")
     with pytest.raises(TemporaryBootExecutionError, match="requested fastboot serial"):
-        execute_temporary_boot_once(profile, offer, auth, gate, capture, tool, baseline, runner=runner)
+        execute_temporary_boot_once(profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner)
     assert all("boot" not in call for call in calls)
 
 
 def test_unlock_or_slot_drift_fails_before_boot(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
     for transcript in (_transcript(unlocked="no"), _transcript(slot="b")):
         runner, calls = _runner(transcript=transcript)
         with pytest.raises(TemporaryBootExecutionError, match="drifted|unlocked"):
-            execute_temporary_boot_once(profile, offer, auth, gate, capture, tool, baseline, runner=runner)
+            execute_temporary_boot_once(
+                profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner
+            )
         assert all("boot" not in call for call in calls)
 
 
 def test_detached_authorization_fails_before_fastboot(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
     runner, calls = _runner()
     bad = replace(auth, offer_sha256=_h("other-offer"))
     with pytest.raises(TemporaryBootExecutionError, match="detached"):
-        execute_temporary_boot_once(profile, offer, bad, gate, capture, tool, baseline, runner=runner)
+        execute_temporary_boot_once(profile, offer, bad, gate, binding, capture, tool, baseline, runner=runner)
     assert calls == []
 
 
 def test_local_image_drift_fails_before_fastboot(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, image = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, image = _fixture(tmp_path)
     image.write_bytes(b"changed-after-authorization")
     runner, calls = _runner()
     with pytest.raises(TemporaryBootExecutionError, match="boot image bytes"):
-        execute_temporary_boot_once(profile, offer, auth, gate, capture, tool, baseline, runner=runner)
+        execute_temporary_boot_once(profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner)
     assert calls == []
 
 
 def test_normal_fastboot_failure_is_recorded_without_hardware_credit(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
     runner, _ = _runner(boot_rc=1)
     probe, execution = execute_temporary_boot_once(
-        profile, offer, auth, gate, capture, tool, baseline, runner=runner
+        profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner
     )
     assert execution.returncode == 1
     assert execution.temporary_boot_executed is True
@@ -297,10 +387,10 @@ def test_normal_fastboot_failure_is_recorded_without_hardware_credit(tmp_path: P
 
 
 def test_evidence_writers_are_immutable(tmp_path: Path) -> None:
-    profile, baseline, capture, tool, gate, offer, auth, _, _ = _fixture(tmp_path)
+    profile, baseline, capture, tool, gate, binding, offer, auth, _, _ = _fixture(tmp_path)
     runner, _ = _runner()
     probe, execution = execute_temporary_boot_once(
-        profile, offer, auth, gate, capture, tool, baseline, runner=runner
+        profile, offer, auth, gate, binding, capture, tool, baseline, runner=runner
     )
     probe_path = tmp_path / "probe.json"
     execution_path = tmp_path / "execution.json"

@@ -59,16 +59,14 @@ def test_execution_output_preflight_checks_writable_parent_without_residue(
     assert list(probe.parent.glob(".kps-output-preflight-*")) == []
 
 
-def test_execution_cli_refuses_before_evidence_or_device_io_without_opt_in(
-    tmp_path: Path,
-) -> None:
-    probe = tmp_path / "probe.json"
-    execution = tmp_path / "execution.json"
-    argv = [
+def _missing_execution_argv(tmp_path: Path) -> list[str]:
+    return [
         "--profile-id",
         "oneplus/avicii",
         "--physical-candidate-gate",
         str(tmp_path / "missing-gate.json"),
+        "--boot-identity-binding",
+        str(tmp_path / "missing-boot-identity.json"),
         "--capture-bundle",
         str(tmp_path / "missing-capture.json"),
         "--baseline-evidence",
@@ -82,15 +80,35 @@ def test_execution_cli_refuses_before_evidence_or_device_io_without_opt_in(
         "--confirmation",
         "WRONG-ON-PURPOSE",
         "--probe-out",
-        str(probe),
+        str(tmp_path / "probe.json"),
         "--execution-out",
-        str(execution),
+        str(tmp_path / "execution.json"),
     ]
+
+
+def test_execution_cli_refuses_before_evidence_or_device_io_without_opt_in(
+    tmp_path: Path,
+) -> None:
+    argv = _missing_execution_argv(tmp_path)
     with pytest.raises(SystemExit) as exc:
         execute_temporary_boot_once_main(argv)
     assert exc.value.code == 2
-    assert not probe.exists()
-    assert not execution.exists()
+    assert not (tmp_path / "probe.json").exists()
+    assert not (tmp_path / "execution.json").exists()
+    # The parser accepted the mandatory identity argument, so this exercises the
+    # explicit execution opt-in boundary rather than failing argument parsing.
+    assert not (tmp_path / "missing-boot-identity.json").exists()
+
+
+def test_execution_cli_refuses_missing_exact_identity_after_explicit_opt_in(
+    tmp_path: Path,
+) -> None:
+    argv = _missing_execution_argv(tmp_path) + ["--execute-temporary-boot"]
+    with pytest.raises(SystemExit) as exc:
+        execute_temporary_boot_once_main(argv)
+    assert exc.value.code == 2
+    assert not (tmp_path / "probe.json").exists()
+    assert not (tmp_path / "execution.json").exists()
 
 
 @pytest.mark.parametrize(
