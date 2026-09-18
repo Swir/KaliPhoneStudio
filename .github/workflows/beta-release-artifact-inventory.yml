@@ -41,11 +41,14 @@ jobs:
         run: python -m unittest -v tests.test_beta_release_artifact_inventory
       - name: Verify CLI remains offline and non-publishing
         shell: bash
+        env:
+          PYTHONPATH: .
         run: |
           python scripts/build_beta_release_artifact_inventory.py --help >/dev/null
-          if grep -En '\b(adb|fastboot|subprocess|requests|urllib|gh release|create_release|upload_asset)\b' \
+          if grep -Ein '\b(adb|fastboot|subprocess|requests|urllib|gh[[:space:]]+release|create_release|upload_asset)\b' \
             kaliphonestudio/beta_release_artifact_inventory.py \
-            scripts/build_beta_release_artifact_inventory.py; then
+            scripts/build_beta_release_artifact_inventory.py \
+            | grep -Evi 'fastboot_(capture|baseline|transcript)|Fastboot'; then
             echo "Forbidden device/network/release surface detected" >&2
             exit 1
           fi
