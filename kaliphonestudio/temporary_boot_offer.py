@@ -166,7 +166,7 @@ def prepare_temporary_boot_offer(
     capture: FastbootCaptureBundleEvidence,
     tool: FastbootToolEvidence,
     *,
-    boot_identity_binding: PhysicalBootIdentityBindingEvidence,
+    boot_identity_binding: PhysicalBootIdentityBindingEvidence | None = None,
     fastboot_executable: Path,
     boot_image: Path,
 ) -> PreparedTemporaryBootOffer:
@@ -186,6 +186,10 @@ def prepare_temporary_boot_offer(
         or gate.beta_gate_credit is not False
     ):
         raise TemporaryBootOfferError("physical candidate gate contains an invalid host-only claim")
+    if boot_identity_binding is None:
+        raise TemporaryBootOfferError(
+            "physical boot identity binding is required before a temporary-boot offer"
+        )
 
     try:
         binding_sha = require_temporary_boot_identity_binding(
