@@ -4,8 +4,9 @@ This module is deliberately narrower than a general Fastboot executor. It accept
 only an already reviewed temporary-boot offer plus explicit profile confirmation,
 re-verifies the exact local Fastboot executable and candidate boot image, requires
 an exact stock/candidate boot-identity binding *and* exact physical recovery-readiness
-material, performs one fresh read-only serial-bound Fastboot probe, and only then
-may invoke the exact ``fastboot -s SERIAL boot IMAGE`` argv from the offer.
+material, performs one fresh read-only serial-bound Fastboot probe, and then
+re-validates the exact host boot/recovery material again immediately before the
+single allowed ``fastboot -s SERIAL boot IMAGE`` invocation.
 
 A successful Fastboot return code proves only that the host command was accepted.
 It does not prove that the kernel booted, Kali userspace was reached, storage works,
@@ -48,7 +49,7 @@ _RUNTIME_PROBE_POLICY = (
     "fresh-fastboot-devices+serial-getvar-all+exact-boot-identity+recovery-readiness-before-boot-v3"
 )
 _EXECUTION_POLICY = (
-    "single-serial-fastboot-boot-exact-identity+recovery-readiness-bound-no-persistent-write-v3"
+    "single-serial-fastboot-boot+post-probe-exact-material-revalidation+no-persistent-write-v4"
 )
 
 
@@ -187,7 +188,7 @@ def _validate_boot_identity_binding(
     binding: PhysicalBootIdentityBindingEvidence,
     offer: PreparedTemporaryBootOffer,
 ) -> None:
-    """Require the exact-byte stock/candidate binding before any device probe."""
+    """Require the exact-byte stock/candidate binding before device I/O."""
     if not isinstance(binding, PhysicalBootIdentityBindingEvidence) or binding.schema_version != 1:
         raise TemporaryBootExecutionError("physical boot identity binding must be schema-v1 typed evidence")
     if binding.profile_id != profile.profile_id or gate.profile_id != profile.profile_id:
@@ -244,7 +245,7 @@ def _validate_recovery_readiness(
     *,
     stock_boot: Path,
 ) -> None:
-    """Recompute the exact recovery-readiness record before the first Fastboot call."""
+    """Recompute the exact recovery-readiness record against local stock bytes."""
     if not isinstance(recovery, PhysicalRecoveryReadinessEvidence) or recovery.schema_version != 1:
         raise TemporaryBootExecutionError("physical recovery readiness must be schema-v1 typed evidence")
     try:
@@ -319,7 +320,9 @@ def _critical_runtime_values(
         raise TemporaryBootExecutionError("profile Fastboot required_vars contract is invalid")
     missing = [item for item in required if item not in variables]
     if missing:
-        raise TemporaryBootExecutionError("fresh Fastboot probe is missing profile-required variables: " + ", ".join(missing))
+        raise TemporaryBootExecutionError(
+            "fresh Fastboot probe is missing profile-required variables: " + ", ".join(missing)
+        )
 
     names = {
         "product": contract.get("identity_var"),
@@ -390,10 +393,57 @@ def _validate_runtime_recovery_slot_context(
     elif ab_device is False:
         if recovery.ab_device is not False:
             raise TemporaryBootExecutionError("single-slot recovery readiness contract mismatch")
-        if recovery.captured_active_slot is not None or recovery.expected_inactive_slot is not None or recovery.slot_count is not None:
+        if (
+            recovery.captured_active_slot is not None
+            or recovery.expected_inactive_slot is not None
+            or recovery.slot_count is not None
+        ):
             raise TemporaryBootExecutionError("single-slot recovery readiness invents A/B slot context")
     else:
         raise TemporaryBootExecutionError("profile ab_device contract must be boolean")
+
+
+def _revalidate_pre_execution_material(
+    profile: DeviceProfile,
+    offer: PreparedTemporaryBootOffer,
+    authorization: TemporaryBootUserAuthorizationEvidence,
+    gate: PhysicalCandidateGateEvidence,
+    binding: PhysicalBootIdentityBindingEvidence,
+    capture: FastbootCaptureBundleEvidence,
+    tool: FastbootToolEvidence,
+    baseline: FastbootBaselineEvidence,
+    physical: PhysicalBaselineBundleEvidence,
+    recovery: PhysicalRecoveryReadinessEvidence,
+    *,
+    stock_boot: Path,
+) -> None:
+    """Close the host-side TOCTOU window after the fresh device probe.
+
+    The read-only Fastboot probe can take measurable time. Re-hash the exact
+    Fastboot executable, candidate boot image and stock recovery material after
+    that probe and immediately before the allowed boot command. Any drift is a
+    hard stop and no boot subprocess is invoked.
+    """
+    try:
+        verify_temporary_boot_offer(offer, profile, gate, capture, tool)
+    except TemporaryBootOfferError as exc:
+        raise TemporaryBootExecutionError(f"pre-execution offer revalidation failed: {exc}") from exc
+    _validate_boot_identity_binding(profile, gate, binding, offer)
+    _validate_authorization(offer, authorization)
+    _validate_baseline_binding(profile, baseline, capture)
+    try:
+        _validate_recovery_readiness(
+            profile,
+            gate,
+            binding,
+            baseline,
+            physical,
+            recovery,
+            offer,
+            stock_boot=stock_boot,
+        )
+    except TemporaryBootExecutionError as exc:
+        raise TemporaryBootExecutionError(f"pre-execution recovery revalidation failed: {exc}") from exc
 
 
 def probe_temporary_boot_runtime(
@@ -509,14 +559,14 @@ def execute_temporary_boot_once(
     boot_timeout_seconds: int = DEFAULT_BOOT_TIMEOUT_SECONDS,
     runner: Callable[..., Any] = subprocess.run,
 ) -> tuple[TemporaryBootRuntimeProbeEvidence, TemporaryBootExecutionEvidence]:
-    """Invoke exactly one serial-bound temporary boot after recovery/read-only checks.
+    """Invoke exactly one serial-bound temporary boot after fail-closed checks.
 
-    The exact-byte boot identity binding and recomputed physical recovery-readiness
-    record are mandatory and validated before any Fastboot probe. A/B slot context
-    is rechecked against the fresh probe before the one allowed ``boot`` verb.
-    This function never exposes ``flash``, ``erase``, ``set_active``, ``reboot`` or
-    any other persistent state-changing Fastboot verb. It does not claim hardware
-    or rollback success.
+    Exact boot identity and recovery readiness are validated before any Fastboot
+    probe. The fresh probe then rechecks the device and A/B slot context. Finally,
+    the exact Fastboot binary, candidate boot image, authorization bindings and
+    local stock recovery material are revalidated *again* immediately before the
+    one allowed ``boot`` verb. This closes the host-side probe-to-boot TOCTOU
+    window without exposing persistent Fastboot operations.
     """
     probe = probe_temporary_boot_runtime(
         profile,
@@ -533,6 +583,24 @@ def execute_temporary_boot_once(
         timeout_seconds=probe_timeout_seconds,
         runner=runner,
     )
+
+    # The read-only probe may take time. Do not trust file identity captured
+    # before it: re-hash all executable/boot/recovery material at the last safe
+    # boundary before invoking the single allowed Fastboot boot command.
+    _revalidate_pre_execution_material(
+        profile,
+        offer,
+        authorization,
+        gate,
+        binding,
+        capture,
+        tool,
+        baseline,
+        physical,
+        recovery,
+        stock_boot=stock_boot,
+    )
+
     timeout = _timeout(boot_timeout_seconds, "temporary-boot execution timeout", 600)
     expected_argv = (
         str(offer.fastboot_executable),
