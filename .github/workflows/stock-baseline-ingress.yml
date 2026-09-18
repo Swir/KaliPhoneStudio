@@ -1,0 +1,75 @@
+name: stock-baseline-ingress
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/ota_import.py"
+      - "kaliphonestudio/payload.py"
+      - "kaliphonestudio/boot_image.py"
+      - "kaliphonestudio/provenance.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
+      - "kaliphonestudio/stock_baseline_ingress.py"
+      - "scripts/prepare_stock_provenance.py"
+      - "scripts/bind_physical_stock_baseline.py"
+      - "devices/**/profile.json"
+      - "tests/test_ota_import.py"
+      - "tests/test_provenance.py"
+      - "tests/test_stock_baseline_ingress.py"
+      - "docs/STOCK_BASELINE_INGRESS.md"
+      - ".github/workflows/stock-baseline-ingress.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/ota_import.py"
+      - "kaliphonestudio/payload.py"
+      - "kaliphonestudio/boot_image.py"
+      - "kaliphonestudio/provenance.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
+      - "kaliphonestudio/stock_baseline_ingress.py"
+      - "scripts/prepare_stock_provenance.py"
+      - "scripts/bind_physical_stock_baseline.py"
+      - "devices/**/profile.json"
+      - "tests/test_ota_import.py"
+      - "tests/test_provenance.py"
+      - "tests/test_stock_baseline_ingress.py"
+      - "docs/STOCK_BASELINE_INGRESS.md"
+      - ".github/workflows/stock-baseline-ingress.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-stock-ingress:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: "pip"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+      - name: Verify exact OTA/payload/provenance and operator ingress
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest -q \
+            tests/test_ota_import.py \
+            tests/test_payload.py \
+            tests/test_boot_image.py \
+            tests/test_provenance.py \
+            tests/test_physical_baseline_bundle.py \
+            tests/test_stock_baseline_ingress.py
+          python -m compileall -q kaliphonestudio scripts
+          python main.py prepare-stock-provenance --help
+          python main.py bind-physical-stock-baseline --help

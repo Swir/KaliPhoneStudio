@@ -9,12 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from zipfile import BadZipFile, ZipFile
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 MAX_METADATA_BYTES = 1024 * 1024
 MAX_METADATA_ENTRIES = 512
 MAX_METADATA_KEY_LENGTH = 256
 MAX_METADATA_VALUE_LENGTH = 8192
+_HASH_CHUNK_SIZE = 1024 * 1024
 
 
 class OTAImportError(ValueError):
@@ -28,6 +29,7 @@ class OTAPackageReport:
     sha256: str
     payload_member: str
     payload_size: int
+    payload_sha256: str
     metadata_member: str | None
     metadata: dict[str, str]
 
@@ -35,8 +37,23 @@ class OTAPackageReport:
 def _digest(path: Path) -> str:
     h = sha256()
     with path.open("rb") as fh:
-        while chunk := fh.read(1024 * 1024):
+        while chunk := fh.read(_HASH_CHUNK_SIZE):
             h.update(chunk)
+    return h.hexdigest()
+
+
+def _digest_member(zf: ZipFile, info: ZipInfo) -> str:
+    """Hash one exact ZIP member while enforcing the declared uncompressed size."""
+    h = sha256()
+    seen = 0
+    with zf.open(info, "r") as fh:
+        while chunk := fh.read(_HASH_CHUNK_SIZE):
+            seen += len(chunk)
+            if seen > info.file_size:
+                raise OTAImportError("payload.bin expanded beyond its declared ZIP size")
+            h.update(chunk)
+    if seen != info.file_size:
+        raise OTAImportError("payload.bin size changed while reading OTA archive")
     return h.hexdigest()
 
 
@@ -107,6 +124,7 @@ def inspect_ota_zip(path: Path) -> OTAPackageReport:
             payload = payloads[0]
             if payload.file_size <= 0:
                 raise OTAImportError("payload.bin is empty")
+            payload_sha256 = _digest_member(zf, payload)
 
             metadata_names = {"META-INF/com/android/metadata", "metadata"}
             metadata_infos = [i for i in infos if i.filename in metadata_names and not i.is_dir()]
@@ -121,12 +139,16 @@ def inspect_ota_zip(path: Path) -> OTAPackageReport:
             else:
                 metadata_member = None
                 metadata = {}
-    except BadZipFile as exc:
-        raise OTAImportError("file is not a valid ZIP archive") from exc
+    except (BadZipFile, OSError) as exc:
+        raise OTAImportError("file is not a valid/readable ZIP archive") from exc
 
     digest = _digest(path)
     after = path.stat()
-    if after.st_size != before.st_size or after.st_mtime_ns != before.st_mtime_ns:
+    if (
+        after.st_size != before.st_size
+        or after.st_mtime_ns != before.st_mtime_ns
+        or after.st_ino != before.st_ino
+    ):
         raise OTAImportError("OTA package changed while being inspected")
     return OTAPackageReport(
         path=path,
@@ -134,6 +156,7 @@ def inspect_ota_zip(path: Path) -> OTAPackageReport:
         sha256=digest,
         payload_member=payload.filename,
         payload_size=payload.file_size,
+        payload_sha256=payload_sha256,
         metadata_member=metadata_member,
         metadata=metadata,
     )
