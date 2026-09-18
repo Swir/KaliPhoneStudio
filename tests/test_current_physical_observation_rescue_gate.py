@@ -8,6 +8,10 @@ from kaliphonestudio.physical_boot_observation import (
     PhysicalBootObservationEvidence,
     validate_physical_boot_observation_evidence,
 )
+from kaliphonestudio.physical_hardware_survey import (
+    PhysicalHardwareSurveyError,
+    record_physical_hardware_survey,
+)
 from kaliphonestudio.physical_rescue_diagnostics import (
     PhysicalRescueDiagnosticsError,
     record_physical_rescue_diagnostics,
@@ -121,6 +125,24 @@ def test_functional_probe_recording_rejects_legacy_before_diagnostics_or_transcr
         match="requires schema-v2 physical boot observation",
     ):
         record_physical_rescue_functional_probes(
+            None,  # type: ignore[arg-type]
+            legacy,
+            None,  # type: ignore[arg-type]
+            missing,
+        )
+    assert not missing.exists()
+
+
+def test_hardware_survey_recording_rejects_legacy_before_diagnostics_or_transcript_access(
+    tmp_path: Path,
+) -> None:
+    legacy = _legacy_observation()
+    missing = tmp_path / "hardware-survey-must-not-be-read.log"
+    with pytest.raises(
+        PhysicalHardwareSurveyError,
+        match="requires schema-v2 physical boot observation",
+    ):
+        record_physical_hardware_survey(
             None,  # type: ignore[arg-type]
             legacy,
             None,  # type: ignore[arg-type]
