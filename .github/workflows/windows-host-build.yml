@@ -12,6 +12,12 @@ on:
       - "kaliphonestudio/fastboot_baseline.py"
       - "kaliphonestudio/fastboot_tool.py"
       - "kaliphonestudio/fastboot_capture_bundle.py"
+      - "kaliphonestudio/stock_baseline_ingress.py"
+      - "kaliphonestudio/ota_import.py"
+      - "kaliphonestudio/payload.py"
+      - "kaliphonestudio/boot_image.py"
+      - "kaliphonestudio/provenance.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
       - "devices/**/profile.json"
       - "assets/**"
       - "tools/**"
@@ -22,8 +28,10 @@ on:
       - "scripts/build_windows.ps1"
       - "tests/test_windows_packaging_contract.py"
       - "tests/test_physical_fastboot_capture.py"
+      - "tests/test_stock_baseline_ingress.py"
       - "docs/WINDOWS_HOST_BUILD.md"
       - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
+      - "docs/STOCK_BASELINE_INGRESS.md"
       - ".github/workflows/windows-host-build.yml"
   pull_request:
     paths:
@@ -35,6 +43,12 @@ on:
       - "kaliphonestudio/fastboot_baseline.py"
       - "kaliphonestudio/fastboot_tool.py"
       - "kaliphonestudio/fastboot_capture_bundle.py"
+      - "kaliphonestudio/stock_baseline_ingress.py"
+      - "kaliphonestudio/ota_import.py"
+      - "kaliphonestudio/payload.py"
+      - "kaliphonestudio/boot_image.py"
+      - "kaliphonestudio/provenance.py"
+      - "kaliphonestudio/physical_baseline_bundle.py"
       - "devices/**/profile.json"
       - "assets/**"
       - "tools/**"
@@ -45,8 +59,10 @@ on:
       - "scripts/build_windows.ps1"
       - "tests/test_windows_packaging_contract.py"
       - "tests/test_physical_fastboot_capture.py"
+      - "tests/test_stock_baseline_ingress.py"
       - "docs/WINDOWS_HOST_BUILD.md"
       - "docs/PHYSICAL_FASTBOOT_OPERATOR_CAPTURE.md"
+      - "docs/STOCK_BASELINE_INGRESS.md"
       - ".github/workflows/windows-host-build.yml"
   workflow_dispatch:
 
@@ -84,6 +100,7 @@ jobs:
           tests/test_operator_diagnostics.py
           tests/test_app.py
           tests/test_physical_fastboot_capture.py
+          tests/test_stock_baseline_ingress.py
 
       - name: Build GUI and CLI onedir artifacts
         shell: pwsh
@@ -103,12 +120,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen --export-diagnostics failed: $LASTEXITCODE" }
           & $Cli capture-fastboot-baseline --help | Set-Content -Encoding utf8 "dist/capture-help.txt"
           if ($LASTEXITCODE -ne 0) { throw "Frozen physical capture help failed: $LASTEXITCODE" }
+          & $Cli prepare-stock-provenance --help | Set-Content -Encoding utf8 "dist/stock-provenance-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen stock provenance help failed: $LASTEXITCODE" }
+          & $Cli bind-physical-stock-baseline --help | Set-Content -Encoding utf8 "dist/stock-bind-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen stock baseline bind help failed: $LASTEXITCODE" }
 
           # Fail before any Fastboot/tool/device interaction when explicit profile
           # confirmation is absent. Exit code 2 is the expected argparse refusal.
           & $Cli capture-fastboot-baseline --profile-id oneplus/avicii --serial NEVER-CONNECTED --firmware-build TEST --firmware-fingerprint TEST --output-dir "dist/should-not-exist" 2> "dist/capture-refusal.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen capture did not fail closed without confirmation token: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-exist") { throw "Refused frozen capture created an output directory" }
+
+          # Offline stock commands must fail closed on missing evidence and must
+          # never create an output record in that case.
+          & $Cli prepare-stock-provenance --profile-id oneplus/avicii --ota "dist/missing-ota.zip" --payload "dist/missing-payload.bin" --stock-boot "dist/missing-boot.img" --out "dist/should-not-stock.json" 2> "dist/stock-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen stock provenance did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-stock.json") { throw "Refused stock provenance created output" }
+          & $Cli bind-physical-stock-baseline --profile-id oneplus/avicii --baseline-evidence "dist/missing-baseline.json" --capture-evidence "dist/missing-capture.json" --stock-provenance "dist/missing-stock.json" --out "dist/should-not-bind.json" 2> "dist/bind-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen stock bind did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-bind.json") { throw "Refused stock bind created output" }
 
           @'
           import json
@@ -137,6 +167,13 @@ jobs:
           capture_help = Path("dist/capture-help.txt").read_text(encoding="utf-8-sig").lower()
           assert "read-only" in capture_help
           assert "--confirm-token" in capture_help
+          stock_help = Path("dist/stock-provenance-help.txt").read_text(encoding="utf-8-sig").lower()
+          assert "offline" in stock_help
+          assert "--ota" in stock_help
+          assert "--payload" in stock_help
+          bind_help = Path("dist/stock-bind-help.txt").read_text(encoding="utf-8-sig").lower()
+          assert "offline" in bind_help
+          assert "--baseline-evidence" in bind_help
           refusal = Path("dist/capture-refusal.txt").read_text(encoding="utf-8-sig").lower()
           assert "--confirm-token" in refusal
           '@ | python -
