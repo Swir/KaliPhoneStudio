@@ -94,6 +94,8 @@ def test_missing_hardware_review_fails_closed_without_functional_plan(tmp_path: 
             "build-functional-test-plan",
             "--profile-id",
             "oneplus/avicii",
+            "--boot-observation",
+            str(tmp_path / "missing-boot-observation.json"),
             "--hardware-review-evidence",
             str(tmp_path / "missing-review.json"),
             "--out",
