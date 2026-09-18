@@ -76,7 +76,7 @@ def require_current_physical_campaign_observation(
         ("boot identity binding", observation.boot_identity_binding_sha256),
         ("recovery readiness", observation.recovery_readiness_sha256),
         ("recovery stock boot", observation.recovery_stock_boot_sha256),
-        ("fresh Fastboot transcript", observation.fresh_fastboot_transcript_sha256),
+        ("fresh bootloader transcript", observation.fresh_fastboot_transcript_sha256),
     )
     for label, value in required:
         if not isinstance(value, str) or len(value) != 64:
