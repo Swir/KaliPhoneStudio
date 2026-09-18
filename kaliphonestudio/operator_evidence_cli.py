@@ -297,7 +297,7 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             digest,
             profile_id=evidence.profile_id,
             device_serial=evidence.device_serial,
-            survey_recorded=evidence.physical_hardware_survey_recorded,
+            survey_recorded=evidence.hardware_survey_recorded,
             manual_review_required=evidence.manual_review_required,
         )
 
