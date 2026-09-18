@@ -222,7 +222,7 @@ def test_exact_file_binding_round_trip_and_write_once(tmp_path: Path) -> None:
     survey_path = tmp_path / "survey.json"
     write_physical_hardware_survey_evidence(survey, survey_path)
     record_path = tmp_path / "review.json"
-    record_path.write_text(_record(survey).canonical_json(), encoding="utf-8")
+    record_path.write_bytes(_record(survey).canonical_json().encode("utf-8"))
     notes_path = tmp_path / "notes.txt"
     notes_path.write_text("Reviewed as presence-only context. Functional tests remain pending.\n")
     evidence = review_physical_hardware_survey_files(survey_path, record_path, notes_path)

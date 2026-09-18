@@ -1,0 +1,146 @@
+name: operator-evidence-workspace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_cli.py"
+      - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "kaliphonestudio/physical_hardware_survey.py"
+      - "kaliphonestudio/physical_hardware_review.py"
+      - "kaliphonestudio/physical_storage_review.py"
+      - "kaliphonestudio/physical_hardware_test_plan.py"
+      - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "devices/**/profile.json"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_operator_evidence_cli.py"
+      - ".github/workflows/operator-evidence-workspace.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_cli.py"
+      - "kaliphonestudio/physical_rescue_diagnostics.py"
+      - "kaliphonestudio/physical_hardware_survey.py"
+      - "kaliphonestudio/physical_hardware_review.py"
+      - "kaliphonestudio/physical_storage_review.py"
+      - "kaliphonestudio/physical_hardware_test_plan.py"
+      - "kaliphonestudio/physical_hardware_test_plan_review.py"
+      - "devices/**/profile.json"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_operator_evidence_cli.py"
+      - ".github/workflows/operator-evidence-workspace.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-cli-evidence-safety:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install runtime and pinned Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+
+      - name: Verify shared evidence contracts before freezing
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_operator_evidence_cli.py
+          tests/test_physical_rescue_diagnostics.py
+          tests/test_physical_hardware_survey.py
+          tests/test_physical_hardware_review.py
+          tests/test_physical_storage_review.py
+          tests/test_physical_hardware_test_plan.py
+          tests/test_physical_hardware_test_plan_review.py
+
+      - name: Build frozen Windows host CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Smoke-test frozen evidence workspace and fail-closed refusals
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          & $Cli evidence --help | Set-Content -Encoding utf8 "dist/evidence-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen evidence help failed: $LASTEXITCODE" }
+          & $Cli evidence record-rescue-diagnostics --help | Set-Content -Encoding utf8 "dist/evidence-rescue-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen rescue-evidence help failed: $LASTEXITCODE" }
+          & $Cli evidence prepare-storage-review --help | Set-Content -Encoding utf8 "dist/evidence-storage-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen storage-review help failed: $LASTEXITCODE" }
+          & $Cli evidence build-functional-test-plan --help | Set-Content -Encoding utf8 "dist/evidence-functional-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen functional-plan help failed: $LASTEXITCODE" }
+
+          & $Cli evidence record-rescue-diagnostics --profile-id oneplus/avicii --observation-evidence "dist/missing-observation.json" --console-transcript "dist/missing-transcript.txt" --out "dist/should-not-rescue.json" 2> "dist/evidence-rescue-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen rescue evidence did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-rescue.json") { throw "Refused rescue evidence created output" }
+
+          & $Cli evidence prepare-storage-review --discovery-evidence "dist/missing-storage.json" --reviewer reviewer-ci --out "dist/should-not-storage.json" 2> "dist/evidence-storage-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen storage review did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-storage.json") { throw "Refused storage review created output" }
+
+          & $Cli evidence build-functional-test-plan --profile-id oneplus/avicii --hardware-review-evidence "dist/missing-hardware-review.json" --out "dist/should-not-plan.json" 2> "dist/evidence-functional-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen functional plan did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-plan.json") { throw "Refused functional plan created output" }
+
+          @'
+          from pathlib import Path
+
+          def text(name):
+              raw = Path("dist", name).read_text(encoding="utf-8-sig").lower()
+              return " ".join(raw.split())
+
+          root = text("evidence-help.txt")
+          assert "offline exact-file evidence workspace" in root
+          assert "do not connect to a phone" in root
+          assert "do not run adb/fastboot" in root
+          assert "do not select storage targets" in root
+          assert "no hardware/beta credit" in root
+          for command in (
+              "record-rescue-diagnostics",
+              "record-hardware-survey",
+              "prepare-hardware-survey-review",
+              "bind-hardware-survey-review",
+              "prepare-storage-review",
+              "bind-storage-review",
+              "build-functional-test-plan",
+              "prepare-functional-test-plan-review",
+              "bind-functional-test-plan-review",
+          ):
+              assert command in root
+
+          rescue = text("evidence-rescue-help.txt")
+          assert "offline-only" in rescue
+          assert "no device command is executed" in rescue
+          storage = text("evidence-storage-help.txt")
+          assert "cannot select a /dev path or authorize writes" in storage
+          functional = text("evidence-functional-help.txt")
+          assert "checklist, not hardware verification" in functional
+
+          for refusal in (
+              "evidence-rescue-refusal.txt",
+              "evidence-storage-refusal.txt",
+              "evidence-functional-refusal.txt",
+          ):
+              assert "evidence workflow error" in text(refusal)
+          '@ | python -

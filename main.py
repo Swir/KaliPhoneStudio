@@ -4,6 +4,7 @@ import sys
 from typing import Sequence
 
 from kaliphonestudio.app import main as app_main
+from kaliphonestudio.operator_evidence_cli import main as operator_evidence_main
 from kaliphonestudio.physical_candidate_operator import (
     bind_physical_candidate_main,
     execute_temporary_boot_once_main,
@@ -21,6 +22,7 @@ BIND_PHYSICAL_STOCK_BASELINE_COMMAND = "bind-physical-stock-baseline"
 BIND_PHYSICAL_CANDIDATE_COMMAND = "bind-physical-candidate-gate"
 PREPARE_TEMPORARY_BOOT_OFFER_COMMAND = "prepare-temporary-boot-offer"
 EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND = "execute-temporary-boot-once"
+EVIDENCE_WORKSPACE_COMMAND = "evidence"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -37,6 +39,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return prepare_temporary_boot_offer_main(args[1:])
     if args and args[0] == EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND:
         return execute_temporary_boot_once_main(args[1:])
+    if args and args[0] == EVIDENCE_WORKSPACE_COMMAND:
+        return operator_evidence_main(args[1:])
     return app_main(args)
 
 
