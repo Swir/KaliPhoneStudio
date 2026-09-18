@@ -3,13 +3,14 @@
 This module is deliberately narrower than a general Fastboot executor. It accepts
 only an already reviewed temporary-boot offer plus explicit profile confirmation,
 re-verifies the exact local Fastboot executable and candidate boot image, requires
-an exact stock/candidate boot-identity binding, performs one fresh read-only
-serial-bound Fastboot probe, and only then may invoke the exact
-``fastboot -s SERIAL boot IMAGE`` argv from the offer.
+an exact stock/candidate boot-identity binding *and* exact physical recovery-readiness
+material, performs one fresh read-only serial-bound Fastboot probe, and only then
+may invoke the exact ``fastboot -s SERIAL boot IMAGE`` argv from the offer.
 
 A successful Fastboot return code proves only that the host command was accepted.
 It does not prove that the kernel booted, Kali userspace was reached, storage works,
-or that any Beta hardware gate passed. Persistent writes are never exposed here.
+recovery was exercised, or that any Beta hardware gate passed. Persistent writes
+are never exposed here.
 """
 from __future__ import annotations
 
@@ -24,8 +25,14 @@ from .fastboot_baseline import FastbootBaselineEvidence, parse_fastboot_getvar_a
 from .fastboot_capture import FastbootCaptureError, capture_fastboot_getvar_all
 from .fastboot_capture_bundle import FastbootCaptureBundleEvidence
 from .fastboot_tool import FastbootToolEvidence
+from .physical_baseline_bundle import PhysicalBaselineBundleEvidence
 from .physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from .physical_candidate_gate import PhysicalCandidateGateEvidence
+from .physical_recovery_readiness import (
+    PhysicalRecoveryReadinessError,
+    PhysicalRecoveryReadinessEvidence,
+    verify_physical_recovery_readiness,
+)
 from .profiles import DeviceProfile
 from .temporary_boot_offer import (
     PreparedTemporaryBootOffer,
@@ -37,8 +44,12 @@ from .temporary_boot_offer import (
 DEFAULT_PROBE_TIMEOUT_SECONDS = 30
 DEFAULT_BOOT_TIMEOUT_SECONDS = 120
 MAX_BOOT_OUTPUT_BYTES = 2 * 1024 * 1024
-_RUNTIME_PROBE_POLICY = "fresh-fastboot-devices+serial-getvar-all+exact-boot-identity-before-boot-v2"
-_EXECUTION_POLICY = "single-serial-fastboot-boot-exact-identity-bound-no-persistent-write-v2"
+_RUNTIME_PROBE_POLICY = (
+    "fresh-fastboot-devices+serial-getvar-all+exact-boot-identity+recovery-readiness-before-boot-v3"
+)
+_EXECUTION_POLICY = (
+    "single-serial-fastboot-boot-exact-identity+recovery-readiness-bound-no-persistent-write-v3"
+)
 
 
 class TemporaryBootExecutionError(RuntimeError):
@@ -54,12 +65,17 @@ class TemporaryBootRuntimeProbeEvidence:
     authorization_sha256: str
     baseline_evidence_sha256: str
     capture_bundle_sha256: str
+    physical_baseline_bundle_sha256: str
     boot_identity_binding_sha256: str
+    recovery_readiness_sha256: str
+    recovery_stock_boot_sha256: str
     fresh_transcript_sha256: str
     fresh_transcript_size: int
     product: str
     current_slot: str | None
     slot_count: int | None
+    captured_active_slot: str | None
+    expected_inactive_slot: str | None
     unlocked: bool
     secure: bool
     bootloader_version: str | None
@@ -111,6 +127,10 @@ def _timeout(value: int, label: str, maximum: int) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 1 or value > maximum:
         raise TemporaryBootExecutionError(f"{label} must be an integer between 1 and {maximum} seconds")
     return value
+
+
+def _valid_sha(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(ch in "0123456789abcdef" for ch in value)
 
 
 def _validate_authorization(
@@ -167,13 +187,7 @@ def _validate_boot_identity_binding(
     binding: PhysicalBootIdentityBindingEvidence,
     offer: PreparedTemporaryBootOffer,
 ) -> None:
-    """Require the exact-byte stock/candidate binding before any device probe.
-
-    The binding was created offline from the exact stock/candidate files. This
-    check makes that record an execution prerequisite rather than a detached audit
-    artifact, while still keeping all persistent-write and hardware-credit flags
-    false.
-    """
+    """Require the exact-byte stock/candidate binding before any device probe."""
     if not isinstance(binding, PhysicalBootIdentityBindingEvidence) or binding.schema_version != 1:
         raise TemporaryBootExecutionError("physical boot identity binding must be schema-v1 typed evidence")
     if binding.profile_id != profile.profile_id or gate.profile_id != profile.profile_id:
@@ -217,6 +231,79 @@ def _validate_boot_identity_binding(
         or binding.beta_gate_credit is not False
     ):
         raise TemporaryBootExecutionError("boot identity binding contains an invalid execution/write/hardware claim")
+
+
+def _validate_recovery_readiness(
+    profile: DeviceProfile,
+    gate: PhysicalCandidateGateEvidence,
+    binding: PhysicalBootIdentityBindingEvidence,
+    baseline: FastbootBaselineEvidence,
+    physical: PhysicalBaselineBundleEvidence,
+    recovery: PhysicalRecoveryReadinessEvidence,
+    offer: PreparedTemporaryBootOffer,
+    *,
+    stock_boot: Path,
+) -> None:
+    """Recompute the exact recovery-readiness record before the first Fastboot call."""
+    if not isinstance(recovery, PhysicalRecoveryReadinessEvidence) or recovery.schema_version != 1:
+        raise TemporaryBootExecutionError("physical recovery readiness must be schema-v1 typed evidence")
+    try:
+        verify_physical_recovery_readiness(
+            recovery,
+            profile,
+            baseline,
+            physical,
+            binding,
+            stock_boot=stock_boot,
+        )
+    except PhysicalRecoveryReadinessError as exc:
+        raise TemporaryBootExecutionError(f"physical recovery readiness verification failed: {exc}") from exc
+
+    if physical.evidence_sha256() != gate.physical_baseline_bundle_sha256:
+        raise TemporaryBootExecutionError("recovery readiness physical baseline is detached from the candidate gate")
+    if recovery.physical_baseline_bundle_sha256 != physical.evidence_sha256():
+        raise TemporaryBootExecutionError("recovery readiness is detached from the exact physical baseline")
+    if recovery.physical_boot_identity_binding_sha256 != binding.evidence_sha256():
+        raise TemporaryBootExecutionError("recovery readiness is detached from the exact boot identity binding")
+    if recovery.physical_candidate_gate_sha256 != gate.evidence_sha256():
+        raise TemporaryBootExecutionError("recovery readiness is detached from the exact physical candidate gate")
+    if recovery.fastboot_baseline_evidence_sha256 != baseline.evidence_sha256():
+        raise TemporaryBootExecutionError("recovery readiness is detached from the exact Fastboot baseline")
+    if recovery.boot_plan_sha256 != gate.boot_plan_sha256:
+        raise TemporaryBootExecutionError("recovery readiness boot plan differs from the candidate gate")
+    if recovery.stock_boot_sha256 != gate.stock_boot_sha256:
+        raise TemporaryBootExecutionError("recovery readiness stock boot differs from the candidate gate")
+    if (
+        recovery.candidate_boot_sha256 != gate.boot_image_sha256
+        or recovery.candidate_boot_size != gate.boot_image_size
+        or recovery.candidate_boot_sha256 != offer.evidence.boot_image_sha256
+        or recovery.candidate_boot_size != offer.evidence.boot_image_size
+    ):
+        raise TemporaryBootExecutionError("recovery readiness candidate boot differs from the exact offer/gate")
+    if recovery.profile_id != profile.profile_id or recovery.device_serial != offer.evidence.device_serial:
+        raise TemporaryBootExecutionError("recovery readiness device identity mismatch")
+    if (
+        recovery.firmware_build != baseline.firmware_build
+        or recovery.firmware_fingerprint != baseline.firmware_fingerprint
+    ):
+        raise TemporaryBootExecutionError("recovery readiness firmware identity mismatch")
+    if (
+        recovery.stock_boot_material_present is not True
+        or recovery.exact_stock_identity_bound is not True
+        or recovery.slot_context_bound is not True
+        or recovery.ready_for_temporary_boot_safety_review is not True
+    ):
+        raise TemporaryBootExecutionError("recovery readiness is incomplete for temporary-boot safety review")
+    if (
+        recovery.slot_switch_authorized is not False
+        or recovery.inactive_slot_write_authorized is not False
+        or recovery.persistent_write_authorized is not False
+        or recovery.rollback_exercised is not False
+        or recovery.recovery_verified is not False
+        or recovery.hardware_verified is not False
+        or recovery.beta_gate_credit is not False
+    ):
+        raise TemporaryBootExecutionError("recovery readiness contains an invalid authorization/recovery/hardware claim")
 
 
 def _critical_runtime_values(
@@ -282,6 +369,33 @@ def _critical_runtime_values(
     return dict(sorted(critical.items()))
 
 
+def _validate_runtime_recovery_slot_context(
+    profile: DeviceProfile,
+    recovery: PhysicalRecoveryReadinessEvidence,
+    current_slot: str | None,
+    slot_count: int | None,
+) -> None:
+    ab_device = profile.data.get("ab_device")
+    if ab_device is True:
+        if recovery.ab_device is not True:
+            raise TemporaryBootExecutionError("recovery readiness A/B contract mismatch")
+        if current_slot != recovery.captured_active_slot:
+            raise TemporaryBootExecutionError("fresh active slot drifted from recovery readiness evidence")
+        if slot_count != recovery.slot_count:
+            raise TemporaryBootExecutionError("fresh slot count drifted from recovery readiness evidence")
+        if recovery.captured_active_slot not in {"a", "b"} or recovery.expected_inactive_slot not in {"a", "b"}:
+            raise TemporaryBootExecutionError("recovery readiness A/B slot context is incomplete")
+        if recovery.captured_active_slot == recovery.expected_inactive_slot:
+            raise TemporaryBootExecutionError("recovery readiness active/inactive slots are not distinct")
+    elif ab_device is False:
+        if recovery.ab_device is not False:
+            raise TemporaryBootExecutionError("single-slot recovery readiness contract mismatch")
+        if recovery.captured_active_slot is not None or recovery.expected_inactive_slot is not None or recovery.slot_count is not None:
+            raise TemporaryBootExecutionError("single-slot recovery readiness invents A/B slot context")
+    else:
+        raise TemporaryBootExecutionError("profile ab_device contract must be boolean")
+
+
 def probe_temporary_boot_runtime(
     profile: DeviceProfile,
     offer: PreparedTemporaryBootOffer,
@@ -291,11 +405,14 @@ def probe_temporary_boot_runtime(
     capture: FastbootCaptureBundleEvidence,
     tool: FastbootToolEvidence,
     baseline: FastbootBaselineEvidence,
+    physical: PhysicalBaselineBundleEvidence,
+    recovery: PhysicalRecoveryReadinessEvidence,
     *,
+    stock_boot: Path,
     timeout_seconds: int = DEFAULT_PROBE_TIMEOUT_SECONDS,
     runner: Callable[..., Any] = subprocess.run,
 ) -> TemporaryBootRuntimeProbeEvidence:
-    """Freshly revalidate exact files, binding and read-only Fastboot identity before execution."""
+    """Revalidate exact files/recovery state, then perform one read-only Fastboot probe."""
     try:
         verify_temporary_boot_offer(offer, profile, gate, capture, tool)
     except TemporaryBootOfferError as exc:
@@ -303,6 +420,16 @@ def probe_temporary_boot_runtime(
     _validate_boot_identity_binding(profile, gate, binding, offer)
     _validate_authorization(offer, authorization)
     _validate_baseline_binding(profile, baseline, capture)
+    _validate_recovery_readiness(
+        profile,
+        gate,
+        binding,
+        baseline,
+        physical,
+        recovery,
+        offer,
+        stock_boot=stock_boot,
+    )
     timeout = _timeout(timeout_seconds, "temporary-boot probe timeout", 300)
     try:
         transcript = capture_fastboot_getvar_all(
@@ -323,25 +450,35 @@ def probe_temporary_boot_runtime(
         return variables.get(key) if isinstance(key, str) else None
 
     slot_count_value = _value("slot_count_var")
-    slot_count = int(slot_count_value, 0) if slot_count_value is not None else None
+    try:
+        slot_count = int(slot_count_value, 0) if slot_count_value is not None else None
+    except ValueError as exc:
+        raise TemporaryBootExecutionError("fresh Fastboot slot-count is not an integer") from exc
+    current_slot = _value("current_slot_var")
+    _validate_runtime_recovery_slot_context(profile, recovery, current_slot, slot_count)
     unlocked_value = _value("unlocked_var")
     secure_value = _value("secure_var")
     unlocked = unlocked_value is not None and unlocked_value.strip().lower() == "yes"
     secure = secure_value is not None and secure_value.strip().lower() == "yes"
     return TemporaryBootRuntimeProbeEvidence(
-        schema_version=2,
+        schema_version=3,
         profile_id=profile.profile_id,
         device_serial=offer.evidence.device_serial,
         offer_sha256=offer.evidence.evidence_sha256(),
         authorization_sha256=authorization.evidence_sha256(),
         baseline_evidence_sha256=baseline.evidence_sha256(),
         capture_bundle_sha256=capture.evidence_sha256(),
+        physical_baseline_bundle_sha256=physical.evidence_sha256(),
         boot_identity_binding_sha256=binding.evidence_sha256(),
+        recovery_readiness_sha256=recovery.evidence_sha256(),
+        recovery_stock_boot_sha256=recovery.stock_boot_sha256,
         fresh_transcript_sha256=sha256(transcript).hexdigest(),
         fresh_transcript_size=len(transcript),
         product=_value("identity_var") or "",
-        current_slot=_value("current_slot_var"),
+        current_slot=current_slot,
         slot_count=slot_count,
+        captured_active_slot=recovery.captured_active_slot,
+        expected_inactive_slot=recovery.expected_inactive_slot,
         unlocked=unlocked,
         secure=secure,
         bootloader_version=_value("bootloader_version_var"),
@@ -364,17 +501,22 @@ def execute_temporary_boot_once(
     capture: FastbootCaptureBundleEvidence,
     tool: FastbootToolEvidence,
     baseline: FastbootBaselineEvidence,
+    physical: PhysicalBaselineBundleEvidence,
+    recovery: PhysicalRecoveryReadinessEvidence,
     *,
+    stock_boot: Path,
     probe_timeout_seconds: int = DEFAULT_PROBE_TIMEOUT_SECONDS,
     boot_timeout_seconds: int = DEFAULT_BOOT_TIMEOUT_SECONDS,
     runner: Callable[..., Any] = subprocess.run,
 ) -> tuple[TemporaryBootRuntimeProbeEvidence, TemporaryBootExecutionEvidence]:
-    """Invoke exactly one serial-bound temporary boot after a fresh read-only probe.
+    """Invoke exactly one serial-bound temporary boot after recovery/read-only checks.
 
-    The exact-byte boot identity binding is mandatory and validated before any
-    Fastboot probe. This function never exposes ``flash``, ``erase``,
-    ``set_active``, ``reboot`` or any other state-changing Fastboot verb. It does
-    not claim hardware success.
+    The exact-byte boot identity binding and recomputed physical recovery-readiness
+    record are mandatory and validated before any Fastboot probe. A/B slot context
+    is rechecked against the fresh probe before the one allowed ``boot`` verb.
+    This function never exposes ``flash``, ``erase``, ``set_active``, ``reboot`` or
+    any other persistent state-changing Fastboot verb. It does not claim hardware
+    or rollback success.
     """
     probe = probe_temporary_boot_runtime(
         profile,
@@ -385,6 +527,9 @@ def execute_temporary_boot_once(
         capture,
         tool,
         baseline,
+        physical,
+        recovery,
+        stock_boot=stock_boot,
         timeout_seconds=probe_timeout_seconds,
         runner=runner,
     )
@@ -464,7 +609,7 @@ def write_temporary_boot_runtime_probe(
     evidence: TemporaryBootRuntimeProbeEvidence,
     destination: Path,
 ) -> str:
-    if not isinstance(evidence, TemporaryBootRuntimeProbeEvidence) or evidence.schema_version != 2:
+    if not isinstance(evidence, TemporaryBootRuntimeProbeEvidence) or evidence.schema_version != 3:
         raise TemporaryBootExecutionError("invalid temporary-boot runtime probe evidence")
     if (
         evidence.probe_policy != _RUNTIME_PROBE_POLICY
@@ -474,10 +619,14 @@ def write_temporary_boot_runtime_probe(
         or evidence.beta_gate_credit is not False
     ):
         raise TemporaryBootExecutionError("runtime probe evidence contains an invalid safety claim")
-    if len(evidence.boot_identity_binding_sha256) != 64 or any(
-        ch not in "0123456789abcdef" for ch in evidence.boot_identity_binding_sha256
+    for value, label in (
+        (evidence.physical_baseline_bundle_sha256, "physical baseline"),
+        (evidence.boot_identity_binding_sha256, "boot identity binding"),
+        (evidence.recovery_readiness_sha256, "recovery readiness"),
+        (evidence.recovery_stock_boot_sha256, "recovery stock boot"),
     ):
-        raise TemporaryBootExecutionError("runtime probe boot identity binding digest is invalid")
+        if not _valid_sha(value):
+            raise TemporaryBootExecutionError(f"runtime probe {label} digest is invalid")
     return _write_once(evidence.canonical_json(), destination, "temporary-boot runtime probe evidence")
 
 
