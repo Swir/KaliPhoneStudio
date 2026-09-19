@@ -13,7 +13,7 @@ It does **not** contact a phone, run ADB/Fastboot, discover or bind a raw block-
 
 The preflight revalidates the complete safety posture of the supplied plan before hashing the artifact. A plan that already carries execution/write/hardware/Beta authorization is rejected.
 
-The rootfs artifact must be a regular non-symlink file. Its size is checked before hashing, SHA-256 is streamed, and file metadata is checked again afterwards so a file changed during hashing fails closed.
+The rootfs artifact must be a regular non-symlink file. It is opened read-only through the shared descriptor-bound local-file verifier, using `O_NOFOLLOW` where available. The initial path identity must match the opened descriptor; hashing reads only that descriptor; descriptor metadata is checked again after hashing; and a final path lookup must still identify the same regular file. Symlink use, path replacement, truncation, growth, size drift or in-place metadata drift fails closed. The exact plan size is enforced before any successful digest is accepted.
 
 ## CLI
 
@@ -77,4 +77,4 @@ For the first `oneplus/avicii` profile, those live requirements remain blocked u
 
 ## CI contract
 
-Focused Python 3.11/3.14 CI verifies canonical/create-only evidence, exact local artifact matching, symlink rejection, plan-safety refusal and unified CLI routing. The frozen Windows CLI gate also verifies that the preflight command is present and that missing inputs fail closed without creating output.
+Focused Python 3.11/3.14 CI verifies canonical/create-only evidence, descriptor-bound exact local artifact matching, symlink/path-replacement refusal, plan-safety refusal and unified CLI routing. The shared local-file verifier is separately exercised on Linux and Windows by the recovery-readiness matrix; the frozen Windows CLI gate also verifies that the preflight command is present and that missing inputs fail closed without creating output.

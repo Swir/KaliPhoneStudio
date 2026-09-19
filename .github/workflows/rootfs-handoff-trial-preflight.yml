@@ -4,20 +4,24 @@ on:
   push:
     branches: [main]
     paths:
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/rootfs_handoff_trial_plan.py"
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
       - "kaliphonestudio/operator_trial_evidence_cli.py"
       - "kaliphonestudio/operator_evidence_workspace.py"
+      - "tests/test_stable_file.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
       - "tests/test_operator_trial_evidence_workspace.py"
       - ".github/workflows/rootfs-handoff-trial-preflight.yml"
   pull_request:
     paths:
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/rootfs_handoff_trial_plan.py"
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
       - "kaliphonestudio/operator_trial_evidence_cli.py"
       - "kaliphonestudio/operator_evidence_workspace.py"
+      - "tests/test_stable_file.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
       - "tests/test_operator_trial_evidence_workspace.py"
@@ -49,6 +53,7 @@ jobs:
       - name: Compile exact preflight boundary
         run: |
           python -m py_compile \
+            kaliphonestudio/stable_file.py \
             kaliphonestudio/rootfs_handoff_trial_plan.py \
             kaliphonestudio/rootfs_handoff_trial_preflight.py \
             kaliphonestudio/operator_trial_evidence_cli.py \
@@ -56,6 +61,7 @@ jobs:
       - name: Run fail-closed preflight and routing tests
         run: >-
           python -m pytest -q
+          tests/test_stable_file.py
           tests/test_rootfs_handoff_trial_plan.py
           tests/test_rootfs_handoff_trial_preflight.py
           tests/test_operator_trial_evidence_workspace.py

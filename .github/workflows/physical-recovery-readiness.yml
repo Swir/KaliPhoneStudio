@@ -5,15 +5,19 @@ on:
     branches: [main]
     paths:
       - "kaliphonestudio/physical_recovery_readiness.py"
+      - "kaliphonestudio/stable_file.py"
       - "scripts/build_physical_recovery_readiness.py"
       - "tests/test_physical_recovery_readiness.py"
+      - "tests/test_stable_file.py"
       - "docs/PHYSICAL_RECOVERY_READINESS.md"
       - ".github/workflows/physical-recovery-readiness.yml"
   pull_request:
     paths:
       - "kaliphonestudio/physical_recovery_readiness.py"
+      - "kaliphonestudio/stable_file.py"
       - "scripts/build_physical_recovery_readiness.py"
       - "tests/test_physical_recovery_readiness.py"
+      - "tests/test_stable_file.py"
       - "docs/PHYSICAL_RECOVERY_READINESS.md"
       - ".github/workflows/physical-recovery-readiness.yml"
   workflow_dispatch:
@@ -23,29 +27,40 @@ permissions:
 
 jobs:
   exact-stock-and-slot-recovery-readiness:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
       - run: python -m pip install pytest jsonschema
       - name: Compile recovery-readiness path
         run: >-
           python -m compileall -q
+          kaliphonestudio/stable_file.py
           kaliphonestudio/physical_recovery_readiness.py
           scripts/build_physical_recovery_readiness.py
+          tests/test_stable_file.py
           tests/test_physical_recovery_readiness.py
-      - name: Run recovery-readiness safety tests
+      - name: Run exact local-file and recovery-readiness safety tests
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m pytest -q tests/test_physical_recovery_readiness.py
+        run: >-
+          python -m pytest -q
+          tests/test_stable_file.py
+          tests/test_physical_recovery_readiness.py
       - name: Prove recovery-readiness layer has no device-command executor
         shell: python
         run: |
           from pathlib import Path
           for path in (
+              Path("kaliphonestudio/stable_file.py"),
               Path("kaliphonestudio/physical_recovery_readiness.py"),
               Path("scripts/build_physical_recovery_readiness.py"),
           ):

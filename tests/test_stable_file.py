@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+from hashlib import sha256
+import os
+from pathlib import Path
+
+import pytest
+
+import kaliphonestudio.stable_file as stable_file
+from kaliphonestudio.stable_file import StableFileError, hash_stable_regular_file
+
+
+def test_hash_stable_regular_file_binds_exact_bytes(tmp_path: Path) -> None:
+    artifact = tmp_path / "stock-boot.img"
+    payload = b"exact local stock boot material\n" * 8
+    artifact.write_bytes(payload)
+
+    identity = hash_stable_regular_file(
+        artifact,
+        max_bytes=1024 * 1024,
+        expected_size=len(payload),
+        label="stock boot recovery material",
+    )
+
+    assert identity.path == artifact
+    assert identity.size == len(payload)
+    assert identity.sha256 == sha256(payload).hexdigest()
+    assert isinstance(identity.device, int)
+    assert isinstance(identity.inode, int)
+    assert identity.mtime_ns > 0
+    assert identity.ctime_ns > 0
+
+
+def test_hash_stable_regular_file_rejects_expected_size_drift(tmp_path: Path) -> None:
+    artifact = tmp_path / "rootfs.img"
+    artifact.write_bytes(b"rootfs")
+
+    with pytest.raises(StableFileError, match="size differs from the expected exact size"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=1024,
+            expected_size=artifact.stat().st_size + 1,
+            label="rootfs artifact",
+        )
+
+
+def test_hash_stable_regular_file_rejects_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "real.img"
+    target.write_bytes(b"real")
+    link = tmp_path / "link.img"
+    try:
+        link.symlink_to(target.name)
+    except (OSError, NotImplementedError):
+        pytest.skip("host cannot create test symlink")
+
+    with pytest.raises(StableFileError, match="regular non-symlink"):
+        hash_stable_regular_file(link, max_bytes=1024, label="artifact")
+
+
+def test_hash_stable_regular_file_rejects_empty_file(tmp_path: Path) -> None:
+    artifact = tmp_path / "empty.img"
+    artifact.write_bytes(b"")
+
+    with pytest.raises(StableFileError, match="size is outside the bounded safety limit"):
+        hash_stable_regular_file(artifact, max_bytes=1024, label="artifact")
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows deliberately denies rename/delete while the secured read handle is open",
+)
+def test_hash_stable_regular_file_rejects_path_swap_during_hash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    displaced = tmp_path / "artifact.original"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    swapped = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal swapped
+        chunk = original_read(fd, count)
+        if chunk and not swapped:
+            artifact.replace(displaced)
+            artifact.write_bytes(b"B" * len(payload))
+            swapped = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(
+        StableFileError,
+        match="(?:changed while being hashed|path was replaced or changed while being hashed)",
+    ):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="stock boot recovery material",
+        )
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="restored-mtime adversarial write is a POSIX ctime contract test",
+)
+def test_hash_stable_regular_file_rejects_same_size_mutation_with_restored_mtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+    original_stat = artifact.stat()
+
+    original_read = os.read
+    mutated = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal mutated
+        chunk = original_read(fd, count)
+        if chunk and not mutated:
+            writer = os.open(artifact, os.O_WRONLY)
+            try:
+                if hasattr(os, "pwrite"):
+                    os.pwrite(writer, b"B", 0)
+                else:
+                    os.lseek(writer, 0, os.SEEK_SET)
+                    os.write(writer, b"B")
+            finally:
+                os.close(writer)
+            os.utime(
+                artifact,
+                ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+            )
+            mutated = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(StableFileError, match="changed while being hashed"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="rootfs artifact",
+        )
+
+
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="Win32 share-mode writer exclusion is Windows-specific",
+)
+def test_windows_hash_handle_denies_concurrent_writer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    writer_blocked = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal writer_blocked
+        chunk = original_read(fd, count)
+        if chunk and not writer_blocked:
+            with pytest.raises(OSError):
+                writer = os.open(artifact, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+                os.close(writer)
+            writer_blocked = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+    identity = hash_stable_regular_file(
+        artifact,
+        max_bytes=4 * 1024 * 1024,
+        expected_size=len(payload),
+        label="artifact",
+    )
+
+    assert writer_blocked is True
+    assert identity.sha256 == sha256(payload).hexdigest()
+
+
+def test_hash_stable_regular_file_rejects_short_descriptor_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    calls = 0
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return original_read(fd, count)
+        return b""
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(StableFileError, match="truncated while being hashed"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="artifact",
+        )
+
+
+def test_hash_stable_regular_file_rejects_overlong_descriptor_stream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    injected = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal injected
+        chunk = original_read(fd, count)
+        if not chunk and not injected:
+            injected = True
+            return b"B"
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(StableFileError, match="grew while being hashed"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="artifact",
+        )
+
+
+def test_hash_stable_regular_file_rejects_non_positive_or_oversized_contract(tmp_path: Path) -> None:
+    artifact = tmp_path / "artifact.bin"
+    artifact.write_bytes(b"x")
+
+    with pytest.raises(StableFileError, match="max_bytes must be a positive integer"):
+        hash_stable_regular_file(artifact, max_bytes=0)
+
+    with pytest.raises(StableFileError, match="expected size is outside the bounded safety limit"):
+        hash_stable_regular_file(artifact, max_bytes=1, expected_size=2)
+
+    with pytest.raises(StableFileError, match="expected size is outside the bounded safety limit"):
+        hash_stable_regular_file(artifact, max_bytes=1, expected_size=True)
