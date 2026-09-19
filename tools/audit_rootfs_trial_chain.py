@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Deterministically audit the offline rootfs trial-chain safety contract.
 
-This checker intentionally parses source instead of importing execution modules.  It
+This checker intentionally parses source instead of importing execution modules. It
 verifies that the three host-side gates between fresh target revalidation and any
-future interactive executor still advertise the reviewed policies and still carry
-all required fail-closed flags.  It performs no device I/O and grants no hardware
-or Beta credit.
+future interactive executor still advertise the reviewed policies, carry all
+required fail-closed flags, and remain free of process-execution primitives. It
+performs no device I/O and grants no hardware or Beta credit.
 """
 from __future__ import annotations
 
@@ -138,8 +138,12 @@ CONTRACTS: tuple[dict[str, Any], ...] = (
 )
 
 
+def _parse(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
 def _literal_assignments(path: Path) -> dict[str, Any]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = _parse(path)
     values: dict[str, Any] = {}
     for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -152,6 +156,29 @@ def _literal_assignments(path: Path) -> dict[str, Any]:
         except (ValueError, TypeError):
             continue
     return values
+
+
+def _execution_primitives(path: Path) -> list[str]:
+    """Return forbidden process-execution imports/calls in an offline boundary."""
+    tree = _parse(path)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".", 1)[0] == "subprocess":
+                    found.add(f"import:{alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module.split(".", 1)[0] == "subprocess":
+                found.add(f"import-from:{module}")
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            owner = node.func.value
+            if isinstance(owner, ast.Name):
+                if owner.id == "os" and node.func.attr in {"system", "popen"}:
+                    found.add(f"call:os.{node.func.attr}")
+                if owner.id == "subprocess":
+                    found.add(f"call:subprocess.{node.func.attr}")
+    return sorted(found)
 
 
 def audit(root: Path = ROOT) -> dict[str, Any]:
@@ -184,6 +211,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         required_true = set(assignments.get(contract["required_attr"], ()))
         missing_forbidden = sorted(set(contract["required_forbidden"]) - forbidden)
         missing_required = sorted(set(contract["required_true"]) - required_true)
+        execution_primitives = _execution_primitives(source)
         doc_text = doc.read_text(encoding="utf-8")
         missing_doc_markers = [marker for marker in contract["doc_markers"] if marker not in doc_text]
 
@@ -194,6 +222,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
                 "required_flag_count": len(required_true),
                 "missing_forbidden_flags": missing_forbidden,
                 "missing_required_flags": missing_required,
+                "execution_primitives": execution_primitives,
                 "missing_doc_markers": missing_doc_markers,
             }
         )
@@ -206,6 +235,10 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
             failures.append(f"{contract['name']}: missing fail-closed flags: {', '.join(missing_forbidden)}")
         if missing_required:
             failures.append(f"{contract['name']}: missing recheck/boundary flags: {', '.join(missing_required)}")
+        if execution_primitives:
+            failures.append(
+                f"{contract['name']}: offline boundary contains execution primitives: {', '.join(execution_primitives)}"
+            )
         if missing_doc_markers:
             failures.append(f"{contract['name']}: documentation safety markers drifted")
 
@@ -214,6 +247,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
                 actual_policy != contract["policy"],
                 missing_forbidden,
                 missing_required,
+                execution_primitives,
                 missing_doc_markers,
             )
         ) else "FAIL"
