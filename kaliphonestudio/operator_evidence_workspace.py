@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Sequence
+from typing import Callable, Sequence
 
 from .operator_evidence_cli import EVIDENCE_COMMANDS, main as core_evidence_main
 from .operator_host_evidence_cli import HOST_EVIDENCE_COMMANDS, main as host_evidence_main
@@ -11,15 +11,34 @@ from .operator_strategy_evidence_cli import STRATEGY_EVIDENCE_COMMANDS, main as 
 from .operator_trial_evidence_cli import TRIAL_EVIDENCE_COMMANDS, main as trial_evidence_main
 
 
-ALL_EVIDENCE_COMMANDS = (
-    EVIDENCE_COMMANDS
-    + HOST_EVIDENCE_COMMANDS
-    + LATE_EVIDENCE_COMMANDS
-    + STRATEGY_EVIDENCE_COMMANDS
-    + TRIAL_EVIDENCE_COMMANDS
+EvidenceHandler = Callable[[Sequence[str] | None], int]
+_COMMAND_GROUPS: tuple[tuple[tuple[str, ...], EvidenceHandler], ...] = (
+    (EVIDENCE_COMMANDS, core_evidence_main),
+    (HOST_EVIDENCE_COMMANDS, host_evidence_main),
+    (LATE_EVIDENCE_COMMANDS, release_evidence_main),
+    (STRATEGY_EVIDENCE_COMMANDS, strategy_evidence_main),
+    (TRIAL_EVIDENCE_COMMANDS, trial_evidence_main),
 )
-
 _GLOBAL_OPTIONS_BEFORE_COMMAND = frozenset({"--json"})
+
+
+def _build_command_handlers(
+    groups: Sequence[tuple[Sequence[str], EvidenceHandler]] = _COMMAND_GROUPS,
+) -> dict[str, EvidenceHandler]:
+    """Build one unambiguous command registry and reject ownership collisions."""
+    handlers: dict[str, EvidenceHandler] = {}
+    for commands, handler in groups:
+        for command in commands:
+            if not isinstance(command, str) or not command:
+                raise RuntimeError("evidence command names must be non-empty strings")
+            if command in handlers:
+                raise RuntimeError(f"duplicate evidence command ownership: {command}")
+            handlers[command] = handler
+    return handlers
+
+
+COMMAND_HANDLERS = _build_command_handlers()
+ALL_EVIDENCE_COMMANDS = tuple(COMMAND_HANDLERS)
 
 
 def _print_help() -> None:
@@ -50,7 +69,7 @@ def _select_command(args: Sequence[str]) -> str | None:
             continue
         if token.startswith("-"):
             return None
-        return token if token in ALL_EVIDENCE_COMMANDS else None
+        return token if token in COMMAND_HANDLERS else None
     return None
 
 
@@ -60,15 +79,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_help()
         return 0
     command = _select_command(args)
-    if command in HOST_EVIDENCE_COMMANDS:
-        return host_evidence_main(args)
-    if command in TRIAL_EVIDENCE_COMMANDS:
-        return trial_evidence_main(args)
-    if command in STRATEGY_EVIDENCE_COMMANDS:
-        return strategy_evidence_main(args)
-    if command in LATE_EVIDENCE_COMMANDS:
-        return release_evidence_main(args)
-    return core_evidence_main(args)
+    handler = COMMAND_HANDLERS.get(command, core_evidence_main)
+    return handler(args)
 
 
 if __name__ == "__main__":
