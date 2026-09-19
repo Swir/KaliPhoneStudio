@@ -109,7 +109,7 @@ def test_unified_workspace_rejects_duplicate_command_ownership():
         return 0
 
     with pytest.raises(RuntimeError, match="duplicate evidence command ownership: duplicate"):
-        _build_command_handlers((("duplicate",), first), (("duplicate",), second))
+        _build_command_handlers(((("duplicate",), first), (("duplicate",), second)))
 
 
 def test_unified_workspace_command_selection_does_not_route_option_values():
