@@ -6,15 +6,25 @@ from pathlib import Path
 
 import pytest
 
+from kaliphonestudio.functional_hardware_contract import (
+    FUNCTIONAL_HARDWARE_POLICY,
+    FUNCTIONAL_HARDWARE_SCHEMA_VERSION,
+    _ALLOWED_CONTEXT_SIGNALS,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_PATH = ROOT / "devices" / "oneplus" / "avicii" / "profile.json"
 SCHEMA_PATH = ROOT / "devices" / "profile.schema.json"
 
 
+def _schema() -> dict:
+    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
 def _validator():
     jsonschema = pytest.importorskip("jsonschema")
-    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    schema = _schema()
     jsonschema.Draft202012Validator.check_schema(schema)
     return jsonschema.Draft202012Validator(schema)
 
@@ -30,6 +40,15 @@ def _messages(payload: dict) -> str:
 
 def test_checked_in_avicii_profile_passes_formal_nested_schema():
     assert list(_validator().iter_errors(_profile())) == []
+
+
+def test_functional_hardware_schema_constants_match_runtime_policy():
+    schema = _schema()
+    functional = schema["$defs"]["functionalHardware"]
+    assert functional["properties"]["schema_version"]["const"] == FUNCTIONAL_HARDWARE_SCHEMA_VERSION
+    assert functional["properties"]["policy"]["const"] == FUNCTIONAL_HARDWARE_POLICY
+    signal_enum = schema["$defs"]["functionalHardwareTest"]["properties"]["required_context_signals"]["items"]["enum"]
+    assert set(signal_enum) == set(_ALLOWED_CONTEXT_SIGNALS)
 
 
 def test_unknown_top_level_profile_field_fails_closed():
