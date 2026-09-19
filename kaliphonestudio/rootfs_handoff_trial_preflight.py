@@ -24,6 +24,7 @@ from .rootfs_handoff_trial_plan import (
     load_rootfs_handoff_trial_plan,
     validate_rootfs_handoff_trial_plan,
 )
+from .stable_file import StableFileError, hash_stable_regular_file
 
 _POLICY = "rootfs-handoff-local-rootfs-preflight-v1"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -205,32 +206,16 @@ def _read_exact(path: Path) -> bytes:
 
 
 def _stable_rootfs_identity(path: Path, expected_size: int) -> tuple[str, int]:
-    candidate = Path(path)
-    if candidate.is_symlink() or not candidate.is_file():
-        raise RootfsHandoffTrialPreflightError("rootfs artifact must be a regular non-symlink file")
     try:
-        before = candidate.stat()
-    except OSError as exc:
-        raise RootfsHandoffTrialPreflightError(f"cannot stat rootfs artifact: {exc}") from exc
-    if expected_size <= 0 or expected_size > _MAX_ROOTFS_ARTIFACT_BYTES:
-        raise RootfsHandoffTrialPreflightError("planned rootfs size is outside the bounded preflight limit")
-    if before.st_size != expected_size:
-        raise RootfsHandoffTrialPreflightError("local rootfs artifact size differs from trial plan")
-    digest = sha256()
-    try:
-        with candidate.open("rb") as handle:
-            while chunk := handle.read(1024 * 1024):
-                digest.update(chunk)
-        after = candidate.stat()
-    except OSError as exc:
-        raise RootfsHandoffTrialPreflightError(f"cannot hash rootfs artifact: {exc}") from exc
-    if (
-        before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
-    ):
-        raise RootfsHandoffTrialPreflightError("rootfs artifact changed while being hashed")
-    return digest.hexdigest(), after.st_size
+        identity = hash_stable_regular_file(
+            Path(path),
+            max_bytes=_MAX_ROOTFS_ARTIFACT_BYTES,
+            expected_size=expected_size,
+            label="rootfs artifact",
+        )
+    except StableFileError as exc:
+        raise RootfsHandoffTrialPreflightError(str(exc)) from exc
+    return identity.sha256, identity.size
 
 
 def _validate_plan_for_preflight(plan: RootfsHandoffTrialPlan) -> None:
