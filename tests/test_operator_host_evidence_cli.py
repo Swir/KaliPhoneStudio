@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 
 from kaliphonestudio.candidate_authority_bundle import FirstBootAuthorityBundleEvidence
-from kaliphonestudio.operator_evidence_workspace import ALL_EVIDENCE_COMMANDS, main as workspace_main
+from kaliphonestudio.operator_evidence_workspace import (
+    ALL_EVIDENCE_COMMANDS,
+    _select_command,
+    main as workspace_main,
+)
 from kaliphonestudio.operator_host_evidence_cli import HOST_EVIDENCE_COMMANDS, main as host_main
 from kaliphonestudio.phosh_candidate_binding import load_phosh_candidate_binding
 from kaliphonestudio.phosh_rootfs_binding import (
@@ -90,6 +94,14 @@ def test_unified_workspace_lists_phosh_candidate_command(capsys):
     assert "bind-phosh-candidate" in out
     assert "do not connect to a phone" in out
     assert "no hardware/beta credit" in out
+
+
+def test_unified_workspace_command_selection_does_not_route_option_values():
+    assert _select_command(["bind-phosh-candidate"]) == "bind-phosh-candidate"
+    assert _select_command(["--json", "bind-phosh-candidate"]) == "bind-phosh-candidate"
+    assert _select_command(["--out", "bind-phosh-candidate"]) is None
+    assert _select_command(["--json", "--out", "bind-phosh-candidate"]) is None
+    assert _select_command(["not-a-command", "bind-phosh-candidate"]) is None
 
 
 def test_unified_workspace_binds_exact_phosh_candidate_without_promotion(tmp_path: Path, capsys):
