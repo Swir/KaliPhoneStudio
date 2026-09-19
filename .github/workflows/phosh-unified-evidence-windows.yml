@@ -86,6 +86,13 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen Phosh candidate binder did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-phosh-candidate.json") { throw "Refused Phosh candidate binder created output" }
 
+          & $Cli evidence --json bind-phosh-candidate `
+            --candidate-authority-bundle "dist/missing-candidate-bundle.json" `
+            --phosh-rootfs-binding "dist/missing-phosh-rootfs-binding.json" `
+            --out "dist/should-not-phosh-candidate-json.json" 2> "dist/phosh-candidate-json-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen option-before-command routing did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-phosh-candidate-json.json") { throw "Refused JSON-routed Phosh candidate binder created output" }
+
           @'
           from pathlib import Path
 
@@ -106,6 +113,6 @@ jobs:
           assert "same reviewed rootfs authority and artifact" in command
           assert "no display/touch/hardware/beta credit" in command
 
-          refusal = text("phosh-candidate-refusal.txt")
-          assert "evidence workflow error" in refusal
+          assert "evidence workflow error" in text("phosh-candidate-refusal.txt")
+          assert "evidence workflow error" in text("phosh-candidate-json-refusal.txt")
           '@ | python -
