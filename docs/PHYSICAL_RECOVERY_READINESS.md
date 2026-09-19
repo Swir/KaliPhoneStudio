@@ -11,14 +11,16 @@ For the selected device profile the builder verifies and records:
 - exact profile, serial, firmware build and firmware fingerprint from the captured Fastboot baseline;
 - exact `FastbootBaselineEvidence` and `PhysicalBaselineBundleEvidence` identities;
 - exact `PhysicalBootIdentityBindingEvidence`, physical candidate gate and boot-plan identities;
-- the locally present stock `boot.img` SHA-256 and size, re-hashed from a regular non-symlink file;
+- the locally present stock `boot.img` SHA-256 and size, re-hashed from one descriptor-bound regular non-symlink file;
 - the stock kernel, ramdisk, optional embedded DTB and optional AVB vbmeta identities already proven by the exact boot-identity binding;
 - the exact candidate `boot.img` identity to make the recovery preparation candidate-specific;
 - profile recovery notes and confirmation text by SHA-256;
 - profile A/B partition contract by SHA-256;
 - the captured active slot and, for an A/B profile, the opposite slot only as an **expected inactive slot**.
 
-The file is re-hashed during construction and must fit the profile's declared boot partition limit. A detached baseline, detached boot binding, stock-image drift, component/AVB incompleteness, ambiguous A/B slot state or any pre-existing write/hardware/Beta claim fails closed.
+The local stock file is opened read-only with `O_NOFOLLOW` when the host exposes it. KaliPhoneStudio compares the path's initial identity with the opened descriptor, hashes only that descriptor, checks descriptor metadata again after the read, then proves that the path still names the same regular file. Symlink use, path replacement, truncation, growth, size/mtime/inode drift or an oversized image fails closed. On hosts without `O_NOFOLLOW`, the `lstat`/`fstat` identity checks remain mandatory.
+
+The file must also fit the profile's declared boot partition limit. A detached baseline, detached boot binding, stock-image drift, component/AVB incompleteness, ambiguous A/B slot state or any pre-existing write/hardware/Beta claim fails closed.
 
 ## Enforcement before physical temporary boot
 
