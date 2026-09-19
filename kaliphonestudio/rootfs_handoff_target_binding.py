@@ -32,6 +32,7 @@ from .rootfs_handoff_strategy_review import (
     RootfsHandoffStrategyReviewEvidence,
     load_rootfs_handoff_strategy_review_evidence,
 )
+from .stable_file import StableFileError, read_stable_regular_file
 
 _POLICY = "reversible-rootfs-handoff-target-binding-review-v1"
 _ALLOWED_DECISIONS = frozenset({"accepted_for_manual_trial", "rejected"})
@@ -198,26 +199,15 @@ def _positive(value: object, label: str) -> int:
 
 
 def _read_exact(path: Path, label: str, maximum: int) -> tuple[bytes, str, int]:
-    source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise RootfsHandoffTargetBindingError(f"{label} must be a regular non-symlink file")
     try:
-        before = source.stat()
-        if before.st_size <= 0 or before.st_size > maximum:
-            raise RootfsHandoffTargetBindingError(f"{label} size is outside the safety limit")
-        raw = source.read_bytes()
-        after = source.stat()
-    except OSError as exc:
-        raise RootfsHandoffTargetBindingError(f"cannot read {label}: {exc}") from exc
-    if len(raw) != before.st_size:
-        raise RootfsHandoffTargetBindingError(f"{label} size changed while being read")
-    if (
-        before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
-    ):
-        raise RootfsHandoffTargetBindingError(f"{label} changed while being read")
-    return raw, sha256(raw).hexdigest(), len(raw)
+        raw, identity = read_stable_regular_file(
+            Path(path),
+            max_bytes=maximum,
+            label=label,
+        )
+    except StableFileError as exc:
+        raise RootfsHandoffTargetBindingError(str(exc)) from exc
+    return raw, identity.sha256, identity.size
 
 
 def _exact_keys(raw: object, expected: set[str], label: str) -> dict[str, Any]:
