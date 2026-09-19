@@ -1,0 +1,118 @@
+name: phosh-unified-evidence-windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_workspace.py"
+      - "kaliphonestudio/operator_host_evidence_cli.py"
+      - "kaliphonestudio/phosh_candidate_binding.py"
+      - "kaliphonestudio/phosh_rootfs_binding.py"
+      - "kaliphonestudio/candidate_authority_bundle.py"
+      - "tests/test_operator_host_evidence_cli.py"
+      - "tests/test_phosh_candidate_binding.py"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - ".github/workflows/phosh-unified-evidence-windows.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_workspace.py"
+      - "kaliphonestudio/operator_host_evidence_cli.py"
+      - "kaliphonestudio/phosh_candidate_binding.py"
+      - "kaliphonestudio/phosh_rootfs_binding.py"
+      - "kaliphonestudio/candidate_authority_bundle.py"
+      - "tests/test_operator_host_evidence_cli.py"
+      - "tests/test_phosh_candidate_binding.py"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - ".github/workflows/phosh-unified-evidence-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-frozen-contract:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install runtime and pinned Windows build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+
+      - name: Verify source-side Phosh provenance command
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_phosh_candidate_binding.py
+          tests/test_operator_host_evidence_cli.py
+
+      - name: Build frozen Windows host CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Smoke-test frozen unified Phosh evidence boundary
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          & $Cli evidence --help | Set-Content -Encoding utf8 "dist/evidence-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen unified evidence help failed: $LASTEXITCODE" }
+
+          & $Cli evidence bind-phosh-candidate --help | Set-Content -Encoding utf8 "dist/phosh-candidate-help.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen Phosh candidate help failed: $LASTEXITCODE" }
+
+          & $Cli evidence bind-phosh-candidate `
+            --candidate-authority-bundle "dist/missing-candidate-bundle.json" `
+            --phosh-rootfs-binding "dist/missing-phosh-rootfs-binding.json" `
+            --out "dist/should-not-phosh-candidate.json" 2> "dist/phosh-candidate-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen Phosh candidate binder did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-phosh-candidate.json") { throw "Refused Phosh candidate binder created output" }
+
+          & $Cli evidence --json bind-phosh-candidate `
+            --candidate-authority-bundle "dist/missing-candidate-bundle.json" `
+            --phosh-rootfs-binding "dist/missing-phosh-rootfs-binding.json" `
+            --out "dist/should-not-phosh-candidate-json.json" 2> "dist/phosh-candidate-json-refusal.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen option-before-command routing did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-phosh-candidate-json.json") { throw "Refused JSON-routed Phosh candidate binder created output" }
+
+          @'
+          from pathlib import Path
+
+          def text(name):
+              raw = Path("dist", name).read_text(encoding="utf-8-sig").lower()
+              return " ".join(raw.split())
+
+          root = text("evidence-help.txt")
+          assert "offline exact-file evidence workspace" in root
+          assert "bind-phosh-candidate" in root
+          assert "do not connect to a phone" in root
+          assert "do not run adb/fastboot" in root
+          assert "do not select storage targets" in root
+          assert "no hardware/beta credit" in root
+
+          command = text("phosh-candidate-help.txt")
+          assert "offline-only" in command
+          assert "same reviewed rootfs authority and artifact" in command
+          assert "no display/touch/hardware/beta credit" in command
+
+          assert "evidence workflow error" in text("phosh-candidate-refusal.txt")
+          assert "evidence workflow error" in text("phosh-candidate-json-refusal.txt")
+          '@ | python -
