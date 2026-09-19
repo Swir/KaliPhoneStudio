@@ -15,7 +15,7 @@ on:
       - "tests/test_phosh_build.py"
       - ".github/workflows/phosh-rootfs-build-contract.yml"
       - "assets/readme/progress-*.svg"
-      - "scripts/render_progress.py"
+      - "scripts/generate_progress_svgs.py"
       - "scripts/check_progress_presentation.py"
       - "BUILD_STATUS.json"
       - "ROADMAP.md"
@@ -32,7 +32,7 @@ on:
       - "tests/test_phosh_build.py"
       - ".github/workflows/phosh-rootfs-build-contract.yml"
       - "assets/readme/progress-*.svg"
-      - "scripts/render_progress.py"
+      - "scripts/generate_progress_svgs.py"
       - "scripts/check_progress_presentation.py"
       - "BUILD_STATUS.json"
       - "ROADMAP.md"
@@ -73,6 +73,6 @@ jobs:
           tests/test_phosh_build.py
       - name: Verify progress presentation remains deterministic
         run: >-
-          python scripts/render_progress.py --check
+          python scripts/generate_progress_svgs.py --check
           &&
           python scripts/check_progress_presentation.py
