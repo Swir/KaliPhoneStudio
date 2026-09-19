@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'kaliphonestudio/rootfs_handoff_trial_authorization.py'
+      - 'kaliphonestudio/rootfs_handoff_trial_plan.py'
       - 'kaliphonestudio/rootfs_handoff_fresh_revalidation.py'
       - 'kaliphonestudio/rootfs_handoff_target_binding.py'
       - 'kaliphonestudio/operator_trial_evidence_cli.py'
@@ -12,11 +13,13 @@ on:
       - 'scripts/prepare_rootfs_handoff_trial_authorization.py'
       - 'scripts/bind_rootfs_handoff_trial_authorization.py'
       - 'tests/test_rootfs_handoff_trial_authorization.py'
+      - 'tests/test_rootfs_handoff_trial_plan.py'
       - 'tests/test_operator_trial_evidence_workspace.py'
       - '.github/workflows/rootfs-handoff-trial-authorization.yml'
   pull_request:
     paths:
       - 'kaliphonestudio/rootfs_handoff_trial_authorization.py'
+      - 'kaliphonestudio/rootfs_handoff_trial_plan.py'
       - 'kaliphonestudio/rootfs_handoff_fresh_revalidation.py'
       - 'kaliphonestudio/rootfs_handoff_target_binding.py'
       - 'kaliphonestudio/operator_trial_evidence_cli.py'
@@ -24,6 +27,7 @@ on:
       - 'scripts/prepare_rootfs_handoff_trial_authorization.py'
       - 'scripts/bind_rootfs_handoff_trial_authorization.py'
       - 'tests/test_rootfs_handoff_trial_authorization.py'
+      - 'tests/test_rootfs_handoff_trial_plan.py'
       - 'tests/test_operator_trial_evidence_workspace.py'
       - '.github/workflows/rootfs-handoff-trial-authorization.yml'
   workflow_dispatch:
@@ -44,10 +48,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Compile authorization boundary and CLIs
+      - name: Compile authorization boundary, plan and CLIs
         run: |
           python -m py_compile \
             kaliphonestudio/rootfs_handoff_trial_authorization.py \
+            kaliphonestudio/rootfs_handoff_trial_plan.py \
             kaliphonestudio/operator_trial_evidence_cli.py \
             kaliphonestudio/operator_evidence_workspace.py \
             scripts/prepare_rootfs_handoff_trial_authorization.py \
@@ -56,6 +61,7 @@ jobs:
         run: |
           python -m unittest -v \
             tests.test_rootfs_handoff_trial_authorization \
+            tests.test_rootfs_handoff_trial_plan \
             tests.test_operator_trial_evidence_workspace
       - name: Assert offline/non-executing surface
         run: |
@@ -63,6 +69,7 @@ jobs:
           from pathlib import Path
           paths = [
               Path('kaliphonestudio/rootfs_handoff_trial_authorization.py'),
+              Path('kaliphonestudio/rootfs_handoff_trial_plan.py'),
               Path('kaliphonestudio/operator_trial_evidence_cli.py'),
               Path('scripts/prepare_rootfs_handoff_trial_authorization.py'),
               Path('scripts/bind_rootfs_handoff_trial_authorization.py'),
@@ -70,6 +77,6 @@ jobs:
           for path in paths:
               lowered = path.read_text(encoding='utf-8').lower()
               if 'subprocess' in lowered or 'os.system' in lowered or 'popen(' in lowered:
-                  raise SystemExit(f'{path}: execution primitive is forbidden in offline authorization boundary')
-          print('offline/non-executing authorization surface verified')
+                  raise SystemExit(f'{path}: execution primitive is forbidden in offline trial boundary')
+          print('offline/non-executing trial authorization and plan surface verified')
           PY
