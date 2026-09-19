@@ -115,7 +115,7 @@ jobs:
           assert "no hardware/beta credit" in root
 
           plan = text("trial-plan-help.txt")
-          assert "non-executing plan" in plan
+          assert "deterministic execution plan" in plan
           assert "--trial-authorization" in plan
           assert "--target-binding" in plan
           assert "--fresh-revalidation" in plan
