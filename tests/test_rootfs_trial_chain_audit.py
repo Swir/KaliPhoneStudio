@@ -81,9 +81,15 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
             self._copy_contract_tree(tree)
             source = tree / "kaliphonestudio/rootfs_handoff_trial_preflight.py"
             text = source.read_text(encoding="utf-8")
+            marker = "_FORBIDDEN_PREFLIGHT_FLAGS = ("
+            self.assertIn(marker, text)
+            prefix, suffix = text.split(marker, 1)
             needle = '    "beta_gate_credit",\n'
-            self.assertIn(needle, text)
-            source.write_text(text.replace(needle, "", 1), encoding="utf-8")
+            self.assertIn(needle, suffix)
+            source.write_text(
+                prefix + marker + suffix.replace(needle, "", 1),
+                encoding="utf-8",
+            )
             report = AUDIT.audit(tree)
             self.assertEqual("FAIL", report["status"])
             self.assertTrue(any("missing fail-closed flags" in failure for failure in report["failures"]))
