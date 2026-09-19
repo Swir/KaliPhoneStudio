@@ -40,6 +40,15 @@ class OperatorTrialEvidenceWorkspaceTests(TestCase):
             self.assertEqual(workspace_main([command, "--help"]), 20)
         routed.assert_called_once_with([command, "--help"])
 
+    def test_workspace_routes_trial_preflight_to_trial_dispatcher(self) -> None:
+        command = "build-rootfs-handoff-trial-preflight"
+        with patch(
+            "kaliphonestudio.operator_evidence_workspace.trial_evidence_main",
+            return_value=21,
+        ) as routed:
+            self.assertEqual(workspace_main([command, "--help"]), 21)
+        routed.assert_called_once_with([command, "--help"])
+
     def test_existing_strategy_route_remains_unchanged(self) -> None:
         command = "build-rootfs-handoff-fresh-revalidation"
         with patch(
@@ -49,7 +58,7 @@ class OperatorTrialEvidenceWorkspaceTests(TestCase):
             self.assertEqual(workspace_main([command, "--help"]), 19)
         routed.assert_called_once_with([command, "--help"])
 
-    def test_trial_parser_requires_exact_inputs_for_prepare_bind_and_plan(self) -> None:
+    def test_trial_parser_requires_exact_inputs_for_prepare_bind_plan_and_preflight(self) -> None:
         parser = _build_parser()
         prepare = parser.parse_args(
             [
@@ -83,3 +92,12 @@ class OperatorTrialEvidenceWorkspaceTests(TestCase):
             ]
         )
         self.assertEqual(plan.evidence_command, TRIAL_EVIDENCE_COMMANDS[2])
+        preflight = parser.parse_args(
+            [
+                "build-rootfs-handoff-trial-preflight",
+                "--trial-plan", "trial-plan.json",
+                "--rootfs-artifact", "rootfs.tar.xz",
+                "--out", "trial-preflight.json",
+            ]
+        )
+        self.assertEqual(preflight.evidence_command, TRIAL_EVIDENCE_COMMANDS[3])
