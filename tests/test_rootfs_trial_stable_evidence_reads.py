@@ -5,12 +5,35 @@ import unittest
 from unittest.mock import patch
 
 from kaliphonestudio import rootfs_handoff_fresh_revalidation as fresh_revalidation
+from kaliphonestudio import rootfs_handoff_target_binding as target_binding
 from kaliphonestudio import rootfs_handoff_trial_plan as trial_plan
 from kaliphonestudio import rootfs_handoff_trial_preflight as trial_preflight
 from kaliphonestudio.stable_file import StableFileError
 
 
 class StableTrialEvidenceReadTests(unittest.TestCase):
+    def test_target_binding_reader_routes_through_stable_reader(self) -> None:
+        with patch.object(
+            target_binding,
+            "read_stable_regular_file",
+            side_effect=StableFileError("synthetic descriptor-bound refusal"),
+        ) as stable_reader:
+            with self.assertRaisesRegex(
+                target_binding.RootfsHandoffTargetBindingError,
+                "synthetic descriptor-bound refusal",
+            ):
+                target_binding._read_exact(
+                    Path("missing-target-binding.json"),
+                    "rootfs target-binding evidence",
+                    target_binding._MAX_EVIDENCE_BYTES,
+                )
+
+        stable_reader.assert_called_once_with(
+            Path("missing-target-binding.json"),
+            max_bytes=target_binding._MAX_EVIDENCE_BYTES,
+            label="rootfs target-binding evidence",
+        )
+
     def test_fresh_revalidation_loader_routes_through_stable_reader(self) -> None:
         with patch.object(
             fresh_revalidation,
@@ -70,6 +93,8 @@ class StableTrialEvidenceReadTests(unittest.TestCase):
         )
 
     def test_domain_loaders_do_not_reintroduce_path_read_bytes(self) -> None:
+        self.assertNotIn("read_bytes", target_binding._read_exact.__code__.co_names)
+        self.assertIn("read_stable_regular_file", target_binding._read_exact.__code__.co_names)
         self.assertNotIn(
             "read_bytes",
             fresh_revalidation.load_rootfs_handoff_fresh_revalidation_evidence.__code__.co_names,
