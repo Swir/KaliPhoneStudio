@@ -21,9 +21,9 @@ For one verification call, the helper requires all of the following:
 - growth or truncation during hashing is rejected;
 - post-read descriptor identity must still match the pre-read descriptor identity;
 - final `lstat` must still identify the same regular file state;
-- device, inode, size, `mtime_ns` and `ctime_ns` are compared where Python exposes the normal `stat_result` fields.
+- device, inode, size and `mtime_ns` are portable equality gates; POSIX additionally requires stable `ctime_ns`.
 
-The `ctime_ns` check is intentional. On POSIX filesystems a writer can restore a previous mtime after modifying bytes, while ordinary file APIs cannot restore ctime. This closes a same-size mutation race that a size+mtime-only check could miss. On platforms where ctime has different semantics, the comparison remains conservative: unexpected drift causes refusal rather than acceptance.
+The POSIX `ctime_ns` gate is intentional. A writer can restore a previous mtime after modifying bytes, while ordinary file APIs cannot restore ctime. This closes a same-size mutation race that a size+mtime-only check could miss. Windows records ctime in the returned identity but does not use it as an equality gate because Python/filesystem generations expose different Windows ctime semantics; the portable device/inode/size/mtime plus path/descriptor checks remain mandatory there.
 
 ## Threat model and limitations
 
@@ -31,6 +31,6 @@ This boundary protects the path/descriptor transition and detects file-state dri
 
 ## Verification
 
-`tests/test_stable_file.py` covers exact hashing, expected-size drift, symlink refusal, path replacement, truncation, growth and a POSIX same-size mutation that restores the original mtime. The dedicated CI matrix runs the contract on Linux and Windows with the oldest and newest supported Python lines used by this project.
+`tests/test_stable_file.py` covers exact hashing, expected-size drift, symlink refusal, path replacement, short/overlong descriptor streams and a POSIX same-size mutation that restores the original mtime. The dedicated CI matrix runs the contract on Linux and Windows with Python 3.11 and 3.14, matching the oldest/newest supported project lines used for focused safety gates.
 
 No passing result from this helper changes the project roadmap percentage or Beta status. Physical AC2003 verification remains mandatory for the hardware gate.
