@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Callable, Sequence
+from typing import Sequence
 
 from .operator_evidence_cli import EVIDENCE_COMMANDS, main as core_evidence_main
 from .operator_host_evidence_cli import HOST_EVIDENCE_COMMANDS, main as host_evidence_main
@@ -11,34 +11,35 @@ from .operator_strategy_evidence_cli import STRATEGY_EVIDENCE_COMMANDS, main as 
 from .operator_trial_evidence_cli import TRIAL_EVIDENCE_COMMANDS, main as trial_evidence_main
 
 
-EvidenceHandler = Callable[[Sequence[str] | None], int]
-_COMMAND_GROUPS: tuple[tuple[tuple[str, ...], EvidenceHandler], ...] = (
-    (EVIDENCE_COMMANDS, core_evidence_main),
-    (HOST_EVIDENCE_COMMANDS, host_evidence_main),
-    (LATE_EVIDENCE_COMMANDS, release_evidence_main),
-    (STRATEGY_EVIDENCE_COMMANDS, strategy_evidence_main),
-    (TRIAL_EVIDENCE_COMMANDS, trial_evidence_main),
+_COMMAND_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("core", EVIDENCE_COMMANDS),
+    ("host", HOST_EVIDENCE_COMMANDS),
+    ("late", LATE_EVIDENCE_COMMANDS),
+    ("strategy", STRATEGY_EVIDENCE_COMMANDS),
+    ("trial", TRIAL_EVIDENCE_COMMANDS),
 )
 _GLOBAL_OPTIONS_BEFORE_COMMAND = frozenset({"--json"})
 
 
-def _build_command_handlers(
-    groups: Sequence[tuple[Sequence[str], EvidenceHandler]] = _COMMAND_GROUPS,
-) -> dict[str, EvidenceHandler]:
+def _build_command_owners(
+    groups: Sequence[tuple[str, Sequence[str]]] = _COMMAND_GROUPS,
+) -> dict[str, str]:
     """Build one unambiguous command registry and reject ownership collisions."""
-    handlers: dict[str, EvidenceHandler] = {}
-    for commands, handler in groups:
+    owners: dict[str, str] = {}
+    for owner, commands in groups:
+        if not isinstance(owner, str) or not owner:
+            raise RuntimeError("evidence command owner names must be non-empty strings")
         for command in commands:
             if not isinstance(command, str) or not command:
                 raise RuntimeError("evidence command names must be non-empty strings")
-            if command in handlers:
+            if command in owners:
                 raise RuntimeError(f"duplicate evidence command ownership: {command}")
-            handlers[command] = handler
-    return handlers
+            owners[command] = owner
+    return owners
 
 
-COMMAND_HANDLERS = _build_command_handlers()
-ALL_EVIDENCE_COMMANDS = tuple(COMMAND_HANDLERS)
+COMMAND_OWNERS = _build_command_owners()
+ALL_EVIDENCE_COMMANDS = tuple(COMMAND_OWNERS)
 
 
 def _print_help() -> None:
@@ -69,7 +70,7 @@ def _select_command(args: Sequence[str]) -> str | None:
             continue
         if token.startswith("-"):
             return None
-        return token if token in COMMAND_HANDLERS else None
+        return token if token in COMMAND_OWNERS else None
     return None
 
 
@@ -79,8 +80,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_help()
         return 0
     command = _select_command(args)
-    handler = COMMAND_HANDLERS.get(command, core_evidence_main)
-    return handler(args)
+    owner = COMMAND_OWNERS.get(command, "core")
+    if owner == "host":
+        return host_evidence_main(args)
+    if owner == "trial":
+        return trial_evidence_main(args)
+    if owner == "strategy":
+        return strategy_evidence_main(args)
+    if owner == "late":
+        return release_evidence_main(args)
+    return core_evidence_main(args)
 
 
 if __name__ == "__main__":
