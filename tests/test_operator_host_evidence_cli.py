@@ -8,8 +8,8 @@ import pytest
 from kaliphonestudio.candidate_authority_bundle import FirstBootAuthorityBundleEvidence
 from kaliphonestudio.operator_evidence_workspace import (
     ALL_EVIDENCE_COMMANDS,
-    COMMAND_HANDLERS,
-    _build_command_handlers,
+    COMMAND_OWNERS,
+    _build_command_owners,
     _select_command,
     main as workspace_main,
 )
@@ -93,7 +93,8 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path]:
 def test_unified_workspace_lists_phosh_candidate_command(capsys):
     assert HOST_EVIDENCE_COMMANDS == ("bind-phosh-candidate",)
     assert "bind-phosh-candidate" in ALL_EVIDENCE_COMMANDS
-    assert set(COMMAND_HANDLERS) == set(ALL_EVIDENCE_COMMANDS)
+    assert set(COMMAND_OWNERS) == set(ALL_EVIDENCE_COMMANDS)
+    assert COMMAND_OWNERS["bind-phosh-candidate"] == "host"
     assert workspace_main(["--help"]) == 0
     out = capsys.readouterr().out.lower()
     assert "bind-phosh-candidate" in out
@@ -102,14 +103,8 @@ def test_unified_workspace_lists_phosh_candidate_command(capsys):
 
 
 def test_unified_workspace_rejects_duplicate_command_ownership():
-    def first(_argv=None):
-        return 0
-
-    def second(_argv=None):
-        return 0
-
     with pytest.raises(RuntimeError, match="duplicate evidence command ownership: duplicate"):
-        _build_command_handlers(((("duplicate",), first), (("duplicate",), second)))
+        _build_command_owners((("first", ("duplicate",)), ("second", ("duplicate",))))
 
 
 def test_unified_workspace_command_selection_does_not_route_option_values():
