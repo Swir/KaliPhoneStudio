@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/rootfs_handoff_trial_authorization.py"
       - "kaliphonestudio/rootfs_handoff_trial_plan.py"
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
@@ -11,6 +12,7 @@ on:
       - "docs/ROOTFS_HANDOFF_TRIAL_PLAN.md"
       - "docs/ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md"
       - "docs/ROOTFS_TRIAL_CHAIN_AUDIT.md"
+      - "tests/test_stable_file.py"
       - "tests/test_rootfs_handoff_trial_authorization.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
@@ -19,6 +21,7 @@ on:
       - ".github/workflows/rootfs-trial-chain-audit.yml"
   pull_request:
     paths:
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/rootfs_handoff_trial_authorization.py"
       - "kaliphonestudio/rootfs_handoff_trial_plan.py"
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
@@ -26,6 +29,7 @@ on:
       - "docs/ROOTFS_HANDOFF_TRIAL_PLAN.md"
       - "docs/ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md"
       - "docs/ROOTFS_TRIAL_CHAIN_AUDIT.md"
+      - "tests/test_stable_file.py"
       - "tests/test_rootfs_handoff_trial_authorization.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
