@@ -4,7 +4,7 @@ The helper is intentionally host-only. It never performs device I/O and never
 turns a verified local file into permission to boot, flash, mount, or write a
 phone. Its job is narrower: bind the bytes read from one regular file descriptor
 to the path identity observed before and after the read, failing closed on
-symlinks, replacement, truncation, size drift, or in-place metadata drift.
+symlinks, replacement, truncation, growth, or in-place metadata/content drift.
 """
 from __future__ import annotations
 
@@ -27,14 +27,24 @@ class StableFileIdentity:
     device: int
     inode: int
     mtime_ns: int
+    ctime_ns: int
 
 
 def _same_object(left: os.stat_result, right: os.stat_result) -> bool:
+    """Return whether two observations describe the same unchanged file state.
+
+    ``ctime_ns`` is deliberately included in addition to size/mtime/inode. On
+    POSIX hosts, a writer can restore an earlier mtime after changing bytes, but
+    cannot restore ctime through ordinary file APIs. Including ctime therefore
+    closes the restored-mtime race while remaining a conservative fail-closed
+    signal on platforms where ctime has different filesystem semantics.
+    """
     return (
         left.st_dev == right.st_dev
         and left.st_ino == right.st_ino
         and left.st_size == right.st_size
         and left.st_mtime_ns == right.st_mtime_ns
+        and left.st_ctime_ns == right.st_ctime_ns
     )
 
 
@@ -50,7 +60,9 @@ def hash_stable_regular_file(
     ``O_NOFOLLOW`` is used when the host exposes it. On platforms without it,
     the initial ``lstat`` plus descriptor ``fstat`` identity comparison remains
     mandatory. A final ``lstat`` proves that the path still names the same file
-    object after hashing.
+    object after hashing. Size, mtime and ctime must remain unchanged across the
+    descriptor read so same-size mutation with a restored mtime also fails
+    closed on filesystems that expose ctime updates.
     """
     candidate = Path(path)
     if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
@@ -109,7 +121,7 @@ def hash_stable_regular_file(
         if stat.S_ISLNK(path_after.st_mode) or not stat.S_ISREG(path_after.st_mode):
             raise StableFileError(f"{label} path stopped naming a regular file during hashing")
         if not _same_object(fd_after, path_after):
-            raise StableFileError(f"{label} path was replaced while being hashed")
+            raise StableFileError(f"{label} path was replaced or changed while being hashed")
 
         return StableFileIdentity(
             path=candidate,
@@ -118,6 +130,7 @@ def hash_stable_regular_file(
             device=fd_after.st_dev,
             inode=fd_after.st_ino,
             mtime_ns=fd_after.st_mtime_ns,
+            ctime_ns=fd_after.st_ctime_ns,
         )
     except StableFileError:
         raise
