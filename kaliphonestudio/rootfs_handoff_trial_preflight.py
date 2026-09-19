@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, fields
 from hashlib import sha256
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from typing import Any
 
@@ -27,6 +27,10 @@ from .rootfs_handoff_trial_plan import (
 
 _POLICY = "rootfs-handoff-local-rootfs-preflight-v1"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SAFE_ROLE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$")
+_SAFE_FS_RE = re.compile(r"^[a-z0-9][a-z0-9._+-]{0,31}$")
+_ALLOWED_ENCRYPTION_STATES = frozenset({"unlocked", "unencrypted"})
 _MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 _MAX_ROOTFS_ARTIFACT_BYTES = 64 * 1024 * 1024 * 1024
 
@@ -165,6 +169,16 @@ def _positive(value: object, label: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise RootfsHandoffTrialPreflightError(f"{label} must be a positive integer")
     return value
+
+
+def _safe_relative_subpath(value: object) -> str:
+    text = _safe_text(value, "staging subpath", 512)
+    if text.startswith(("/", "\\")) or ":" in text or "\\" in text:
+        raise RootfsHandoffTrialPreflightError("staging subpath must be relative and path-independent")
+    path = PurePosixPath(text)
+    if not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+        raise RootfsHandoffTrialPreflightError("staging subpath must be a safe relative POSIX path")
+    return path.as_posix()
 
 
 def _read_exact(path: Path) -> bytes:
@@ -308,11 +322,18 @@ def validate_rootfs_handoff_trial_preflight_evidence(
     _safe_text(evidence.device_serial, "device serial", 256)
     _safe_text(evidence.firmware_build, "firmware build", 256)
     _safe_text(evidence.firmware_fingerprint, "firmware fingerprint", 1024)
-    _safe_text(evidence.candidate_partition_role, "candidate partition role", 64)
-    _safe_text(evidence.observed_kernel_name, "observed kernel name", 128)
-    _safe_text(evidence.observed_filesystem, "observed filesystem", 32)
-    _safe_text(evidence.observed_encryption_state, "observed encryption state", 32)
-    _safe_text(evidence.staging_subpath, "staging subpath", 512)
+    role = evidence.candidate_partition_role
+    if not isinstance(role, str) or not _SAFE_ROLE_RE.fullmatch(role):
+        raise RootfsHandoffTrialPreflightError("candidate partition role is invalid")
+    kernel = evidence.observed_kernel_name
+    if not isinstance(kernel, str) or not _SAFE_NAME_RE.fullmatch(kernel):
+        raise RootfsHandoffTrialPreflightError("observed kernel name is invalid")
+    filesystem = evidence.observed_filesystem
+    if not isinstance(filesystem, str) or not _SAFE_FS_RE.fullmatch(filesystem):
+        raise RootfsHandoffTrialPreflightError("observed filesystem is invalid")
+    if evidence.observed_encryption_state not in _ALLOWED_ENCRYPTION_STATES:
+        raise RootfsHandoffTrialPreflightError("observed encryption state is not acceptable for trial preflight")
+    _safe_relative_subpath(evidence.staging_subpath)
     for value, label in (
         (evidence.trial_plan_sha256, "trial plan"),
         (evidence.trial_authorization_sha256, "trial authorization"),
@@ -326,7 +347,9 @@ def validate_rootfs_handoff_trial_preflight_evidence(
     required = _positive(evidence.required_free_bytes, "required free bytes")
     if observed < required:
         raise RootfsHandoffTrialPreflightError("trial preflight free-space observation is below requirement")
-    _positive(evidence.rootfs_artifact_size, "rootfs artifact size")
+    artifact_size = _positive(evidence.rootfs_artifact_size, "rootfs artifact size")
+    if artifact_size > _MAX_ROOTFS_ARTIFACT_BYTES:
+        raise RootfsHandoffTrialPreflightError("rootfs artifact size exceeds the bounded preflight limit")
     for name in _REQUIRED_PREFLIGHT_FLAGS:
         if getattr(evidence, name) is not True:
             raise RootfsHandoffTrialPreflightError(f"trial preflight requires {name}=true")
