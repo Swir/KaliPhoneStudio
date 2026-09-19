@@ -28,6 +28,7 @@ def test_hash_stable_regular_file_binds_exact_bytes(tmp_path: Path) -> None:
     assert isinstance(identity.device, int)
     assert isinstance(identity.inode, int)
     assert identity.mtime_ns > 0
+    assert identity.ctime_ns > 0
 
 
 def test_hash_stable_regular_file_rejects_expected_size_drift(tmp_path: Path) -> None:
@@ -83,12 +84,120 @@ def test_hash_stable_regular_file_rejects_path_swap_during_hash(
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
 
-    with pytest.raises(StableFileError, match="path was replaced while being hashed"):
+    with pytest.raises(StableFileError, match="path was replaced or changed while being hashed"):
         hash_stable_regular_file(
             artifact,
             max_bytes=4 * 1024 * 1024,
             expected_size=len(payload),
             label="stock boot recovery material",
+        )
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="restored-mtime adversarial write is a POSIX ctime contract test",
+)
+def test_hash_stable_regular_file_rejects_same_size_mutation_with_restored_mtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+    original_stat = artifact.stat()
+
+    original_read = os.read
+    mutated = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal mutated
+        chunk = original_read(fd, count)
+        if chunk and not mutated:
+            writer = os.open(artifact, os.O_WRONLY)
+            try:
+                if hasattr(os, "pwrite"):
+                    os.pwrite(writer, b"B", 0)
+                else:
+                    os.lseek(writer, 0, os.SEEK_SET)
+                    os.write(writer, b"B")
+            finally:
+                os.close(writer)
+            os.utime(
+                artifact,
+                ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+            )
+            mutated = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(StableFileError, match="changed while being hashed"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="rootfs artifact",
+        )
+
+
+def test_hash_stable_regular_file_rejects_truncation_during_hash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    truncated = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal truncated
+        chunk = original_read(fd, count)
+        if chunk and not truncated:
+            os.truncate(artifact, 512 * 1024)
+            truncated = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(StableFileError, match="truncated while being hashed"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="artifact",
+        )
+
+
+def test_hash_stable_regular_file_rejects_growth_during_hash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    grown = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal grown
+        chunk = original_read(fd, count)
+        if chunk and not grown:
+            with artifact.open("ab") as handle:
+                handle.write(b"B" * (1024 * 1024))
+            grown = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+
+    with pytest.raises(StableFileError, match="grew while being hashed"):
+        hash_stable_regular_file(
+            artifact,
+            max_bytes=4 * 1024 * 1024,
+            expected_size=len(payload),
+            label="artifact",
         )
 
 
