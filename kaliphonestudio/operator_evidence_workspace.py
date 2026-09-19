@@ -11,13 +11,35 @@ from .operator_strategy_evidence_cli import STRATEGY_EVIDENCE_COMMANDS, main as 
 from .operator_trial_evidence_cli import TRIAL_EVIDENCE_COMMANDS, main as trial_evidence_main
 
 
-ALL_EVIDENCE_COMMANDS = (
-    EVIDENCE_COMMANDS
-    + HOST_EVIDENCE_COMMANDS
-    + LATE_EVIDENCE_COMMANDS
-    + STRATEGY_EVIDENCE_COMMANDS
-    + TRIAL_EVIDENCE_COMMANDS
+_COMMAND_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("core", EVIDENCE_COMMANDS),
+    ("host", HOST_EVIDENCE_COMMANDS),
+    ("late", LATE_EVIDENCE_COMMANDS),
+    ("strategy", STRATEGY_EVIDENCE_COMMANDS),
+    ("trial", TRIAL_EVIDENCE_COMMANDS),
 )
+_GLOBAL_OPTIONS_BEFORE_COMMAND = frozenset({"--json"})
+
+
+def _build_command_owners(
+    groups: Sequence[tuple[str, Sequence[str]]] = _COMMAND_GROUPS,
+) -> dict[str, str]:
+    """Build one unambiguous command registry and reject ownership collisions."""
+    owners: dict[str, str] = {}
+    for owner, commands in groups:
+        if not isinstance(owner, str) or not owner:
+            raise RuntimeError("evidence command owner names must be non-empty strings")
+        for command in commands:
+            if not isinstance(command, str) or not command:
+                raise RuntimeError("evidence command names must be non-empty strings")
+            if command in owners:
+                raise RuntimeError(f"duplicate evidence command ownership: {command}")
+            owners[command] = owner
+    return owners
+
+
+COMMAND_OWNERS = _build_command_owners()
+ALL_EVIDENCE_COMMANDS = tuple(COMMAND_OWNERS)
 
 
 def _print_help() -> None:
@@ -34,16 +56,21 @@ def _print_help() -> None:
 
 
 def _select_command(args: Sequence[str]) -> str | None:
-    """Return the first known command token, preserving parser ownership of options.
+    """Select only the first positional command after known flag-only globals.
 
-    Specialized evidence parsers accept global options such as ``--json`` before
-    their subcommand. Routing solely on ``args[0]`` silently sent those valid
-    forms to the core parser. Scanning for the first known command fixes that
-    without interpreting, rewriting or consuming any option/value pairs here.
+    Specialized evidence parsers accept ``--json`` before their subcommand. The
+    dispatcher must support that form without scanning arbitrary later tokens:
+    an unknown option may consume a value that happens to equal a valid command,
+    and routing on that value would hand arguments to the wrong parser. Unknown
+    leading options and unknown first positional tokens therefore fail closed to
+    the core parser, which owns the final argparse error.
     """
     for token in args:
-        if token in ALL_EVIDENCE_COMMANDS:
-            return token
+        if token in _GLOBAL_OPTIONS_BEFORE_COMMAND:
+            continue
+        if token.startswith("-"):
+            return None
+        return token if token in COMMAND_OWNERS else None
     return None
 
 
@@ -53,13 +80,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_help()
         return 0
     command = _select_command(args)
-    if command in HOST_EVIDENCE_COMMANDS:
+    owner = COMMAND_OWNERS.get(command, "core")
+    if owner == "host":
         return host_evidence_main(args)
-    if command in TRIAL_EVIDENCE_COMMANDS:
+    if owner == "trial":
         return trial_evidence_main(args)
-    if command in STRATEGY_EVIDENCE_COMMANDS:
+    if owner == "strategy":
         return strategy_evidence_main(args)
-    if command in LATE_EVIDENCE_COMMANDS:
+    if owner == "late":
         return release_evidence_main(args)
     return core_evidence_main(args)
 
