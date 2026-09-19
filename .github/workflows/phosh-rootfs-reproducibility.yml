@@ -1,0 +1,184 @@
+name: Phosh rootfs A/B reproducibility candidate
+
+on:
+  pull_request:
+    paths:
+      - "kaliphonestudio/phosh.py"
+      - "kaliphonestudio/phosh_build.py"
+      - "kaliphonestudio/phosh_reproducibility.py"
+      - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/rootfs_canonical.py"
+      - "scripts/run_locked_phosh_rootfs_build.py"
+      - "scripts/compare_phosh_rootfs_builds.py"
+      - "tools/phosh-source-lock.json"
+      - "tools/phosh-rootfs-build-contract.json"
+      - "tests/test_phosh.py"
+      - "tests/test_phosh_build.py"
+      - "tests/test_phosh_reproducibility.py"
+      - ".github/workflows/phosh-rootfs-reproducibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  comparator-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install pytest
+      - name: Compile Phosh A/B comparison boundary
+        run: >-
+          python -m py_compile
+          kaliphonestudio/phosh_reproducibility.py
+          scripts/compare_phosh_rootfs_builds.py
+          tests/test_phosh_reproducibility.py
+      - name: Test fail-closed Phosh A/B comparison
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_phosh_reproducibility.py
+
+  real-build:
+    name: Real Phosh rootfs build ${{ matrix.build-id }}
+    if: github.event_name == 'pull_request'
+    needs: comparator-contract
+    strategy:
+      fail-fast: false
+      matrix:
+        build-id: [a, b]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install real-build host prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binfmt-support ca-certificates debos git qemu-user-static xz-utils
+          if [ -e /dev/kvm ]; then
+            sudo chmod a+rw /dev/kvm
+          fi
+          host_kernel="/boot/vmlinuz-$(uname -r)"
+          if [ -f "$host_kernel" ]; then
+            sudo chmod a+r "$host_kernel"
+            test -r "$host_kernel"
+          fi
+          command -v debos
+          command -v qemu-aarch64-static
+
+      - name: Load exact pinned upstream source
+        id: source
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.phosh import load_phosh_source_lock
+
+          lock = load_phosh_source_lock(Path("tools/phosh-source-lock.json"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"repository={lock.upstream_repository}", file=out)
+              print(f"commit={lock.upstream_commit}", file=out)
+          print(f"phosh_source_lock_sha256={lock.lock_sha256()}")
+          PY
+
+      - name: Prepare exact detached upstream checkout
+        shell: bash
+        env:
+          SOURCE_REPOSITORY: ${{ steps.source.outputs.repository }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream-phosh
+          git -C upstream-phosh remote add origin "$SOURCE_REPOSITORY"
+          git -C upstream-phosh fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream-phosh rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream-phosh checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C upstream-phosh rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test -z "$(git -C upstream-phosh status --porcelain --untracked-files=no)"
+
+      - name: Build canonical Phosh ARM64 rootfs candidate
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts evidence
+          python scripts/run_locked_phosh_rootfs_build.py \
+            --checkout upstream-phosh \
+            --out artifacts/phosh-${{ matrix.build-id }}.tar.xz \
+            --package-manifest evidence/phosh-packages.tsv \
+            --build-evidence evidence/phosh-build.json \
+            --canonicalization-evidence evidence/phosh-canonical.json \
+            --timeout 6600
+          test -s artifacts/phosh-${{ matrix.build-id }}.tar.xz
+          test -s evidence/phosh-build.json
+          test -s evidence/phosh-packages.tsv
+          test -s evidence/phosh-canonical.json
+
+      - name: Upload exact non-release build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-real-build-${{ matrix.build-id }}-evidence
+          path: |
+            evidence/phosh-build.json
+            evidence/phosh-canonical.json
+            evidence/phosh-packages.tsv
+          if-no-files-found: error
+          retention-days: 7
+
+  compare:
+    name: Compare independent Phosh A/B outputs
+    needs: real-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: phosh-rootfs-real-build-*-evidence
+          path: repro-evidence
+
+      - name: Create review-required A/B reproducibility candidate
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/compare_phosh_rootfs_builds.py \
+            --build-a repro-evidence/phosh-rootfs-real-build-a-evidence/phosh-build.json \
+            --build-b repro-evidence/phosh-rootfs-real-build-b-evidence/phosh-build.json \
+            --origin-a "github-actions/${{ github.repository }}/${{ github.run_id }}/${{ github.run_attempt }}/build-a" \
+            --origin-b "github-actions/${{ github.repository }}/${{ github.run_id }}/${{ github.run_attempt }}/build-b" \
+            --out repro-evidence/phosh-rootfs-reproducibility-candidate.json
+          test -s repro-evidence/phosh-rootfs-reproducibility-candidate.json
+
+      - name: Upload reproducibility-candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-reproducibility-candidate
+          path: repro-evidence/phosh-rootfs-reproducibility-candidate.json
+          if-no-files-found: error
+          retention-days: 14
