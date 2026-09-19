@@ -6,14 +6,18 @@ on:
     paths:
       - "kaliphonestudio/phosh.py"
       - "kaliphonestudio/phosh_build.py"
+      - "kaliphonestudio/phosh_reproducibility.py"
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_canonical.py"
       - "scripts/run_locked_phosh_rootfs_build.py"
+      - "scripts/compare_phosh_rootfs_builds.py"
       - "tools/phosh-source-lock.json"
       - "tools/phosh-rootfs-build-contract.json"
       - "tests/test_phosh.py"
       - "tests/test_phosh_build.py"
+      - "tests/test_phosh_reproducibility.py"
       - ".github/workflows/phosh-rootfs-build-contract.yml"
+      - ".github/workflows/phosh-rootfs-reproducibility.yml"
       - "assets/readme/progress-*.svg"
       - "scripts/generate_progress_svgs.py"
       - "scripts/check_progress_presentation.py"
@@ -23,14 +27,18 @@ on:
     paths:
       - "kaliphonestudio/phosh.py"
       - "kaliphonestudio/phosh_build.py"
+      - "kaliphonestudio/phosh_reproducibility.py"
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_canonical.py"
       - "scripts/run_locked_phosh_rootfs_build.py"
+      - "scripts/compare_phosh_rootfs_builds.py"
       - "tools/phosh-source-lock.json"
       - "tools/phosh-rootfs-build-contract.json"
       - "tests/test_phosh.py"
       - "tests/test_phosh_build.py"
+      - "tests/test_phosh_reproducibility.py"
       - ".github/workflows/phosh-rootfs-build-contract.yml"
+      - ".github/workflows/phosh-rootfs-reproducibility.yml"
       - "assets/readme/progress-*.svg"
       - "scripts/generate_progress_svgs.py"
       - "scripts/check_progress_presentation.py"
@@ -60,143 +68,23 @@ jobs:
           python -m py_compile
           kaliphonestudio/phosh.py
           kaliphonestudio/phosh_build.py
+          kaliphonestudio/phosh_reproducibility.py
           kaliphonestudio/rootfs.py
           kaliphonestudio/rootfs_canonical.py
           scripts/run_locked_phosh_rootfs_build.py
+          scripts/compare_phosh_rootfs_builds.py
           tests/test_phosh_build.py
-      - name: Test Phosh source and executable build contracts
+          tests/test_phosh_reproducibility.py
+      - name: Test Phosh source, build and A/B comparison contracts
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: >-
           python -m pytest -q
           tests/test_phosh.py
           tests/test_phosh_build.py
+          tests/test_phosh_reproducibility.py
       - name: Verify progress presentation remains deterministic
         run: >-
           python scripts/generate_progress_svgs.py --check
           &&
           python scripts/check_progress_presentation.py
-
-  real-build-smoke:
-    name: Real ARM64 Phosh rootfs build smoke
-    if: github.event_name == 'pull_request'
-    needs: contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-
-      - name: Install real-build host prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            binfmt-support ca-certificates debos git qemu-user-static xz-utils
-          if [ -e /dev/kvm ]; then
-            sudo chmod a+rw /dev/kvm
-          fi
-          host_kernel="/boot/vmlinuz-$(uname -r)"
-          if [ -f "$host_kernel" ]; then
-            sudo chmod a+r "$host_kernel"
-            test -r "$host_kernel"
-          fi
-          command -v debos
-          dpkg-query -W -f='debos_version=${Version}\n' debos
-          command -v qemu-aarch64-static
-
-      - name: Load exact pinned upstream source
-        id: source
-        shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          from kaliphonestudio.phosh import load_phosh_source_lock
-
-          lock = load_phosh_source_lock(Path("tools/phosh-source-lock.json"))
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              print(f"repository={lock.upstream_repository}", file=out)
-              print(f"commit={lock.upstream_commit}", file=out)
-          print(f"phosh_source_lock_sha256={lock.lock_sha256()}")
-          PY
-
-      - name: Prepare exact detached upstream checkout
-        shell: bash
-        env:
-          SOURCE_REPOSITORY: ${{ steps.source.outputs.repository }}
-          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
-        run: |
-          set -euo pipefail
-          git init --quiet upstream-phosh
-          git -C upstream-phosh remote add origin "$SOURCE_REPOSITORY"
-          git -C upstream-phosh fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
-          test "$(git -C upstream-phosh rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
-          git -C upstream-phosh checkout --quiet --detach "$SOURCE_COMMIT"
-          test "$(git -C upstream-phosh rev-parse HEAD)" = "$SOURCE_COMMIT"
-          test -z "$(git -C upstream-phosh status --porcelain --untracked-files=no)"
-
-      - name: Execute one real pinned Phosh ARM64 rootfs build
-        shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts evidence
-          python scripts/run_locked_phosh_rootfs_build.py \
-            --checkout upstream-phosh \
-            --out artifacts/phosh-smoke.tar.xz \
-            --package-manifest evidence/phosh-packages.tsv \
-            --build-evidence evidence/phosh-build.json \
-            --canonicalization-evidence evidence/phosh-canonical.json \
-            --timeout 6600
-          test -s artifacts/phosh-smoke.tar.xz
-          test -s evidence/phosh-packages.tsv
-          test -s evidence/phosh-build.json
-          test -s evidence/phosh-canonical.json
-          sha256sum artifacts/phosh-smoke.tar.xz > evidence/phosh-smoke.sha256
-
-      - name: Enforce smoke evidence remains non-authoritative
-        shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from hashlib import sha256
-          import json
-          from pathlib import Path
-
-          artifact = Path("artifacts/phosh-smoke.tar.xz")
-          evidence = json.loads(Path("evidence/phosh-build.json").read_text(encoding="utf-8"))
-          digest = sha256(artifact.read_bytes()).hexdigest()
-          assert evidence["artifact_sha256"] == digest
-          assert evidence["phosh_package_contract_satisfied"] is True
-          assert evidence["reproducibility_authority"] is False
-          assert evidence["physical_validation_required"] is True
-          assert evidence["hardware_verified"] is False
-          assert evidence["beta_gate_credit"] is False
-          print(f"artifact_sha256={digest}")
-          print(f"artifact_size={artifact.stat().st_size}")
-          print(f"package_count={evidence['package_count']}")
-          PY
-
-      - name: Upload non-release real-build smoke evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phosh-rootfs-real-build-smoke-evidence
-          path: |
-            evidence/phosh-build.json
-            evidence/phosh-canonical.json
-            evidence/phosh-packages.tsv
-            evidence/phosh-smoke.sha256
-          if-no-files-found: warn
-          retention-days: 7
