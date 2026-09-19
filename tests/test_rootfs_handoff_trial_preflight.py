@@ -133,6 +133,26 @@ class RootfsHandoffTrialPreflightTests(TestCase):
         with self.assertRaisesRegex(RootfsHandoffTrialPreflightError, "persistent_write_authorized=false"):
             load_rootfs_handoff_trial_preflight_evidence(destination)
 
+    def test_tampered_preflight_absolute_staging_path_is_rejected(self) -> None:
+        evidence = replace(
+            build_rootfs_handoff_trial_preflight(self.plan_path, self.rootfs_path),
+            staging_subpath="/data/kaliphonestudio/rootfs-stage",
+        )
+        destination = self.root / "tampered-path.json"
+        destination.write_text(evidence.canonical_json(), encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(RootfsHandoffTrialPreflightError, "relative and path-independent"):
+            load_rootfs_handoff_trial_preflight_evidence(destination)
+
+    def test_tampered_preflight_locked_encryption_is_rejected(self) -> None:
+        evidence = replace(
+            build_rootfs_handoff_trial_preflight(self.plan_path, self.rootfs_path),
+            observed_encryption_state="locked",
+        )
+        destination = self.root / "tampered-encryption.json"
+        destination.write_text(evidence.canonical_json(), encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(RootfsHandoffTrialPreflightError, "encryption state is not acceptable"):
+            load_rootfs_handoff_trial_preflight_evidence(destination)
+
     def test_symlink_rootfs_is_rejected_when_supported(self) -> None:
         link = self.root / "rootfs-link.tar.xz"
         try:
