@@ -33,6 +33,8 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
         self.assertEqual(3, len(report["contracts"]))
         self.assertTrue(all(item["status"] == "PASS" for item in report["contracts"]))
         self.assertTrue(all(not item["execution_primitives"] for item in report["contracts"]))
+        preflight = next(item for item in report["contracts"] if item["name"] == "local-rootfs-preflight")
+        self.assertEqual(["kaliphonestudio/stable_file.py"], preflight["dependencies"])
         self.assertFalse(report["physical_interaction_performed"])
         self.assertFalse(report["external_device_command_executed"])
         self.assertFalse(report["persistent_write_authorized"])
@@ -53,9 +55,14 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
         self.assertEqual("PASS", report["status"])
 
     def _copy_contract_tree(self, destination: Path) -> None:
+        copied: set[Path] = set()
         for contract in AUDIT.CONTRACTS:
-            for key in ("source", "doc", "test"):
-                relative = Path(contract[key])
+            relative_paths = [Path(contract[key]) for key in ("source", "doc", "test")]
+            relative_paths.extend(Path(value) for value in contract.get("dependencies", ()))
+            for relative in relative_paths:
+                if relative in copied:
+                    continue
+                copied.add(relative)
                 target = destination / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / relative, target)
@@ -110,6 +117,24 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
             report = AUDIT.audit(tree)
             self.assertEqual("FAIL", report["status"])
             self.assertTrue(any("execution primitives" in failure for failure in report["failures"]))
+
+    def test_execution_primitive_in_safety_dependency_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp)
+            self._copy_contract_tree(tree)
+            dependency = tree / "kaliphonestudio/stable_file.py"
+            text = dependency.read_text(encoding="utf-8")
+            future = "from __future__ import annotations\n"
+            self.assertIn(future, text)
+            dependency.write_text(
+                text.replace(future, future + "import subprocess\n", 1),
+                encoding="utf-8",
+            )
+            report = AUDIT.audit(tree)
+            self.assertEqual("FAIL", report["status"])
+            self.assertTrue(any("execution primitives" in failure for failure in report["failures"]))
+            preflight = next(item for item in report["contracts"] if item["name"] == "local-rootfs-preflight")
+            self.assertTrue(any("stable_file.py:import:subprocess" in hit for hit in preflight["execution_primitives"]))
 
     def test_documentation_safety_marker_drift_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
