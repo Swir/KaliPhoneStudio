@@ -30,7 +30,18 @@ The evidence always keeps these claims false:
 
 The module performs no Fastboot/ADB/device access, chooses no storage target, carries no raw device path or mount target, and cannot authorize a rootfs trial or persistent write.
 
-## Offline CLI
+## Unified evidence CLI
+
+The preferred operator path is the same source/frozen Windows evidence namespace used by the other offline review stages:
+
+```bash
+python main.py evidence bind-phosh-candidate \
+  --candidate-authority-bundle evidence/first-boot-authority-bundle.json \
+  --phosh-rootfs-binding evidence/phosh-rootfs-authority-binding.json \
+  --out evidence/phosh-candidate-binding.json
+```
+
+The standalone builder remains available for reproducible scripting:
 
 ```bash
 python scripts/build_phosh_candidate_binding.py \
@@ -39,7 +50,7 @@ python scripts/build_phosh_candidate_binding.py \
   --output evidence/phosh-candidate-binding.json
 ```
 
-Both inputs must be canonical regular files and not symlinks. The output is create-only canonical JSON. Existing output or stale temporary paths are refused.
+Both inputs must be canonical regular files and not symlinks. The output is create-only canonical JSON. Existing output or stale temporary paths are refused. The unified command emits the same explicit safety boundary: no phone interaction, no storage selection/write authorization and no display/touch/hardware/Beta credit.
 
 ## What comes next
 
