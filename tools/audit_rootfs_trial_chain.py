@@ -5,7 +5,8 @@ This checker intentionally parses source instead of importing execution modules.
 verifies that the three host-side gates between fresh target revalidation and any
 future interactive executor still advertise the reviewed policies, carry all
 required fail-closed flags, and remain free of process-execution primitives. It
-performs no device I/O and grants no hardware or Beta credit.
+also audits safety-sensitive helper dependencies used by a reviewed boundary.
+It performs no device I/O and grants no hardware or Beta credit.
 """
 from __future__ import annotations
 
@@ -95,6 +96,7 @@ CONTRACTS: tuple[dict[str, Any], ...] = (
     {
         "name": "local-rootfs-preflight",
         "source": "kaliphonestudio/rootfs_handoff_trial_preflight.py",
+        "dependencies": ("kaliphonestudio/stable_file.py",),
         "policy_attr": "_POLICY",
         "policy": "rootfs-handoff-local-rootfs-preflight-v1",
         "forbidden_attr": "_FORBIDDEN_PREFLIGHT_FLAGS",
@@ -181,6 +183,14 @@ def _execution_primitives(path: Path) -> list[str]:
     return sorted(found)
 
 
+def _execution_primitives_for_paths(root: Path, paths: tuple[Path, ...]) -> list[str]:
+    found: list[str] = []
+    for path in paths:
+        relative = path.relative_to(root).as_posix()
+        found.extend(f"{relative}:{hit}" for hit in _execution_primitives(path))
+    return sorted(found)
+
+
 def audit(root: Path = ROOT) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     failures: list[str] = []
@@ -189,15 +199,18 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         source = root / contract["source"]
         doc = root / contract["doc"]
         test = root / contract["test"]
+        dependencies = tuple(root / value for value in contract.get("dependencies", ()))
         item: dict[str, Any] = {
             "name": contract["name"],
             "source": contract["source"],
+            "dependencies": [path.relative_to(root).as_posix() for path in dependencies],
             "doc": contract["doc"],
             "test": contract["test"],
             "expected_policy": contract["policy"],
         }
 
-        missing = [str(p.relative_to(root)) for p in (source, doc, test) if not p.is_file()]
+        required_paths = (source, doc, test, *dependencies)
+        missing = [str(p.relative_to(root)) for p in required_paths if not p.is_file()]
         if missing:
             item["status"] = "FAIL"
             item["missing"] = missing
@@ -211,7 +224,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         required_true = set(assignments.get(contract["required_attr"], ()))
         missing_forbidden = sorted(set(contract["required_forbidden"]) - forbidden)
         missing_required = sorted(set(contract["required_true"]) - required_true)
-        execution_primitives = _execution_primitives(source)
+        execution_primitives = _execution_primitives_for_paths(root, (source, *dependencies))
         doc_text = doc.read_text(encoding="utf-8")
         missing_doc_markers = [marker for marker in contract["doc_markers"] if marker not in doc_text]
 
