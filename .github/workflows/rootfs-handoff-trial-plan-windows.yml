@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "main.py"
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/operator_evidence_workspace.py"
       - "kaliphonestudio/operator_trial_evidence_cli.py"
       - "kaliphonestudio/rootfs_handoff_trial_authorization.py"
@@ -18,11 +19,13 @@ on:
       - "tests/test_rootfs_handoff_trial_authorization.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
+      - "tests/test_rootfs_trial_stable_evidence_reads.py"
       - "tests/test_operator_trial_evidence_workspace.py"
       - ".github/workflows/rootfs-handoff-trial-plan-windows.yml"
   pull_request:
     paths:
       - "main.py"
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/operator_evidence_workspace.py"
       - "kaliphonestudio/operator_trial_evidence_cli.py"
       - "kaliphonestudio/rootfs_handoff_trial_authorization.py"
@@ -36,6 +39,7 @@ on:
       - "tests/test_rootfs_handoff_trial_authorization.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
+      - "tests/test_rootfs_trial_stable_evidence_reads.py"
       - "tests/test_operator_trial_evidence_workspace.py"
       - ".github/workflows/rootfs-handoff-trial-plan-windows.yml"
   workflow_dispatch:
@@ -72,6 +76,7 @@ jobs:
           tests/test_rootfs_handoff_trial_authorization.py
           tests/test_rootfs_handoff_trial_plan.py
           tests/test_rootfs_handoff_trial_preflight.py
+          tests/test_rootfs_trial_stable_evidence_reads.py
           tests/test_operator_trial_evidence_workspace.py
 
       - name: Build frozen Windows host CLI

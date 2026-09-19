@@ -33,6 +33,7 @@ from .rootfs_handoff_trial_authorization import (
     load_rootfs_handoff_trial_authorization_evidence,
     validate_rootfs_handoff_trial_authorization_evidence,
 )
+from .stable_file import StableFileError, read_stable_regular_file
 
 _POLICY = "rootfs-handoff-interactive-trial-plan-v1"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -180,25 +181,14 @@ def _safe_relative_subpath(value: object) -> str:
 
 
 def _read_exact(path: Path) -> bytes:
-    source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise RootfsHandoffTrialPlanError("trial plan must be a regular non-symlink file")
     try:
-        before = source.stat()
-        if before.st_size <= 0 or before.st_size > _MAX_EVIDENCE_BYTES:
-            raise RootfsHandoffTrialPlanError("trial plan size is outside the safety limit")
-        raw = source.read_bytes()
-        after = source.stat()
-    except OSError as exc:
-        raise RootfsHandoffTrialPlanError(f"cannot read trial plan: {exc}") from exc
-    if len(raw) != before.st_size:
-        raise RootfsHandoffTrialPlanError("trial plan size changed while being read")
-    if (
-        before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
-    ):
-        raise RootfsHandoffTrialPlanError("trial plan changed while being read")
+        raw, _identity = read_stable_regular_file(
+            Path(path),
+            max_bytes=_MAX_EVIDENCE_BYTES,
+            label="trial plan",
+        )
+    except StableFileError as exc:
+        raise RootfsHandoffTrialPlanError(str(exc)) from exc
     return raw
 
 

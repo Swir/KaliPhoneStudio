@@ -33,8 +33,12 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
         self.assertEqual(3, len(report["contracts"]))
         self.assertTrue(all(item["status"] == "PASS" for item in report["contracts"]))
         self.assertTrue(all(not item["execution_primitives"] for item in report["contracts"]))
+        plan = next(item for item in report["contracts"] if item["name"] == "interactive-trial-plan")
         preflight = next(item for item in report["contracts"] if item["name"] == "local-rootfs-preflight")
+        self.assertEqual(["kaliphonestudio/stable_file.py"], plan["dependencies"])
         self.assertEqual(["kaliphonestudio/stable_file.py"], preflight["dependencies"])
+        self.assertEqual([], plan["stable_reader_issues"])
+        self.assertEqual([], preflight["stable_reader_issues"])
         self.assertFalse(report["physical_interaction_performed"])
         self.assertFalse(report["external_device_command_executed"])
         self.assertFalse(report["persistent_write_authorized"])
@@ -135,6 +139,22 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
             self.assertTrue(any("execution primitives" in failure for failure in report["failures"]))
             preflight = next(item for item in report["contracts"] if item["name"] == "local-rootfs-preflight")
             self.assertTrue(any("stable_file.py:import:subprocess" in hit for hit in preflight["execution_primitives"]))
+
+    def test_stable_reader_regression_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp)
+            self._copy_contract_tree(tree)
+            source = tree / "kaliphonestudio/rootfs_handoff_trial_plan.py"
+            text = source.read_text(encoding="utf-8")
+            needle = "raw, _identity = read_stable_regular_file("
+            self.assertIn(needle, text)
+            source.write_text(
+                text.replace(needle, "raw = Path(path).read_bytes()\n        _identity = read_stable_regular_file(", 1),
+                encoding="utf-8",
+            )
+            report = AUDIT.audit(tree)
+            self.assertEqual("FAIL", report["status"])
+            self.assertTrue(any("descriptor-bound stable reader drift" in failure for failure in report["failures"]))
 
     def test_documentation_safety_marker_drift_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
