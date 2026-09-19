@@ -1,9 +1,10 @@
 """Offline rootfs trial-authorization and later-executor planning commands.
 
 These commands are intentionally non-executing. They consume already reviewed
-host evidence, create/bind manual authorization records, and can build an exact
-plan for a future interactive executor. They never talk to a phone, resolve a
-raw storage path, mount/copy/write storage, execute a rootfs trial, or grant
+host evidence, create/bind manual authorization records, build an exact plan for
+a future interactive executor, and can re-hash the exact local rootfs artifact
+before that later boundary. They never talk to a phone, resolve a raw storage
+path, mount/copy/write storage, execute a rootfs trial, or grant
 storage/recovery/hardware/Beta credit.
 """
 from __future__ import annotations
@@ -26,11 +27,17 @@ from .rootfs_handoff_trial_plan import (
     build_rootfs_handoff_trial_plan,
     write_rootfs_handoff_trial_plan,
 )
+from .rootfs_handoff_trial_preflight import (
+    RootfsHandoffTrialPreflightError,
+    build_rootfs_handoff_trial_preflight,
+    write_rootfs_handoff_trial_preflight_evidence,
+)
 
 TRIAL_EVIDENCE_COMMANDS = (
     "prepare-rootfs-handoff-trial-authorization-review",
     "bind-rootfs-handoff-trial-authorization-review",
     "build-rootfs-handoff-trial-plan",
+    "build-rootfs-handoff-trial-preflight",
 )
 
 
@@ -38,8 +45,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="KaliPhoneStudio evidence",
         description=(
-            "Offline manual rootfs-trial authorization and planning workspace. No phone I/O, raw path binding, mounting, "
-            "trial execution, persistent write authorization, hardware promotion or Beta credit is possible here."
+            "Offline manual rootfs-trial authorization, planning and local-artifact preflight workspace. "
+            "No phone I/O, raw path binding, mounting, trial execution, persistent write authorization, "
+            "hardware promotion or Beta credit is possible here."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Emit a machine-readable safety/result summary.")
@@ -86,6 +94,19 @@ def _build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--target-binding", type=Path, required=True)
     plan.add_argument("--fresh-revalidation", type=Path, required=True)
     plan.add_argument("--out", type=Path, required=True)
+
+    preflight = sub.add_parser(
+        "build-rootfs-handoff-trial-preflight",
+        help="Re-hash the exact local rootfs artifact against one accepted non-executing trial plan.",
+        description=(
+            "Build deterministic local-artifact preflight evidence from one exact trial plan and local rootfs file. "
+            "This re-hashes exact rootfs bytes only; live device/firmware/target/recovery rechecks and explicit operator "
+            "confirmation remain mandatory at a later interactive executor. No device I/O, raw path, mount or write is performed."
+        ),
+    )
+    preflight.add_argument("--trial-plan", type=Path, required=True)
+    preflight.add_argument("--rootfs-artifact", type=Path, required=True)
+    preflight.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -230,6 +251,30 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             physical_gate_still_incomplete=plan.physical_gate_still_incomplete,
         )
 
+    if args.evidence_command == "build-rootfs-handoff-trial-preflight":
+        evidence = build_rootfs_handoff_trial_preflight(args.trial_plan, args.rootfs_artifact)
+        digest = write_rootfs_handoff_trial_preflight_evidence(evidence, args.out)
+        return _safe_result(
+            args.evidence_command,
+            args.out,
+            digest,
+            profile_id=evidence.profile_id,
+            device_serial=evidence.device_serial,
+            exact_trial_plan_bound=evidence.exact_trial_plan_bound,
+            local_rootfs_exact_bytes_verified=evidence.local_rootfs_exact_bytes_verified,
+            rootfs_artifact_sha256=evidence.rootfs_artifact_sha256,
+            rootfs_artifact_size=evidence.rootfs_artifact_size,
+            live_device_identity_recheck_required=evidence.live_device_identity_recheck_required,
+            live_firmware_recheck_required=evidence.live_firmware_recheck_required,
+            live_target_identity_recheck_required=evidence.live_target_identity_recheck_required,
+            live_filesystem_encryption_capacity_recheck_required=evidence.live_filesystem_encryption_capacity_recheck_required,
+            recovery_readiness_recheck_required=evidence.recovery_readiness_recheck_required,
+            explicit_operator_confirmation_required=evidence.explicit_operator_confirmation_required,
+            write_scope_confirmation_required=evidence.write_scope_confirmation_required,
+            interactive_executor_still_required=evidence.interactive_executor_still_required,
+            physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
+        )
+
     raise RootfsHandoffTrialAuthorizationError(f"unsupported trial evidence command: {args.evidence_command}")
 
 
@@ -238,7 +283,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         result = _run(args)
-    except (RootfsHandoffTrialAuthorizationError, RootfsHandoffTrialPlanError, OSError, ValueError) as exc:
+    except (
+        RootfsHandoffTrialAuthorizationError,
+        RootfsHandoffTrialPlanError,
+        RootfsHandoffTrialPreflightError,
+        OSError,
+        ValueError,
+    ) as exc:
         print(f"Evidence workflow error: {exc}", file=sys.stderr)
         return 2
     _emit(result, as_json=args.json)
