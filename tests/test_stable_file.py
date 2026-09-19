@@ -56,6 +56,10 @@ def test_hash_stable_regular_file_rejects_symlink(tmp_path: Path) -> None:
         hash_stable_regular_file(link, max_bytes=1024, label="artifact")
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows may deny renaming a file while the read descriptor is open",
+)
 def test_hash_stable_regular_file_rejects_path_swap_during_hash(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
