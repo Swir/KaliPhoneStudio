@@ -57,6 +57,8 @@ CONTRACTS: tuple[dict[str, Any], ...] = (
     {
         "name": "interactive-trial-plan",
         "source": "kaliphonestudio/rootfs_handoff_trial_plan.py",
+        "dependencies": ("kaliphonestudio/stable_file.py",),
+        "stable_reader_required": True,
         "policy_attr": "_POLICY",
         "policy": "rootfs-handoff-interactive-trial-plan-v1",
         "forbidden_attr": "_PLAN_FORBIDDEN",
@@ -97,6 +99,7 @@ CONTRACTS: tuple[dict[str, Any], ...] = (
         "name": "local-rootfs-preflight",
         "source": "kaliphonestudio/rootfs_handoff_trial_preflight.py",
         "dependencies": ("kaliphonestudio/stable_file.py",),
+        "stable_reader_required": True,
         "policy_attr": "_POLICY",
         "policy": "rootfs-handoff-local-rootfs-preflight-v1",
         "forbidden_attr": "_FORBIDDEN_PREFLIGHT_FLAGS",
@@ -191,6 +194,44 @@ def _execution_primitives_for_paths(root: Path, paths: tuple[Path, ...]) -> list
     return sorted(found)
 
 
+def _stable_reader_issues(path: Path) -> list[str]:
+    """Verify that _read_exact is descriptor-bound through stable_file."""
+    tree = _parse(path)
+    imported: set[str] = set()
+    read_exact: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module == "stable_file":
+            imported.update(alias.name for alias in node.names)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_read_exact":
+            read_exact = node
+
+    issues: list[str] = []
+    for required in ("StableFileError", "read_stable_regular_file"):
+        if required not in imported:
+            issues.append(f"missing stable_file import: {required}")
+
+    if read_exact is None:
+        issues.append("missing _read_exact boundary")
+        return issues
+
+    stable_calls = 0
+    path_read_calls = 0
+    for node in ast.walk(read_exact):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "read_stable_regular_file":
+                stable_calls += 1
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"read_bytes", "read_text", "open"}:
+                path_read_calls += 1
+
+    if stable_calls != 1:
+        issues.append(f"_read_exact must call read_stable_regular_file exactly once, got {stable_calls}")
+    if path_read_calls:
+        issues.append("_read_exact contains direct path read/open operations")
+    return issues
+
+
 def audit(root: Path = ROOT) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     failures: list[str] = []
@@ -225,6 +266,9 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         missing_forbidden = sorted(set(contract["required_forbidden"]) - forbidden)
         missing_required = sorted(set(contract["required_true"]) - required_true)
         execution_primitives = _execution_primitives_for_paths(root, (source, *dependencies))
+        stable_reader_issues = (
+            _stable_reader_issues(source) if contract.get("stable_reader_required") else []
+        )
         doc_text = doc.read_text(encoding="utf-8")
         missing_doc_markers = [marker for marker in contract["doc_markers"] if marker not in doc_text]
 
@@ -236,6 +280,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
                 "missing_forbidden_flags": missing_forbidden,
                 "missing_required_flags": missing_required,
                 "execution_primitives": execution_primitives,
+                "stable_reader_issues": stable_reader_issues,
                 "missing_doc_markers": missing_doc_markers,
             }
         )
@@ -252,6 +297,10 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
             failures.append(
                 f"{contract['name']}: offline boundary contains execution primitives: {', '.join(execution_primitives)}"
             )
+        if stable_reader_issues:
+            failures.append(
+                f"{contract['name']}: descriptor-bound stable reader drift: {', '.join(stable_reader_issues)}"
+            )
         if missing_doc_markers:
             failures.append(f"{contract['name']}: documentation safety markers drifted")
 
@@ -261,6 +310,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
                 missing_forbidden,
                 missing_required,
                 execution_primitives,
+                stable_reader_issues,
                 missing_doc_markers,
             )
         ) else "FAIL"

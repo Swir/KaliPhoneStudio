@@ -16,6 +16,7 @@ on:
       - "tests/test_rootfs_handoff_trial_authorization.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
+      - "tests/test_rootfs_trial_stable_evidence_reads.py"
       - "tests/test_rootfs_trial_chain_audit.py"
       - "tools/audit_rootfs_trial_chain.py"
       - ".github/workflows/rootfs-trial-chain-audit.yml"
@@ -33,6 +34,7 @@ on:
       - "tests/test_rootfs_handoff_trial_authorization.py"
       - "tests/test_rootfs_handoff_trial_plan.py"
       - "tests/test_rootfs_handoff_trial_preflight.py"
+      - "tests/test_rootfs_trial_stable_evidence_reads.py"
       - "tests/test_rootfs_trial_chain_audit.py"
       - "tools/audit_rootfs_trial_chain.py"
       - ".github/workflows/rootfs-trial-chain-audit.yml"
@@ -67,5 +69,6 @@ jobs:
           tests.test_rootfs_handoff_trial_authorization
           tests.test_rootfs_handoff_trial_plan
           tests.test_rootfs_handoff_trial_preflight
+          tests.test_rootfs_trial_stable_evidence_reads
           tests.test_rootfs_trial_chain_audit
           -v
