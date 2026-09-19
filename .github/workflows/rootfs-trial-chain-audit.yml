@@ -1,0 +1,67 @@
+name: rootfs-trial-chain-audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/rootfs_handoff_trial_authorization.py"
+      - "kaliphonestudio/rootfs_handoff_trial_plan.py"
+      - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
+      - "docs/ROOTFS_HANDOFF_TRIAL_AUTHORIZATION.md"
+      - "docs/ROOTFS_HANDOFF_TRIAL_PLAN.md"
+      - "docs/ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md"
+      - "docs/ROOTFS_TRIAL_CHAIN_AUDIT.md"
+      - "tests/test_rootfs_handoff_trial_authorization.py"
+      - "tests/test_rootfs_handoff_trial_plan.py"
+      - "tests/test_rootfs_handoff_trial_preflight.py"
+      - "tests/test_rootfs_trial_chain_audit.py"
+      - "tools/audit_rootfs_trial_chain.py"
+      - ".github/workflows/rootfs-trial-chain-audit.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/rootfs_handoff_trial_authorization.py"
+      - "kaliphonestudio/rootfs_handoff_trial_plan.py"
+      - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
+      - "docs/ROOTFS_HANDOFF_TRIAL_AUTHORIZATION.md"
+      - "docs/ROOTFS_HANDOFF_TRIAL_PLAN.md"
+      - "docs/ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md"
+      - "docs/ROOTFS_TRIAL_CHAIN_AUDIT.md"
+      - "tests/test_rootfs_handoff_trial_authorization.py"
+      - "tests/test_rootfs_handoff_trial_plan.py"
+      - "tests/test_rootfs_handoff_trial_preflight.py"
+      - "tests/test_rootfs_trial_chain_audit.py"
+      - "tools/audit_rootfs_trial_chain.py"
+      - ".github/workflows/rootfs-trial-chain-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Deterministic safety audit
+        run: python tools/audit_rootfs_trial_chain.py --json
+
+      - name: Focused trial-chain tests
+        run: >-
+          python -m unittest
+          tests.test_rootfs_handoff_trial_authorization
+          tests.test_rootfs_handoff_trial_plan
+          tests.test_rootfs_handoff_trial_preflight
+          tests.test_rootfs_trial_chain_audit
+          -v
