@@ -32,6 +32,7 @@ from .rootfs_handoff_target_binding import (
     load_rootfs_handoff_target_binding_evidence,
     validate_rootfs_handoff_target_binding_evidence,
 )
+from .stable_file import StableFileError, read_stable_regular_file
 
 _POLICY = "reversible-rootfs-handoff-fresh-target-revalidation-v1"
 _ALLOWED_ENCRYPTION_STATES = frozenset({"unlocked", "unencrypted"})
@@ -357,24 +358,14 @@ def write_rootfs_handoff_fresh_revalidation_evidence(
 def load_rootfs_handoff_fresh_revalidation_evidence(
     path: Path,
 ) -> RootfsHandoffFreshRevalidationEvidence:
-    source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise RootfsHandoffFreshRevalidationError("fresh target revalidation evidence must be a regular non-symlink file")
     try:
-        before = source.stat()
-        raw = source.read_bytes()
-        after = source.stat()
-    except OSError as exc:
-        raise RootfsHandoffFreshRevalidationError(f"cannot read fresh target revalidation evidence: {exc}") from exc
-    if not raw or len(raw) > _MAX_EVIDENCE_BYTES:
-        raise RootfsHandoffFreshRevalidationError("fresh target revalidation evidence size is outside the safety limit")
-    if (
-        before.st_size != len(raw)
-        or before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
-    ):
-        raise RootfsHandoffFreshRevalidationError("fresh target revalidation evidence changed while being read")
+        raw, _identity = read_stable_regular_file(
+            Path(path),
+            max_bytes=_MAX_EVIDENCE_BYTES,
+            label="fresh target revalidation evidence",
+        )
+    except StableFileError as exc:
+        raise RootfsHandoffFreshRevalidationError(str(exc)) from exc
     try:
         value: Any = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
