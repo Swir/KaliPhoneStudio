@@ -6,8 +6,10 @@ KaliPhoneStudio keeps device-specific knowledge under `devices/<vendor>/<codenam
 
 Every maintained profile uses `schema_version: 3` and is checked in two layers:
 
-1. `devices/profile.schema.json` — Draft 2020-12 structural validation for required fields and typed identity structure.
+1. `devices/profile.schema.json` — Draft 2020-12 structural validation for required fields and typed safety-sensitive structures.
 2. `kaliphonestudio.profiles.validate_profile()` — fail-closed semantic validation for cross-field constraints such as profile/path identity, boot/A-B contracts, pinned source commits, kernel/ramdisk compatibility and the functional hardware test contract.
+
+The formal schema is intentionally strict at object boundaries. Unknown top-level fields fail closed, and nested boot, partition, Fastboot probe, kernel, device-tree, rootfs-handoff, hooks and functional-hardware structures are typed before runtime semantic checks begin. The discovery-only rootfs handoff contract cannot structurally opt into target selection or persistent writes, while every functional-hardware test remains manual-review-only, non-destructive and unable to authorize persistent writes. Cross-field facts that JSON Schema cannot safely prove remain the responsibility of the runtime validator; passing either layer grants no hardware or Beta credit.
 
 Run both layers locally with:
 
@@ -59,7 +61,7 @@ Run it with:
 python -m kaliphonestudio.profile_registry_audit --devices-root devices --json
 ```
 
-The dedicated GitHub Actions workflow additionally builds the real frozen Windows CLI and reruns the registry audit through `KaliPhoneStudioCLI.exe`, preventing source-only behavior from drifting away from the packaged application.
+The dedicated GitHub Actions workflow validates both JSON-Schema and runtime layers, runs nested schema regression tests, builds the real frozen Windows CLI and reruns the registry audit through `KaliPhoneStudioCLI.exe`. This prevents source-only behavior and packaged registry behavior from drifting apart.
 
 ## Requirements before adding a profile
 
