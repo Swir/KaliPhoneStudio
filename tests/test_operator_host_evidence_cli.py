@@ -157,6 +157,34 @@ def test_host_cli_json_summary_keeps_all_safety_flags_false(tmp_path: Path, caps
     assert payload["ready_for_physical_phosh_validation"] is True
 
 
+def test_unified_workspace_routes_global_json_before_host_command(tmp_path: Path, capsys):
+    candidate_path, phosh_path = _inputs(tmp_path)
+    out_path = tmp_path / "phosh-candidate-binding.json"
+
+    rc = workspace_main(
+        [
+            "--json",
+            "bind-phosh-candidate",
+            "--candidate-authority-bundle",
+            str(candidate_path),
+            "--phosh-rootfs-binding",
+            str(phosh_path),
+            "--out",
+            str(out_path),
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "bind-phosh-candidate"
+    assert payload["profile_id"] == "oneplus/avicii"
+    assert payload["hardware_verified"] is False
+    assert payload["beta_release_authorized"] is False
+    assert payload["beta_gate_credit"] is False
+    assert payload["ready_for_physical_phosh_validation"] is True
+    assert load_phosh_candidate_binding(out_path).provenance_cross_bound is True
+
+
 def test_unified_workspace_missing_inputs_fail_closed_without_output(tmp_path: Path, capsys):
     out_path = tmp_path / "must-not-exist.json"
     rc = workspace_main(
