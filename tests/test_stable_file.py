@@ -84,7 +84,10 @@ def test_hash_stable_regular_file_rejects_path_swap_during_hash(
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
 
-    with pytest.raises(StableFileError, match="path was replaced or changed while being hashed"):
+    with pytest.raises(
+        StableFileError,
+        match="(?:changed while being hashed|path was replaced or changed while being hashed)",
+    ):
         hash_stable_regular_file(
             artifact,
             max_bytes=4 * 1024 * 1024,
