@@ -19,6 +19,8 @@ ALL_EVIDENCE_COMMANDS = (
     + TRIAL_EVIDENCE_COMMANDS
 )
 
+_GLOBAL_OPTIONS_BEFORE_COMMAND = frozenset({"--json"})
+
 
 def _print_help() -> None:
     print("KaliPhoneStudio evidence — offline exact-file evidence workspace")
@@ -34,16 +36,21 @@ def _print_help() -> None:
 
 
 def _select_command(args: Sequence[str]) -> str | None:
-    """Return the first known command token, preserving parser ownership of options.
+    """Select only the first positional command after known flag-only globals.
 
-    Specialized evidence parsers accept global options such as ``--json`` before
-    their subcommand. Routing solely on ``args[0]`` silently sent those valid
-    forms to the core parser. Scanning for the first known command fixes that
-    without interpreting, rewriting or consuming any option/value pairs here.
+    Specialized evidence parsers accept ``--json`` before their subcommand. The
+    dispatcher must support that form without scanning arbitrary later tokens:
+    an unknown option may consume a value that happens to equal a valid command,
+    and routing on that value would hand arguments to the wrong parser. Unknown
+    leading options and unknown first positional tokens therefore fail closed to
+    the core parser, which owns the final argparse error.
     """
     for token in args:
-        if token in ALL_EVIDENCE_COMMANDS:
-            return token
+        if token in _GLOBAL_OPTIONS_BEFORE_COMMAND:
+            continue
+        if token.startswith("-"):
+            return None
+        return token if token in ALL_EVIDENCE_COMMANDS else None
     return None
 
 
