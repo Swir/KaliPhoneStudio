@@ -1,0 +1,69 @@
+name: stable-local-artifact-integrity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/stable_file.py"
+      - "tests/test_stable_file.py"
+      - "docs/STABLE_LOCAL_ARTIFACT_INTEGRITY.md"
+      - ".github/workflows/stable-local-artifact-integrity.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/stable_file.py"
+      - "tests/test_stable_file.py"
+      - "docs/STABLE_LOCAL_ARTIFACT_INTEGRITY.md"
+      - ".github/workflows/stable-local-artifact-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-local-file-boundary:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install pytest
+      - name: Compile stable-file contract
+        run: python -m py_compile kaliphonestudio/stable_file.py tests/test_stable_file.py
+      - name: Run adversarial stable-file tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_stable_file.py
+      - name: Prove helper remains host-only and non-authorizing
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("kaliphonestudio/stable_file.py")
+          text = path.read_text(encoding="utf-8")
+          forbidden = (
+              "subprocess.run",
+              "Popen(",
+              "os.system",
+              "os.popen",
+              "fastboot ",
+              "adb ",
+              " mount ",
+              " flash ",
+              " erase ",
+              "beta_release_authorized=True",
+              "hardware_verified=True",
+          )
+          hits = [token for token in forbidden if token in text]
+          if hits:
+              raise SystemExit(f"stable-file helper gained forbidden execution/promotion surface: {hits}")
+          required = ("os.lstat", "os.fstat", "O_NOFOLLOW", "st_mtime_ns", "st_ctime_ns", "sha256")
+          missing = [token for token in required if token not in text]
+          if missing:
+              raise SystemExit(f"stable-file helper lost required fail-closed primitive(s): {missing}")
+          print("stable local artifact integrity contract remains host-only and fail-closed")
