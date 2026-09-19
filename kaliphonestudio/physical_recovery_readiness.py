@@ -20,6 +20,7 @@ from .fastboot_baseline import FastbootBaselineEvidence
 from .physical_baseline_bundle import PhysicalBaselineBundleEvidence
 from .physical_boot_identity_binding import PhysicalBootIdentityBindingEvidence
 from .profiles import DeviceProfile
+from .stable_file import StableFileError, hash_stable_regular_file
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -111,24 +112,15 @@ def _text_sha(value: object, label: str) -> str:
 
 
 def _stable_file_identity(path: Path, label: str) -> tuple[str, int]:
-    candidate = Path(path)
-    if candidate.is_symlink() or not candidate.is_file():
-        raise PhysicalRecoveryReadinessError(f"{label} must be a regular non-symlink file: {candidate}")
-    before = candidate.stat()
-    if before.st_size <= 0 or before.st_size > MAX_STOCK_BOOT_BYTES:
-        raise PhysicalRecoveryReadinessError(f"{label} size is outside the bounded recovery-material limit")
-    digest = sha256()
-    with candidate.open("rb") as handle:
-        while chunk := handle.read(1024 * 1024):
-            digest.update(chunk)
-    after = candidate.stat()
-    if (
-        before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or before.st_ino != after.st_ino
-    ):
-        raise PhysicalRecoveryReadinessError(f"{label} changed while being hashed")
-    return digest.hexdigest(), after.st_size
+    try:
+        identity = hash_stable_regular_file(
+            Path(path),
+            max_bytes=MAX_STOCK_BOOT_BYTES,
+            label=label,
+        )
+    except StableFileError as exc:
+        raise PhysicalRecoveryReadinessError(str(exc)) from exc
+    return identity.sha256, identity.size
 
 
 def _slot_context(profile: DeviceProfile, baseline: FastbootBaselineEvidence) -> tuple[str | None, str | None, int | None, str]:
