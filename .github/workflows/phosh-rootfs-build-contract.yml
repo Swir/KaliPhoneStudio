@@ -101,7 +101,7 @@ jobs:
             sudo chmod a+rw /dev/kvm
           fi
           command -v debos
-          debos --version
+          dpkg-query -W -f='debos_version=${Version}\n' debos
           command -v qemu-aarch64-static
 
       - name: Load exact pinned upstream source
