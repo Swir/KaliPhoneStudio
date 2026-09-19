@@ -140,7 +140,7 @@ def test_hash_stable_regular_file_rejects_same_size_mutation_with_restored_mtime
         )
 
 
-def test_hash_stable_regular_file_rejects_truncation_during_hash(
+def test_hash_stable_regular_file_rejects_short_descriptor_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -149,15 +149,14 @@ def test_hash_stable_regular_file_rejects_truncation_during_hash(
     artifact.write_bytes(payload)
 
     original_read = os.read
-    truncated = False
+    calls = 0
 
     def adversarial_read(fd: int, count: int) -> bytes:
-        nonlocal truncated
-        chunk = original_read(fd, count)
-        if chunk and not truncated:
-            os.truncate(artifact, 512 * 1024)
-            truncated = True
-        return chunk
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return original_read(fd, count)
+        return b""
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
 
@@ -170,7 +169,7 @@ def test_hash_stable_regular_file_rejects_truncation_during_hash(
         )
 
 
-def test_hash_stable_regular_file_rejects_growth_during_hash(
+def test_hash_stable_regular_file_rejects_overlong_descriptor_stream(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -179,15 +178,14 @@ def test_hash_stable_regular_file_rejects_growth_during_hash(
     artifact.write_bytes(payload)
 
     original_read = os.read
-    grown = False
+    injected = False
 
     def adversarial_read(fd: int, count: int) -> bytes:
-        nonlocal grown
+        nonlocal injected
         chunk = original_read(fd, count)
-        if chunk and not grown:
-            with artifact.open("ab") as handle:
-                handle.write(b"B" * (1024 * 1024))
-            grown = True
+        if not chunk and not injected:
+            injected = True
+            return b"B"
         return chunk
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
