@@ -113,7 +113,7 @@ class BetaReleaseReviewManifestTests(TestCase):
 
     def test_missing_artifact_fails_closed(self) -> None:
         (self.release / "KNOWN_ISSUES.txt").unlink()
-        with self.assertRaisesRegex(BetaReleaseReviewManifestError, "regular non-symlink"):
+        with self.assertRaisesRegex(BetaReleaseReviewManifestError, "cannot inspect"):
             self._build()
 
     def test_symlink_artifact_fails_closed(self) -> None:

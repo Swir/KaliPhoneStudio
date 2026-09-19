@@ -1,4 +1,4 @@
-"""Descriptor-bound hashing for safety-sensitive local artifacts.
+"""Descriptor-bound reads and hashing for safety-sensitive local artifacts.
 
 The helper is intentionally host-only. It never performs device I/O and never
 turns a verified local file into permission to boot, flash, mount, or write a
@@ -61,7 +61,7 @@ def _open_readonly_descriptor(candidate: Path) -> int:
 
     POSIX uses O_NOFOLLOW when available. Windows uses CreateFileW directly so
     the verification handle shares reads only: later write/delete opens and path
-    replacement are denied while the exact bytes are being hashed. The final
+    replacement are denied while the exact bytes are being consumed. The final
     component is opened as the reparse point itself rather than followed.
     """
     flags = os.O_RDONLY
@@ -124,22 +124,15 @@ def _open_readonly_descriptor(candidate: Path) -> int:
         raise
 
 
-def hash_stable_regular_file(
+def _consume_stable_regular_file(
     path: Path,
     *,
     max_bytes: int,
-    expected_size: int | None = None,
-    label: str = "artifact",
-) -> StableFileIdentity:
-    """Hash one exact regular file while defending the path/FD boundary.
-
-    ``O_NOFOLLOW`` is used when the host exposes it. Windows instead opens a
-    Win32 handle with read-only sharing and reparse-point protection. The initial
-    ``lstat`` plus descriptor ``fstat`` identity comparison remains mandatory on
-    every platform. A final ``lstat`` proves that the path still names the same
-    file object after hashing. Size and mtime must remain unchanged everywhere;
-    POSIX also requires unchanged ctime.
-    """
+    expected_size: int | None,
+    label: str,
+    capture_bytes: bool,
+) -> tuple[StableFileIdentity, bytes | None]:
+    """Consume one exact descriptor and optionally retain the verified bytes."""
     candidate = Path(path)
     if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
         raise StableFileError("max_bytes must be a positive integer")
@@ -172,6 +165,7 @@ def hash_stable_regular_file(
             raise StableFileError(f"{label} size differs from the expected exact size")
 
         digest = sha256()
+        captured = bytearray() if capture_bytes else None
         total = 0
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
@@ -179,22 +173,24 @@ def hash_stable_regular_file(
                 break
             total += len(chunk)
             if total > fd_before.st_size or total > max_bytes:
-                raise StableFileError(f"{label} grew while being hashed")
+                raise StableFileError(f"{label} grew while being read")
             digest.update(chunk)
+            if captured is not None:
+                captured.extend(chunk)
 
         fd_after = os.fstat(descriptor)
         if total != fd_before.st_size:
-            raise StableFileError(f"{label} was truncated while being hashed")
+            raise StableFileError(f"{label} was truncated while being read")
         if not _same_object(fd_before, fd_after):
-            raise StableFileError(f"{label} changed while being hashed")
+            raise StableFileError(f"{label} changed while being read")
 
         path_after = os.lstat(candidate)
         if stat.S_ISLNK(path_after.st_mode) or not stat.S_ISREG(path_after.st_mode):
-            raise StableFileError(f"{label} path stopped naming a regular file during hashing")
+            raise StableFileError(f"{label} path stopped naming a regular file during read")
         if not _same_object(fd_after, path_after):
-            raise StableFileError(f"{label} path was replaced or changed while being hashed")
+            raise StableFileError(f"{label} path was replaced or changed while being read")
 
-        return StableFileIdentity(
+        identity = StableFileIdentity(
             path=candidate,
             size=fd_after.st_size,
             sha256=digest.hexdigest(),
@@ -203,10 +199,53 @@ def hash_stable_regular_file(
             mtime_ns=fd_after.st_mtime_ns,
             ctime_ns=fd_after.st_ctime_ns,
         )
+        return identity, bytes(captured) if captured is not None else None
     except StableFileError:
         raise
     except OSError as exc:
-        raise StableFileError(f"cannot hash {label}: {exc}") from exc
+        raise StableFileError(f"cannot read {label}: {exc}") from exc
     finally:
         if descriptor is not None:
             os.close(descriptor)
+
+
+def hash_stable_regular_file(
+    path: Path,
+    *,
+    max_bytes: int,
+    expected_size: int | None = None,
+    label: str = "artifact",
+) -> StableFileIdentity:
+    """Hash one exact regular file while defending the path/FD boundary."""
+    identity, _ = _consume_stable_regular_file(
+        path,
+        max_bytes=max_bytes,
+        expected_size=expected_size,
+        label=label,
+        capture_bytes=False,
+    )
+    return identity
+
+
+def read_stable_regular_file(
+    path: Path,
+    *,
+    max_bytes: int,
+    expected_size: int | None = None,
+    label: str = "evidence",
+) -> tuple[bytes, StableFileIdentity]:
+    """Read bounded exact bytes and hash them from the same secured descriptor.
+
+    Callers should keep ``max_bytes`` deliberately small because the verified
+    payload is retained in memory. The returned bytes and identity come from one
+    descriptor-bound read, so canonical JSON parsing cannot race a later reopen.
+    """
+    identity, payload = _consume_stable_regular_file(
+        path,
+        max_bytes=max_bytes,
+        expected_size=expected_size,
+        label=label,
+        capture_bytes=True,
+    )
+    assert payload is not None
+    return payload, identity

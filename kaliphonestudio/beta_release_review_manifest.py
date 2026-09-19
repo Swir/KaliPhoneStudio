@@ -21,6 +21,7 @@ from .beta_release_artifact_inventory import (
     ReleaseArtifactEntry,
     load_beta_release_artifact_inventory,
 )
+from .stable_file import StableFileError, hash_stable_regular_file, read_stable_regular_file
 
 _POLICY = "beta-release-review-manifest-v1"
 _PROJECT = "KaliPhoneStudio"
@@ -98,39 +99,15 @@ def _safe_filename(value: object) -> str:
 
 
 def _read_exact(path: Path, label: str, maximum: int) -> tuple[bytes, str, int]:
-    source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise BetaReleaseReviewManifestError(f"{label} must be a regular non-symlink file")
     try:
-        before = source.stat()
-        if before.st_size <= 0 or before.st_size > maximum:
-            raise BetaReleaseReviewManifestError(f"{label} size is outside the safety limit")
-        digest = sha256()
-        chunks: list[bytes] = []
-        total = 0
-        with source.open("rb") as handle:
-            while True:
-                chunk = handle.read(1024 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > maximum:
-                    raise BetaReleaseReviewManifestError(f"{label} size is outside the safety limit")
-                digest.update(chunk)
-                if maximum <= _MAX_EVIDENCE_BYTES:
-                    chunks.append(chunk)
-        after = source.stat()
-    except OSError as exc:
-        raise BetaReleaseReviewManifestError(f"cannot read {label}: {exc}") from exc
-    if total != before.st_size:
-        raise BetaReleaseReviewManifestError(f"{label} size changed while being read")
-    if (
-        before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
-    ):
-        raise BetaReleaseReviewManifestError(f"{label} changed while being read")
-    return b"".join(chunks), digest.hexdigest(), total
+        if maximum <= _MAX_EVIDENCE_BYTES:
+            raw, identity = read_stable_regular_file(path, max_bytes=maximum, label=label)
+        else:
+            identity = hash_stable_regular_file(path, max_bytes=maximum, label=label)
+            raw = b""
+    except StableFileError as exc:
+        raise BetaReleaseReviewManifestError(str(exc)) from exc
+    return raw, identity.sha256, identity.size
 
 
 def _validate_inventory_admission(inventory: BetaReleaseArtifactInventoryEvidence) -> None:

@@ -4,15 +4,23 @@ on:
   push:
     branches: [main]
     paths:
+      - "kaliphonestudio/stable_file.py"
+      - "kaliphonestudio/beta_release_artifact_inventory.py"
       - "kaliphonestudio/beta_release_review_manifest.py"
       - "scripts/build_beta_release_review_manifest.py"
+      - "tests/test_beta_release_artifact_inventory.py"
       - "tests/test_beta_release_review_manifest.py"
+      - "docs/BETA_RELEASE_REVIEW_MANIFEST.md"
       - ".github/workflows/beta-release-review-manifest.yml"
   pull_request:
     paths:
+      - "kaliphonestudio/stable_file.py"
+      - "kaliphonestudio/beta_release_artifact_inventory.py"
       - "kaliphonestudio/beta_release_review_manifest.py"
       - "scripts/build_beta_release_review_manifest.py"
+      - "tests/test_beta_release_artifact_inventory.py"
       - "tests/test_beta_release_review_manifest.py"
+      - "docs/BETA_RELEASE_REVIEW_MANIFEST.md"
       - ".github/workflows/beta-release-review-manifest.yml"
   workflow_dispatch:
 
@@ -24,21 +32,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.14"]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Compile manifest contract and CLI
+      - name: Compile stable-file, inventory, manifest contracts and CLI
+        shell: bash
         run: |
           python -m py_compile \
+            kaliphonestudio/stable_file.py \
+            kaliphonestudio/beta_release_artifact_inventory.py \
             kaliphonestudio/beta_release_review_manifest.py \
             scripts/build_beta_release_review_manifest.py \
             tests/test_beta_release_review_manifest.py
-      - name: Run focused fail-closed tests
-        run: python -m unittest -v tests.test_beta_release_review_manifest
+      - name: Run focused descriptor-bound release-chain tests
+        shell: bash
+        run: python -m unittest -v tests.test_beta_release_artifact_inventory tests.test_beta_release_review_manifest
       - name: Verify manifest layer remains offline and non-publishing
         shell: bash
         env:

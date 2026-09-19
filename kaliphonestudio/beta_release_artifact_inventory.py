@@ -23,6 +23,7 @@ from .rootfs_handoff_strategy_review import (
     RootfsHandoffStrategyReviewError,
     load_rootfs_handoff_strategy_review_evidence,
 )
+from .stable_file import StableFileError, hash_stable_regular_file, read_stable_regular_file
 
 _POLICY = "beta-release-artifact-inventory-v1"
 _MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
@@ -118,39 +119,15 @@ def _positive(value: object, label: str) -> int:
 
 
 def _read_exact(path: Path, label: str, maximum: int) -> tuple[bytes, str, int]:
-    source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise BetaReleaseArtifactInventoryError(f"{label} must be a regular non-symlink file")
     try:
-        before = source.stat()
-        if before.st_size <= 0 or before.st_size > maximum:
-            raise BetaReleaseArtifactInventoryError(f"{label} size is outside the safety limit")
-        digest = sha256()
-        chunks: list[bytes] = []
-        total = 0
-        with source.open("rb") as handle:
-            while True:
-                chunk = handle.read(1024 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > maximum:
-                    raise BetaReleaseArtifactInventoryError(f"{label} size is outside the safety limit")
-                digest.update(chunk)
-                if maximum <= _MAX_EVIDENCE_BYTES:
-                    chunks.append(chunk)
-        after = source.stat()
-    except OSError as exc:
-        raise BetaReleaseArtifactInventoryError(f"cannot read {label}: {exc}") from exc
-    if total != before.st_size:
-        raise BetaReleaseArtifactInventoryError(f"{label} size changed while being read")
-    if (
-        before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
-    ):
-        raise BetaReleaseArtifactInventoryError(f"{label} changed while being read")
-    return b"".join(chunks), digest.hexdigest(), total
+        if maximum <= _MAX_EVIDENCE_BYTES:
+            raw, identity = read_stable_regular_file(path, max_bytes=maximum, label=label)
+        else:
+            identity = hash_stable_regular_file(path, max_bytes=maximum, label=label)
+            raw = b""
+    except StableFileError as exc:
+        raise BetaReleaseArtifactInventoryError(str(exc)) from exc
+    return raw, identity.sha256, identity.size
 
 
 def _load_candidate_gate(path: Path) -> tuple[PhysicalCandidateGateEvidence, str, int]:

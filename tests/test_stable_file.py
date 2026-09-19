@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 import kaliphonestudio.stable_file as stable_file
-from kaliphonestudio.stable_file import StableFileError, hash_stable_regular_file
+from kaliphonestudio.stable_file import StableFileError, hash_stable_regular_file, read_stable_regular_file
 
 
 def test_hash_stable_regular_file_binds_exact_bytes(tmp_path: Path) -> None:
@@ -29,6 +29,24 @@ def test_hash_stable_regular_file_binds_exact_bytes(tmp_path: Path) -> None:
     assert isinstance(identity.inode, int)
     assert identity.mtime_ns > 0
     assert identity.ctime_ns > 0
+
+
+def test_read_stable_regular_file_returns_bytes_from_same_verified_descriptor(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.json"
+    payload = b'{"schema_version":1}\n'
+    evidence.write_bytes(payload)
+
+    raw, identity = read_stable_regular_file(
+        evidence,
+        max_bytes=4096,
+        expected_size=len(payload),
+        label="canonical evidence",
+    )
+
+    assert raw == payload
+    assert identity.path == evidence
+    assert identity.size == len(payload)
+    assert identity.sha256 == sha256(payload).hexdigest()
 
 
 def test_hash_stable_regular_file_rejects_expected_size_drift(tmp_path: Path) -> None:
@@ -55,6 +73,19 @@ def test_hash_stable_regular_file_rejects_symlink(tmp_path: Path) -> None:
 
     with pytest.raises(StableFileError, match="regular non-symlink"):
         hash_stable_regular_file(link, max_bytes=1024, label="artifact")
+
+
+def test_read_stable_regular_file_rejects_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "real.json"
+    target.write_bytes(b"{}\n")
+    link = tmp_path / "link.json"
+    try:
+        link.symlink_to(target.name)
+    except (OSError, NotImplementedError):
+        pytest.skip("host cannot create test symlink")
+
+    with pytest.raises(StableFileError, match="regular non-symlink"):
+        read_stable_regular_file(link, max_bytes=1024, label="evidence")
 
 
 def test_hash_stable_regular_file_rejects_empty_file(tmp_path: Path) -> None:
@@ -94,7 +125,7 @@ def test_hash_stable_regular_file_rejects_path_swap_during_hash(
 
     with pytest.raises(
         StableFileError,
-        match="(?:changed while being hashed|path was replaced or changed while being hashed)",
+        match="(?:changed while being read|path was replaced or changed while being read)",
     ):
         hash_stable_regular_file(
             artifact,
@@ -142,7 +173,7 @@ def test_hash_stable_regular_file_rejects_same_size_mutation_with_restored_mtime
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
 
-    with pytest.raises(StableFileError, match="changed while being hashed"):
+    with pytest.raises(StableFileError, match="changed while being read"):
         hash_stable_regular_file(
             artifact,
             max_bytes=4 * 1024 * 1024,
@@ -208,7 +239,7 @@ def test_hash_stable_regular_file_rejects_short_descriptor_read(
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
 
-    with pytest.raises(StableFileError, match="truncated while being hashed"):
+    with pytest.raises(StableFileError, match="truncated while being read"):
         hash_stable_regular_file(
             artifact,
             max_bytes=4 * 1024 * 1024,
@@ -238,13 +269,21 @@ def test_hash_stable_regular_file_rejects_overlong_descriptor_stream(
 
     monkeypatch.setattr(stable_file.os, "read", adversarial_read)
 
-    with pytest.raises(StableFileError, match="grew while being hashed"):
+    with pytest.raises(StableFileError, match="grew while being read"):
         hash_stable_regular_file(
             artifact,
             max_bytes=4 * 1024 * 1024,
             expected_size=len(payload),
             label="artifact",
         )
+
+
+def test_read_stable_regular_file_rejects_over_bound_capture(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.json"
+    evidence.write_bytes(b"12345")
+
+    with pytest.raises(StableFileError, match="size is outside the bounded safety limit"):
+        read_stable_regular_file(evidence, max_bytes=4, label="evidence")
 
 
 def test_hash_stable_regular_file_rejects_non_positive_or_oversized_contract(tmp_path: Path) -> None:
