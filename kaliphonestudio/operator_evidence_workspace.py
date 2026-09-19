@@ -5,13 +5,18 @@ import sys
 from typing import Sequence
 
 from .operator_evidence_cli import EVIDENCE_COMMANDS, main as core_evidence_main
+from .operator_host_evidence_cli import HOST_EVIDENCE_COMMANDS, main as host_evidence_main
 from .operator_release_evidence_cli import LATE_EVIDENCE_COMMANDS, main as release_evidence_main
 from .operator_strategy_evidence_cli import STRATEGY_EVIDENCE_COMMANDS, main as strategy_evidence_main
 from .operator_trial_evidence_cli import TRIAL_EVIDENCE_COMMANDS, main as trial_evidence_main
 
 
 ALL_EVIDENCE_COMMANDS = (
-    EVIDENCE_COMMANDS + LATE_EVIDENCE_COMMANDS + STRATEGY_EVIDENCE_COMMANDS + TRIAL_EVIDENCE_COMMANDS
+    EVIDENCE_COMMANDS
+    + HOST_EVIDENCE_COMMANDS
+    + LATE_EVIDENCE_COMMANDS
+    + STRATEGY_EVIDENCE_COMMANDS
+    + TRIAL_EVIDENCE_COMMANDS
 )
 
 
@@ -33,6 +38,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args or args[0] in {"-h", "--help"}:
         _print_help()
         return 0
+    if args[0] in HOST_EVIDENCE_COMMANDS:
+        return host_evidence_main(args)
     if args[0] in TRIAL_EVIDENCE_COMMANDS:
         return trial_evidence_main(args)
     if args[0] in STRATEGY_EVIDENCE_COMMANDS:
