@@ -33,19 +33,23 @@ class StableFileIdentity:
 def _same_object(left: os.stat_result, right: os.stat_result) -> bool:
     """Return whether two observations describe the same unchanged file state.
 
-    ``ctime_ns`` is deliberately included in addition to size/mtime/inode. On
-    POSIX hosts, a writer can restore an earlier mtime after changing bytes, but
-    cannot restore ctime through ordinary file APIs. Including ctime therefore
-    closes the restored-mtime race while remaining a conservative fail-closed
-    signal on platforms where ctime has different filesystem semantics.
+    Device, inode, size and mtime are portable path/descriptor invariants. POSIX
+    additionally binds ctime: a writer can restore an older mtime after changing
+    bytes, but ordinary file APIs cannot restore ctime. Windows ctime semantics
+    differ across Python/filesystem generations, so it is recorded for evidence
+    but is not used as a portability-breaking equality gate there.
     """
-    return (
+    portable_match = (
         left.st_dev == right.st_dev
         and left.st_ino == right.st_ino
         and left.st_size == right.st_size
         and left.st_mtime_ns == right.st_mtime_ns
-        and left.st_ctime_ns == right.st_ctime_ns
     )
+    if not portable_match:
+        return False
+    if os.name != "nt" and left.st_ctime_ns != right.st_ctime_ns:
+        return False
+    return True
 
 
 def hash_stable_regular_file(
@@ -60,9 +64,9 @@ def hash_stable_regular_file(
     ``O_NOFOLLOW`` is used when the host exposes it. On platforms without it,
     the initial ``lstat`` plus descriptor ``fstat`` identity comparison remains
     mandatory. A final ``lstat`` proves that the path still names the same file
-    object after hashing. Size, mtime and ctime must remain unchanged across the
-    descriptor read so same-size mutation with a restored mtime also fails
-    closed on filesystems that expose ctime updates.
+    object after hashing. Size and mtime must remain unchanged everywhere; POSIX
+    also requires unchanged ctime so same-size mutation with restored mtime fails
+    closed without making Windows depend on version-specific ctime semantics.
     """
     candidate = Path(path)
     if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
