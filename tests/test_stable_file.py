@@ -57,9 +57,17 @@ def test_hash_stable_regular_file_rejects_symlink(tmp_path: Path) -> None:
         hash_stable_regular_file(link, max_bytes=1024, label="artifact")
 
 
+def test_hash_stable_regular_file_rejects_empty_file(tmp_path: Path) -> None:
+    artifact = tmp_path / "empty.img"
+    artifact.write_bytes(b"")
+
+    with pytest.raises(StableFileError, match="size is outside the bounded safety limit"):
+        hash_stable_regular_file(artifact, max_bytes=1024, label="artifact")
+
+
 @pytest.mark.skipif(
     os.name == "nt",
-    reason="Windows may deny renaming a file while the read descriptor is open",
+    reason="Windows deliberately denies rename/delete while the secured read handle is open",
 )
 def test_hash_stable_regular_file_rejects_path_swap_during_hash(
     tmp_path: Path,
@@ -143,6 +151,43 @@ def test_hash_stable_regular_file_rejects_same_size_mutation_with_restored_mtime
         )
 
 
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="Win32 share-mode writer exclusion is Windows-specific",
+)
+def test_windows_hash_handle_denies_concurrent_writer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "artifact.bin"
+    payload = b"A" * (2 * 1024 * 1024)
+    artifact.write_bytes(payload)
+
+    original_read = os.read
+    writer_blocked = False
+
+    def adversarial_read(fd: int, count: int) -> bytes:
+        nonlocal writer_blocked
+        chunk = original_read(fd, count)
+        if chunk and not writer_blocked:
+            with pytest.raises(OSError):
+                writer = os.open(artifact, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+                os.close(writer)
+            writer_blocked = True
+        return chunk
+
+    monkeypatch.setattr(stable_file.os, "read", adversarial_read)
+    identity = hash_stable_regular_file(
+        artifact,
+        max_bytes=4 * 1024 * 1024,
+        expected_size=len(payload),
+        label="artifact",
+    )
+
+    assert writer_blocked is True
+    assert identity.sha256 == sha256(payload).hexdigest()
+
+
 def test_hash_stable_regular_file_rejects_short_descriptor_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -211,3 +256,6 @@ def test_hash_stable_regular_file_rejects_non_positive_or_oversized_contract(tmp
 
     with pytest.raises(StableFileError, match="expected size is outside the bounded safety limit"):
         hash_stable_regular_file(artifact, max_bytes=1, expected_size=2)
+
+    with pytest.raises(StableFileError, match="expected size is outside the bounded safety limit"):
+        hash_stable_regular_file(artifact, max_bytes=1, expected_size=True)

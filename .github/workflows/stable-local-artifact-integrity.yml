@@ -62,7 +62,18 @@ jobs:
           hits = [token for token in forbidden if token in text]
           if hits:
               raise SystemExit(f"stable-file helper gained forbidden execution/promotion surface: {hits}")
-          required = ("os.lstat", "os.fstat", "O_NOFOLLOW", "st_mtime_ns", "st_ctime_ns", "sha256")
+          required = (
+              "os.lstat",
+              "os.fstat",
+              "O_NOFOLLOW",
+              "st_mtime_ns",
+              "st_ctime_ns",
+              "sha256",
+              "CreateFileW",
+              "file_share_read",
+              "file_flag_open_reparse_point",
+              "msvcrt.open_osfhandle",
+          )
           missing = [token for token in required if token not in text]
           if missing:
               raise SystemExit(f"stable-file helper lost required fail-closed primitive(s): {missing}")
