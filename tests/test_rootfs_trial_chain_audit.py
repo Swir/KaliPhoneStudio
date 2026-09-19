@@ -32,6 +32,7 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
         self.assertEqual("PASS", report["status"], report["failures"])
         self.assertEqual(3, len(report["contracts"]))
         self.assertTrue(all(item["status"] == "PASS" for item in report["contracts"]))
+        self.assertTrue(all(not item["execution_primitives"] for item in report["contracts"]))
         self.assertFalse(report["physical_interaction_performed"])
         self.assertFalse(report["external_device_command_executed"])
         self.assertFalse(report["persistent_write_authorized"])
@@ -93,6 +94,22 @@ class RootfsTrialChainAuditTests(unittest.TestCase):
             report = AUDIT.audit(tree)
             self.assertEqual("FAIL", report["status"])
             self.assertTrue(any("missing fail-closed flags" in failure for failure in report["failures"]))
+
+    def test_execution_primitive_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp)
+            self._copy_contract_tree(tree)
+            source = tree / "kaliphonestudio/rootfs_handoff_trial_authorization.py"
+            text = source.read_text(encoding="utf-8")
+            future = "from __future__ import annotations\n"
+            self.assertIn(future, text)
+            source.write_text(
+                text.replace(future, future + "import subprocess\n", 1),
+                encoding="utf-8",
+            )
+            report = AUDIT.audit(tree)
+            self.assertEqual("FAIL", report["status"])
+            self.assertTrue(any("execution primitives" in failure for failure in report["failures"]))
 
     def test_documentation_safety_marker_drift_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
