@@ -30,7 +30,7 @@ The first inventory schema requires one exact file for each of these roles:
 
 Optional roles are `kernel_image`, `dtb`, `dtbo_image` and `windows_host_bundle`. If the exact physical candidate requires DTB or DTBO material, the matching role becomes mandatory and its SHA-256 must match the candidate gate.
 
-Every file must be a regular non-symlink file. The inventory records a safe basename, exact byte size and SHA-256; duplicate roles and duplicate filenames fail closed. The candidate boot image and Kali rootfs are re-hashed and matched against the reviewed evidence chain. The file is re-statted after hashing to reject simple TOCTOU drift.
+Every file must be a regular non-symlink file. Safety-sensitive reads use the shared descriptor-bound `stable_file` verifier: the path is bound to one secured descriptor before bytes are consumed, release artifacts are SHA-256 hashed without reopening them, and bounded canonical JSON evidence is parsed from bytes returned by that same verified descriptor. Symlink/reparse-point traversal, path replacement, truncation, growth and metadata/content drift fail closed. On Windows the read handle denies concurrent write/delete sharing while verification is active.
 
 ## CLI
 
@@ -53,6 +53,10 @@ PYTHONPATH=. python scripts/build_beta_release_artifact_inventory.py \
 Add `--artifact dtb=...`, `--artifact dtbo_image=...`, `--artifact kernel_image=...` or `--artifact windows_host_bundle=...` when those files are part of the reviewed candidate/release set.
 
 The command prints the inventory SHA-256 and explicitly reports that release publication is still disallowed and the final manual gate review is still required.
+
+## CI contract
+
+The inventory workflow runs on Linux and Windows with Python 3.11 and 3.14. Changes to the shared `kaliphonestudio/stable_file.py` verifier retrigger this release-safety boundary, preventing verifier drift from bypassing inventory tests.
 
 ## What this does not satisfy
 

@@ -4,15 +4,19 @@ on:
   push:
     branches: [main]
     paths:
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/beta_release_artifact_inventory.py"
       - "scripts/build_beta_release_artifact_inventory.py"
       - "tests/test_beta_release_artifact_inventory.py"
+      - "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md"
       - ".github/workflows/beta-release-artifact-inventory.yml"
   pull_request:
     paths:
+      - "kaliphonestudio/stable_file.py"
       - "kaliphonestudio/beta_release_artifact_inventory.py"
       - "scripts/build_beta_release_artifact_inventory.py"
       - "tests/test_beta_release_artifact_inventory.py"
+      - "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md"
       - ".github/workflows/beta-release-artifact-inventory.yml"
   workflow_dispatch:
 
@@ -24,20 +28,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.14"]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Compile contract and CLI
+      - name: Compile stable-file contract, inventory contract and CLI
+        shell: bash
         run: |
           python -m py_compile \
+            kaliphonestudio/stable_file.py \
             kaliphonestudio/beta_release_artifact_inventory.py \
             scripts/build_beta_release_artifact_inventory.py \
             tests/test_beta_release_artifact_inventory.py
-      - name: Run focused fail-closed tests
+      - name: Run focused descriptor-bound inventory tests
+        shell: bash
         run: python -m unittest -v tests.test_beta_release_artifact_inventory
       - name: Verify CLI remains offline and non-publishing
         shell: bash
