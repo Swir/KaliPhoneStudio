@@ -16,7 +16,18 @@ For every member it records:
 
 Structural tar PAX keys (`path`, `linkpath`, `size`, timestamps and owner overrides) are intentionally not duplicated into the restorable PAX set. Security-oriented keys such as `SCHILY.xattr.*`, `LIBARCHIVE.xattr.*` and `SCHILY.acl.*` are counted explicitly so their presence cannot disappear silently before a later writer implementation.
 
-## Build the create-only manifest
+## Build the create-only metadata manifest
+
+The unified evidence workspace exposes the host-only stage directly:
+
+```bash
+KaliPhoneStudio evidence build-rootfs-handoff-trial-metadata-manifest \
+  --payload-manifest evidence/rootfs-trial-payload-manifest.json \
+  --rootfs-artifact artifacts/kali-rootfs-arm64.tar.xz \
+  --out evidence/rootfs-trial-metadata-manifest.json
+```
+
+The repository-local script remains available for source-tree use:
 
 ```bash
 python scripts/build_rootfs_handoff_trial_metadata_manifest.py \
@@ -25,7 +36,7 @@ python scripts/build_rootfs_handoff_trial_metadata_manifest.py \
   --out evidence/rootfs-trial-metadata-manifest.json
 ```
 
-Use `--json` for machine-readable output. The evidence is canonical JSON and create-only; an existing output is never overwritten.
+Use the workspace-level `--json` switch, or the repository script's `--json`, for machine-readable output. The evidence is canonical JSON and create-only; an existing output is never overwritten.
 
 ## Extraction-safety companion evidence
 
@@ -37,6 +48,17 @@ Before any future extractor or writer is allowed to consume the archive, `exact-
 - hardlinks that do not resolve to a reviewed regular-file member.
 
 Absolute symlink targets are classified separately and interpreted as rootfs-namespace targets for safety analysis; their presence does not authorize host-path traversal. The resulting canonical evidence records symlink/hardlink counts and keeps extraction, raw-device binding, mounting, writes, hardware claims and Beta credit false.
+
+Unified workspace:
+
+```bash
+KaliPhoneStudio evidence build-rootfs-handoff-trial-archive-safety \
+  --metadata-manifest evidence/rootfs-trial-metadata-manifest.json \
+  --rootfs-artifact artifacts/kali-rootfs-arm64.tar.xz \
+  --out evidence/rootfs-trial-archive-safety.json
+```
+
+Repository-local script:
 
 ```bash
 python scripts/build_rootfs_handoff_trial_archive_safety.py \
