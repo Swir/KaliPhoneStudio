@@ -29,7 +29,7 @@ from .stable_file import StableFileError, hash_stable_regular_file
 SESSION_MANIFEST_NAME = "physical-first-test-session.json"
 FASTBOOT_SUBDIR = "fastboot"
 _CAPTURE_EVIDENCE_MAX_BYTES = 8 * 1024 * 1024
-_EXPECTED_CAPTURE_POLICY = "read-only-fastboot-baseline-v1"
+_EXPECTED_CAPTURE_POLICY = "fastboot-version+devices+serial-getvar-all-v1"
 
 
 class PhysicalFirstTestSessionError(RuntimeError):
