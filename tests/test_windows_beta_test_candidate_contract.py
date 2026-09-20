@@ -165,6 +165,8 @@ def test_ac2003_first_test_runbook_is_recovery_first_and_exact_evidence_driven()
         "extract-stock-boot-from-ota",
         "bind-physical-stock-baseline",
         "bind-physical-candidate-gate",
+        "bind-physical-boot-identity",
+        "build-physical-recovery-readiness",
         "prepare-temporary-boot-offer",
         "execute-temporary-boot-once",
         "build-beta-artifact-inventory",
@@ -174,6 +176,8 @@ def test_ac2003_first_test_runbook_is_recovery_first_and_exact_evidence_driven()
 
     assert '--confirm-token "AC2003"' in runbook
     assert "--extractor-platform windows-amd64" in runbook
+    assert '--boot-identity-binding "$Session\\physical-boot-identity.json"' in runbook
+    assert '--recovery-readiness "$Session\\physical-recovery-readiness.json"' in runbook
     assert "--execute-temporary-boot" in runbook
     assert "A Fastboot return code is not proof that Kali booted" in runbook
     assert "exercised recovery/rollback" in runbook
