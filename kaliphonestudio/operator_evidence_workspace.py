@@ -6,6 +6,7 @@ from typing import Sequence
 
 from .operator_evidence_cli import EVIDENCE_COMMANDS, main as core_evidence_main
 from .operator_host_evidence_cli import HOST_EVIDENCE_COMMANDS, main as host_evidence_main
+from .operator_payload_evidence_cli import PAYLOAD_EVIDENCE_COMMANDS, main as payload_evidence_main
 from .operator_release_evidence_cli import LATE_EVIDENCE_COMMANDS, main as release_evidence_main
 from .operator_strategy_evidence_cli import STRATEGY_EVIDENCE_COMMANDS, main as strategy_evidence_main
 from .operator_trial_evidence_cli import TRIAL_EVIDENCE_COMMANDS, main as trial_evidence_main
@@ -15,6 +16,7 @@ _COMMAND_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("core", EVIDENCE_COMMANDS),
     ("host", HOST_EVIDENCE_COMMANDS),
     ("late", LATE_EVIDENCE_COMMANDS),
+    ("payload", PAYLOAD_EVIDENCE_COMMANDS),
     ("strategy", STRATEGY_EVIDENCE_COMMANDS),
     ("trial", TRIAL_EVIDENCE_COMMANDS),
 )
@@ -83,6 +85,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     owner = COMMAND_OWNERS.get(command, "core")
     if owner == "host":
         return host_evidence_main(args)
+    if owner == "payload":
+        return payload_evidence_main(args)
     if owner == "trial":
         return trial_evidence_main(args)
     if owner == "strategy":
