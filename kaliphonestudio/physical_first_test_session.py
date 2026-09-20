@@ -23,10 +23,13 @@ from .physical_fastboot_capture import (
     default_destinations,
 )
 from .profiles import DeviceProfile, ProfileError, get_profile
+from .stable_file import StableFileError, hash_stable_regular_file
 
 
 SESSION_MANIFEST_NAME = "physical-first-test-session.json"
 FASTBOOT_SUBDIR = "fastboot"
+_CAPTURE_EVIDENCE_MAX_BYTES = 8 * 1024 * 1024
+_EXPECTED_CAPTURE_POLICY = "read-only-fastboot-baseline-v1"
 
 
 class PhysicalFirstTestSessionError(RuntimeError):
@@ -67,7 +70,7 @@ class PhysicalFirstTestSession:
 def _reject_symlink_ancestor(path: Path) -> None:
     current = Path(path).parent
     while True:
-        if current.exists() and current.is_symlink():
+        if current.is_symlink():
             raise PhysicalFirstTestSessionError(
                 f"refusing session below symlinked directory: {current}"
             )
@@ -121,6 +124,32 @@ def _write_session_manifest(session: PhysicalFirstTestSession, destination: Path
     finally:
         temporary.unlink(missing_ok=True)
     return sha256(payload).hexdigest()
+
+
+def _verify_exact_capture_files(
+    fastboot_dir: Path,
+    capture_result: PhysicalFastbootCaptureResult,
+) -> None:
+    destinations = default_destinations(fastboot_dir)
+    expected = (
+        (destinations.transcript, "Fastboot transcript", capture_result.transcript_sha256),
+        (destinations.baseline, "Fastboot baseline evidence", capture_result.baseline_evidence_sha256),
+        (destinations.tool, "Fastboot tool evidence", capture_result.fastboot_tool_evidence_sha256),
+        (destinations.capture, "Fastboot capture bundle", capture_result.fastboot_capture_bundle_sha256),
+    )
+    for path, label, expected_digest in expected:
+        try:
+            identity = hash_stable_regular_file(
+                path,
+                max_bytes=_CAPTURE_EVIDENCE_MAX_BYTES,
+                label=label,
+            )
+        except StableFileError as exc:
+            raise PhysicalFirstTestSessionError(str(exc)) from exc
+        if identity.sha256 != expected_digest:
+            raise PhysicalFirstTestSessionError(
+                f"{label} digest drifted before first-test session binding"
+            )
 
 
 def begin_physical_first_test_session(
@@ -191,13 +220,20 @@ def begin_physical_first_test_session(
     if capture_result.firmware_fingerprint != firmware_fingerprint.strip():
         raise PhysicalFirstTestSessionError("captured firmware fingerprint drifted")
     if (
-        capture_result.read_only is not True
+        capture_result.capture_policy != _EXPECTED_CAPTURE_POLICY
+        or capture_result.confirmation_token_verified is not True
+        or capture_result.physical_interaction_performed is not True
+        or capture_result.read_only is not True
         or capture_result.phone_storage_written is not False
         or capture_result.persistent_write_authorized is not False
         or capture_result.hardware_verified is not False
         or capture_result.beta_gate_credit is not False
     ):
         raise PhysicalFirstTestSessionError("physical baseline capture violated read-only policy")
+
+    # Bind the session only after the exact four files emitted by the guarded capture
+    # have been descriptor-stably re-hashed and still match the capture result.
+    _verify_exact_capture_files(fastboot_dir, capture_result)
 
     session = PhysicalFirstTestSession(
         schema_version=1,
