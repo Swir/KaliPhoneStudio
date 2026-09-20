@@ -69,7 +69,7 @@ def test_beta_test_candidate_contains_exact_operator_pack_and_integrity_files() 
     assert "BETA_TEST_CANDIDATE_SHA256.txt" in workflow
     assert "BETA_TEST_CANDIDATE_INFO.json" in workflow
     assert 'Get-Item "dist/BETA_TEST_CANDIDATE_INFO.json"' in workflow
-    assert '& "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"' in workflow
+    assert '& pwsh -NoProfile -File "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"' in workflow
     assert "KaliPhoneStudio-AC2003-beta-test-candidate.zip" in workflow
     assert "KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256" in workflow
     assert "actions/upload-artifact@v4" in workflow
