@@ -36,6 +36,17 @@ Both the previously reviewed free-space requirement and the latest observed free
 
 ## Build the create-only manifest
 
+The installed/unified evidence workspace exposes the same non-writing contract:
+
+```bash
+KaliPhoneStudio evidence build-rootfs-handoff-trial-payload-manifest \
+  --execution-gate evidence/rootfs-trial-execution-gate.json \
+  --rootfs-artifact artifacts/kali-rootfs-arm64.tar.xz \
+  --out evidence/rootfs-trial-payload-manifest.json
+```
+
+The repository script remains available for source-tree use:
+
 ```bash
 python scripts/build_rootfs_handoff_trial_payload_manifest.py \
   --execution-gate evidence/rootfs-trial-execution-gate.json \
@@ -43,7 +54,7 @@ python scripts/build_rootfs_handoff_trial_payload_manifest.py \
   --out evidence/rootfs-trial-payload-manifest.json
 ```
 
-Use `--json` for a compact machine-readable result. The output is canonical JSON and create-only; existing files are never overwritten.
+The unified command supports the workspace-level `--json` switch; the repository script also supports `--json`. The output is canonical JSON and create-only; existing files are never overwritten.
 
 ## What success does **not** mean
 
