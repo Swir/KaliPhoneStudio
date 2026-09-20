@@ -260,7 +260,7 @@ jobs:
             }
           $Lines | Set-Content -Encoding ascii "dist/BETA_TEST_CANDIDATE_SHA256.txt"
 
-          & "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"
+          & pwsh -NoProfile -File "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"
           if ($LASTEXITCODE -ne 0) { throw "Candidate integrity verifier failed: $LASTEXITCODE" }
 
           $Zip = "dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip"
