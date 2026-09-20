@@ -19,6 +19,7 @@ DEVICES = ROOT / "devices"
 FIRMWARE_BUILD = "AC2003_11_F.22"
 FIRMWARE_FINGERPRINT = "OnePlus/avicii/avicii:13/test/F.22:user/release-keys"
 SERIAL = "SERIAL123"
+CAPTURE_POLICY = "fastboot-version+devices+serial-getvar-all-v1"
 
 
 def _profile():
@@ -29,7 +30,12 @@ def _digest(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
-def _result(destinations, *, persistent_write_authorized: bool = False):
+def _result(
+    destinations,
+    *,
+    persistent_write_authorized: bool = False,
+    capture_policy: str = CAPTURE_POLICY,
+):
     return PhysicalFastbootCaptureResult(
         profile_id="oneplus/avicii",
         product="avicii",
@@ -46,7 +52,7 @@ def _result(destinations, *, persistent_write_authorized: bool = False):
         fastboot_executable_sha256="3" * 64,
         fastboot_tool_evidence_sha256=_digest(destinations.tool),
         fastboot_capture_bundle_sha256=_digest(destinations.capture),
-        capture_policy="read-only-fastboot-baseline-v1",
+        capture_policy=capture_policy,
         confirmation_token_verified=True,
         physical_interaction_performed=True,
         read_only=True,
@@ -179,6 +185,7 @@ def test_success_creates_exact_read_only_session_manifest(monkeypatch, tmp_path:
     assert call["tool_timeout_seconds"] == 12
     assert call["capture_timeout_seconds"] == 34
     assert capture.serialno == SERIAL
+    assert capture.capture_policy == CAPTURE_POLICY
 
     manifest_path = target / session.SESSION_MANIFEST_NAME
     assert manifest_path.is_file()
@@ -252,6 +259,28 @@ def test_non_read_only_capture_result_never_gets_session_manifest(monkeypatch, t
 
     assert not (target / session.SESSION_MANIFEST_NAME).exists()
     assert (target / session.FASTBOOT_SUBDIR / "fastboot-capture-bundle.json").is_file()
+
+
+def test_unreviewed_capture_policy_never_gets_session_manifest(monkeypatch, tmp_path: Path):
+    def wrong_policy_capture(*args, **kwargs):
+        destinations = kwargs["destinations"]
+        _write_fake_capture(destinations)
+        return _result(destinations, capture_policy="different-fastboot-policy")
+
+    monkeypatch.setattr(session, "capture_physical_fastboot_baseline", wrong_policy_capture)
+    target = tmp_path / "session-01"
+
+    with pytest.raises(session.PhysicalFirstTestSessionError, match="read-only policy"):
+        session.begin_physical_first_test_session(
+            _profile(),
+            confirmation_token="AC2003",
+            serial=SERIAL,
+            firmware_build=FIRMWARE_BUILD,
+            firmware_fingerprint=FIRMWARE_FINGERPRINT,
+            session_dir=target,
+        )
+
+    assert not (target / session.SESSION_MANIFEST_NAME).exists()
 
 
 def test_tampered_capture_file_fails_before_session_manifest(monkeypatch, tmp_path: Path):
