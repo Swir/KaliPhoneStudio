@@ -45,6 +45,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        with:
+          # pull_request normally exposes github.sha as a synthetic merge commit.
+          # The test candidate must instead be built from and identify the exact
+          # development head that will later be reviewed/merged.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-python@v6
         with:
@@ -233,7 +238,7 @@ jobs:
           @{
             schema_version = 1
             kind = "kaliphonestudio-unsigned-ac2003-beta-test-candidate"
-            git_commit = "${{ github.sha }}"
+            git_commit = "${{ github.event.pull_request.head.sha || github.sha }}"
             profile_id = "oneplus/avicii"
             python = "3.12"
             pyinstaller = "6.22.3"
@@ -277,7 +282,7 @@ jobs:
       - name: Upload unsigned AC2003 Beta test candidate
         uses: actions/upload-artifact@v4
         with:
-          name: KaliPhoneStudio-AC2003-beta-test-candidate-${{ github.sha }}
+          name: KaliPhoneStudio-AC2003-beta-test-candidate-${{ github.event.pull_request.head.sha || github.sha }}
           retention-days: 7
           if-no-files-found: error
           path: |
