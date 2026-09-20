@@ -7,7 +7,6 @@ import pytest
 
 import main as entrypoint
 from kaliphonestudio import physical_boot_identity_operator
-from kaliphonestudio.boot_builder import BootBuildPlan
 from kaliphonestudio.physical_baseline_bundle import PhysicalBaselineBundleEvidence
 from kaliphonestudio.physical_candidate_gate import PhysicalCandidateGateEvidence
 from kaliphonestudio.provenance import StockBootProvenance
