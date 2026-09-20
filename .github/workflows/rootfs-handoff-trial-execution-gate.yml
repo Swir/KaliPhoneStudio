@@ -10,7 +10,7 @@ on:
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
       - "kaliphonestudio/rootfs_handoff_trial_execution_gate.py"
       - "tests/test_rootfs_handoff_trial_execution_gate.py"
-      - "tools/audit_rootfs_trial_chain.py"
+      - "tools/audit_rootfs_trial_execution_gate.py"
       - "docs/ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md"
       - ".github/workflows/rootfs-handoff-trial-execution-gate.yml"
   pull_request:
@@ -21,7 +21,7 @@ on:
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
       - "kaliphonestudio/rootfs_handoff_trial_execution_gate.py"
       - "tests/test_rootfs_handoff_trial_execution_gate.py"
-      - "tools/audit_rootfs_trial_chain.py"
+      - "tools/audit_rootfs_trial_execution_gate.py"
       - "docs/ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md"
       - ".github/workflows/rootfs-handoff-trial-execution-gate.yml"
   workflow_dispatch:
@@ -54,8 +54,8 @@ jobs:
           kaliphonestudio/rootfs_handoff_trial_plan.py
           kaliphonestudio/rootfs_handoff_trial_preflight.py
           kaliphonestudio/rootfs_handoff_trial_execution_gate.py
-          tools/audit_rootfs_trial_chain.py
+          tools/audit_rootfs_trial_execution_gate.py
       - name: Run fail-closed execution-gate tests and source audit
         run: >-
           python -m pytest -q tests/test_rootfs_handoff_trial_execution_gate.py
-          && python tools/audit_rootfs_trial_chain.py --json
+          && python tools/audit_rootfs_trial_execution_gate.py --json
