@@ -17,6 +17,21 @@ The execution-time revalidation must resolve to the same target-binding identity
 
 The second capture may not reuse the authorization-time storage-discovery digest or report digest. This prevents a previously accepted snapshot from being presented as a live execution check.
 
+## Build the create-only evidence
+
+After the second fresh read-only capture has been converted into a valid fresh-revalidation evidence file, build the execution gate with:
+
+```bash
+python scripts/build_rootfs_handoff_trial_execution_gate.py \
+  --trial-plan evidence/rootfs-trial-plan.json \
+  --trial-preflight evidence/rootfs-trial-preflight.json \
+  --authorized-fresh-revalidation evidence/rootfs-authorized-fresh-revalidation.json \
+  --execution-fresh-revalidation evidence/rootfs-execution-fresh-revalidation.json \
+  --out evidence/rootfs-trial-execution-gate.json
+```
+
+The output is create-only. Existing output is never overwritten. The command prints the evidence SHA-256 plus the explicit non-write state so an operator cannot mistake a passed evidence gate for write permission.
+
 ## What success means
 
 A successful gate records:
