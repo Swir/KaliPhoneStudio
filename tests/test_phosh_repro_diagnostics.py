@@ -151,6 +151,31 @@ def test_diagnostic_classifies_encoding_order_and_content_drift(tmp_path: Path):
     assert content.differences[0].fields == ("content_sha256",)
 
 
+def test_diagnostic_accepts_root_marker_and_hex_encoded_pax_values(tmp_path: Path):
+    root = _entry(0, ".")
+    root.update(
+        type_hex="35",
+        mode=493,
+        size=0,
+        content_sha256=None,
+        pax_headers=[["SCHILY.xattr.security.capability", "hex:0102636170"]],
+    )
+    first = tmp_path / "root-marker"
+    first.mkdir()
+    diagnostic = diagnose_phosh_rootfs_builds(
+        *_inputs(first, entries_a=[root], entries_b=[dict(root)])
+    )
+    assert diagnostic.member_records_identical is True
+    assert diagnostic.archive_encoding_only_difference is True
+
+    bad = tmp_path / "raw-pax"
+    bad.mkdir()
+    raw = dict(root)
+    raw["pax_headers"] = [["comment", "raw-value"]]
+    with pytest.raises(PhoshReproDiagnosticError, match="hex encoding"):
+        diagnose_phosh_rootfs_builds(*_inputs(bad, entries_a=[raw], entries_b=[raw]))
+
+
 def test_diagnostic_rejects_detached_unsafe_or_invalid_metadata(tmp_path: Path):
     a, b, ma, mb = _inputs(tmp_path)
     raw = json.loads(ma.read_text()); raw["artifact_sha256"] = "c" * 64; _write_json(ma, raw)
