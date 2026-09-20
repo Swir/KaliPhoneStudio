@@ -84,9 +84,18 @@ def _validate_fresh_session_dir(session_dir: Path) -> Path:
         raise PhysicalFirstTestSessionError(
             f"refusing to reuse existing physical test session: {session}"
         )
-    parent = session.parent
-    parent.mkdir(parents=True, exist_ok=True)
-    _reject_symlink_ancestor(session)
+    try:
+        session.parent.mkdir(parents=True, exist_ok=True)
+        _reject_symlink_ancestor(session)
+        session.mkdir()
+    except OSError as exc:
+        raise PhysicalFirstTestSessionError(
+            f"cannot create fresh physical test session: {session}: {exc}"
+        ) from exc
+    if session.is_symlink() or not session.is_dir():
+        raise PhysicalFirstTestSessionError(
+            f"physical test session is not a regular directory: {session}"
+        )
     return session
 
 
@@ -105,6 +114,10 @@ def _write_session_manifest(session: PhysicalFirstTestSession, destination: Path
     try:
         temporary.write_bytes(payload)
         temporary.replace(destination)
+    except OSError as exc:
+        raise PhysicalFirstTestSessionError(
+            f"cannot publish physical session manifest: {destination}: {exc}"
+        ) from exc
     finally:
         temporary.unlink(missing_ok=True)
     return sha256(payload).hexdigest()
