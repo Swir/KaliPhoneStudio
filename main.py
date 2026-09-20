@@ -5,6 +5,7 @@ from typing import Sequence
 
 from kaliphonestudio.app import main as app_main
 from kaliphonestudio.operator_evidence_workspace import main as operator_evidence_main
+from kaliphonestudio.physical_boot_identity_operator import main as physical_boot_identity_main
 from kaliphonestudio.physical_candidate_operator import (
     bind_physical_candidate_main,
     execute_temporary_boot_once_main,
@@ -26,6 +27,7 @@ EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND = "extract-stock-boot-from-ota"
 PREPARE_STOCK_PROVENANCE_COMMAND = "prepare-stock-provenance"
 BIND_PHYSICAL_STOCK_BASELINE_COMMAND = "bind-physical-stock-baseline"
 BIND_PHYSICAL_CANDIDATE_COMMAND = "bind-physical-candidate-gate"
+BIND_PHYSICAL_BOOT_IDENTITY_COMMAND = "bind-physical-boot-identity"
 BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND = "build-physical-recovery-readiness"
 PREPARE_TEMPORARY_BOOT_OFFER_COMMAND = "prepare-temporary-boot-offer"
 EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND = "execute-temporary-boot-once"
@@ -47,6 +49,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return bind_physical_stock_main(args[1:])
     if args and args[0] == BIND_PHYSICAL_CANDIDATE_COMMAND:
         return bind_physical_candidate_main(args[1:])
+    if args and args[0] == BIND_PHYSICAL_BOOT_IDENTITY_COMMAND:
+        return physical_boot_identity_main(args[1:])
     if args and args[0] == BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND:
         return physical_recovery_readiness_main(args[1:])
     if args and args[0] == PREPARE_TEMPORARY_BOOT_OFFER_COMMAND:
