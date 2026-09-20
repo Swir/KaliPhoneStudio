@@ -15,6 +15,10 @@ on:
       - "kaliphonestudio/stock_ota_pipeline.py"
       - "kaliphonestudio/stock_baseline_ingress.py"
       - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/physical_boot_identity_operator.py"
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/physical_recovery_operator.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
       - "kaliphonestudio/temporary_boot_execution.py"
       - "devices/oneplus/avicii/profile.json"
       - "tools/fastboot-tool-policy.json"
@@ -36,6 +40,10 @@ on:
       - "tests/test_physical_first_test_session.py"
       - "tests/test_stock_baseline_ingress.py"
       - "tests/test_physical_candidate_operator.py"
+      - "tests/test_physical_boot_identity_operator.py"
+      - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_recovery_operator.py"
+      - "tests/test_physical_recovery_readiness.py"
       - "tests/test_temporary_boot_execution.py"
   pull_request:
     paths:
@@ -50,6 +58,10 @@ on:
       - "kaliphonestudio/stock_ota_pipeline.py"
       - "kaliphonestudio/stock_baseline_ingress.py"
       - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/physical_boot_identity_operator.py"
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/physical_recovery_operator.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
       - "kaliphonestudio/temporary_boot_execution.py"
       - "devices/oneplus/avicii/profile.json"
       - "tools/fastboot-tool-policy.json"
@@ -71,6 +83,10 @@ on:
       - "tests/test_physical_first_test_session.py"
       - "tests/test_stock_baseline_ingress.py"
       - "tests/test_physical_candidate_operator.py"
+      - "tests/test_physical_boot_identity_operator.py"
+      - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_recovery_operator.py"
+      - "tests/test_physical_recovery_readiness.py"
       - "tests/test_temporary_boot_execution.py"
   workflow_dispatch:
 
@@ -118,6 +134,10 @@ jobs:
           tests/test_physical_first_test_session.py
           tests/test_stock_baseline_ingress.py
           tests/test_physical_candidate_operator.py
+          tests/test_physical_boot_identity_operator.py
+          tests/test_physical_boot_identity_binding.py
+          tests/test_physical_recovery_operator.py
+          tests/test_physical_recovery_readiness.py
           tests/test_temporary_boot_execution.py
 
       - name: Build frozen Windows GUI and CLI
@@ -142,6 +162,8 @@ jobs:
             "extract-stock-boot-from-ota",
             "bind-physical-stock-baseline",
             "bind-physical-candidate-gate",
+            "bind-physical-boot-identity",
+            "build-physical-recovery-readiness",
             "prepare-temporary-boot-offer",
             "execute-temporary-boot-once"
           )) {
@@ -190,6 +212,31 @@ jobs:
             --out-dir "dist/should-not-stock" 2> "dist/refusal-stock.txt"
           if ($LASTEXITCODE -ne 2) { throw "Frozen stock extraction did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-stock") { throw "Refused stock extraction created an output directory" }
+
+          # Exact boot-identity and recovery-readiness commands must remain offline and
+          # create nothing when their reviewed physical inputs are absent.
+          & $Cli bind-physical-boot-identity `
+            --profile-id oneplus/avicii `
+            --physical-baseline "dist/missing-physical.json" `
+            --physical-candidate-gate "dist/missing-gate.json" `
+            --stock-provenance "dist/missing-provenance.json" `
+            --boot-plan "dist/missing-plan.json" `
+            --stock-boot "dist/missing-stock-boot.img" `
+            --candidate-boot "dist/missing-candidate-boot.img" `
+            --candidate-dtbo "dist/missing-candidate-dtbo.img" `
+            --out "dist/should-not-boot-identity.json" 2> "dist/refusal-boot-identity.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen boot identity command did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-boot-identity.json") { throw "Refused boot identity command created output" }
+
+          & $Cli build-physical-recovery-readiness `
+            --profile-id oneplus/avicii `
+            --baseline-evidence "dist/missing-baseline.json" `
+            --physical-baseline "dist/missing-physical.json" `
+            --boot-identity-binding "dist/missing-binding.json" `
+            --stock-boot "dist/missing-stock-boot.img" `
+            --out "dist/should-not-recovery-readiness.json" 2> "dist/refusal-recovery-readiness.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen recovery-readiness command did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-recovery-readiness.json") { throw "Refused recovery command created output" }
 
           # The only temporary-boot executor must refuse without the explicit opt-in,
           # before evidence loading or any physical device probe.
@@ -251,6 +298,12 @@ jobs:
           assert "--confirm-token" in help_text("help-capture-fastboot-baseline.txt")
           assert "--extractor-platform" in help_text("help-extract-stock-boot-from-ota.txt")
           assert "--physical-baseline" in help_text("help-bind-physical-candidate-gate.txt")
+          boot_identity_help = help_text("help-bind-physical-boot-identity.txt")
+          assert "--candidate-dtbo" in boot_identity_help
+          assert "no device i/o" in boot_identity_help
+          recovery_ready_help = help_text("help-build-physical-recovery-readiness.txt")
+          assert "--stock-boot" in recovery_ready_help
+          assert "no device command" in recovery_ready_help
           assert "not authorize execution" in help_text("help-prepare-temporary-boot-offer.txt")
           execution_help = help_text("help-execute-temporary-boot-once.txt")
           assert "--execute-temporary-boot" in execution_help

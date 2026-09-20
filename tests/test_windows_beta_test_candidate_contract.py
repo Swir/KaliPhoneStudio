@@ -16,6 +16,14 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
     assert "branches: [main]" in workflow
     assert '"kaliphonestudio/physical_first_test_session.py"' in workflow
     assert '"tests/test_physical_first_test_session.py"' in workflow
+    assert '"kaliphonestudio/physical_boot_identity_operator.py"' in workflow
+    assert '"kaliphonestudio/physical_boot_identity_binding.py"' in workflow
+    assert '"kaliphonestudio/physical_recovery_operator.py"' in workflow
+    assert '"kaliphonestudio/physical_recovery_readiness.py"' in workflow
+    assert '"tests/test_physical_boot_identity_operator.py"' in workflow
+    assert '"tests/test_physical_boot_identity_binding.py"' in workflow
+    assert '"tests/test_physical_recovery_operator.py"' in workflow
+    assert '"tests/test_physical_recovery_readiness.py"' in workflow
     assert "runs-on: windows-latest" in workflow
     assert 'python-version: "3.12"' in workflow
     assert "./scripts/build_windows.ps1" in workflow
@@ -25,6 +33,10 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
     assert "tests/test_physical_first_test_session.py" in workflow
     assert "tests/test_stock_baseline_ingress.py" in workflow
     assert "tests/test_physical_candidate_operator.py" in workflow
+    assert "tests/test_physical_boot_identity_operator.py" in workflow
+    assert "tests/test_physical_boot_identity_binding.py" in workflow
+    assert "tests/test_physical_recovery_operator.py" in workflow
+    assert "tests/test_physical_recovery_readiness.py" in workflow
     assert "tests/test_temporary_boot_execution.py" in workflow
 
     for command in (
@@ -33,6 +45,8 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
         "extract-stock-boot-from-ota",
         "bind-physical-stock-baseline",
         "bind-physical-candidate-gate",
+        "bind-physical-boot-identity",
+        "build-physical-recovery-readiness",
         "prepare-temporary-boot-offer",
         "execute-temporary-boot-once",
         "build-beta-artifact-inventory",
@@ -42,6 +56,11 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
 
     assert "--confirm-token" in workflow
     assert "--extractor-platform" in workflow
+    assert "--candidate-dtbo" in workflow
+    assert "--boot-identity-binding" in workflow
+    assert "--stock-boot" in workflow
+    assert "no device i/o" in workflow
+    assert "no device command" in workflow
     assert "--execute-temporary-boot" in workflow
     assert "$LASTEXITCODE -ne 2" in workflow
     assert "$global:LASTEXITCODE = 0" in workflow
@@ -50,6 +69,8 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
         "dist/should-not-session",
         "dist/should-not-capture",
         "dist/should-not-stock",
+        "dist/should-not-boot-identity.json",
+        "dist/should-not-recovery-readiness.json",
         "dist/should-not-probe.json",
         "dist/should-not-execute.json",
         "dist/should-not-inventory.json",
