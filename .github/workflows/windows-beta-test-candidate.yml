@@ -22,6 +22,7 @@ on:
       - "docs/AC2003_FIRST_TEST.md"
       - "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md"
       - "scripts/build_windows.ps1"
+      - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
       - "tests/test_windows_beta_test_candidate_contract.py"
@@ -222,23 +223,12 @@ jobs:
           Copy-Item "devices/oneplus/avicii/profile.json" "dist/operator-pack/profile.json"
           Copy-Item "tools/fastboot-tool-policy.json" "dist/operator-pack/fastboot-tool-policy.json"
           Copy-Item "tools/extractor-locks.json" "dist/operator-pack/extractor-locks.json"
+          Copy-Item "scripts/verify_windows_beta_test_candidate.ps1" "dist/operator-pack/verify-candidate.ps1"
 
-      - name: Create candidate manifests and ZIP
+      - name: Create and self-verify candidate manifests and ZIP
         shell: pwsh
         run: |
           $Root = (Resolve-Path "dist").Path
-          $Files = @()
-          foreach ($Target in @("dist/KaliPhoneStudio", "dist/KaliPhoneStudioCLI", "dist/operator-pack")) {
-            $Files += Get-ChildItem -Path $Target -Recurse -File
-          }
-          $Lines = $Files |
-            Sort-Object FullName |
-            ForEach-Object {
-              $Hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
-              $Relative = [IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\\', '/')
-              "$Hash  $Relative"
-            }
-          $Lines | Set-Content -Encoding ascii "dist/BETA_TEST_CANDIDATE_SHA256.txt"
 
           @{
             schema_version = 1
@@ -255,6 +245,23 @@ jobs:
             beta_release = $false
             beta_gate_credit = $false
           } | ConvertTo-Json | Set-Content -Encoding utf8 "dist/BETA_TEST_CANDIDATE_INFO.json"
+
+          $Files = @()
+          foreach ($Target in @("dist/KaliPhoneStudio", "dist/KaliPhoneStudioCLI", "dist/operator-pack")) {
+            $Files += Get-ChildItem -Path $Target -Recurse -File
+          }
+          $Files += Get-Item "dist/BETA_TEST_CANDIDATE_INFO.json"
+          $Lines = $Files |
+            Sort-Object FullName |
+            ForEach-Object {
+              $Hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
+              $Relative = [IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\\', '/')
+              "$Hash  $Relative"
+            }
+          $Lines | Set-Content -Encoding ascii "dist/BETA_TEST_CANDIDATE_SHA256.txt"
+
+          & "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"
+          if ($LASTEXITCODE -ne 0) { throw "Candidate integrity verifier failed: $LASTEXITCODE" }
 
           $Zip = "dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip"
           Compress-Archive -Path `
