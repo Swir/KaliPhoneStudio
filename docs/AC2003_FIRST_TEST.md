@@ -87,6 +87,8 @@ Replace the angle-bracket values with the exact observations from this phone:
 
 The command checks the profile confirmation token before creating the session or reaching Fastboot, refuses an existing session path, then reuses the guarded Fastboot version/device/getvar-only capture. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
 
+`begin-physical-test-session` is the recovery-first wrapper around the existing `capture-fastboot-baseline` primitive. Do not run both against the same session: the wrapper deliberately owns the fresh session directory and exact baseline capture so evidence cannot be duplicated or mixed.
+
 A successful command creates the exact baseline set under `$Session\fastboot` plus the create-only session manifest:
 
 ```text
