@@ -52,6 +52,31 @@ def test_explicit_root_directory_marker_is_normalized_safely(tmp_path: Path) -> 
     assert manifest.beta_gate_credit is False
 
 
+def test_binary_pax_value_is_losslessly_hex_encoded(tmp_path: Path) -> None:
+    archive_path = tmp_path / "rootfs-pax.tar.xz"
+    info = tarfile.TarInfo("./usr/bin/capable")
+    info.type = tarfile.REGTYPE
+    info.mode = 0o755
+    info.uid = 0
+    info.gid = 0
+    info.pax_headers = {
+        "SCHILY.xattr.security.capability": "\x01\x02cap",
+        "comment": "plain-text",
+    }
+
+    _write_archive(archive_path, [(info, b"payload")])
+    manifest = build_rootfs_member_manifest(archive_path)
+
+    assert manifest.entries[0].pax_headers == (
+        ("SCHILY.xattr.security.capability", "hex:0102636170"),
+        ("comment", "hex:706c61696e2d74657874"),
+    )
+    assert all(
+        all(ord(char) >= 32 and ord(char) != 127 for char in value)
+        for _, value in manifest.entries[0].pax_headers
+    )
+
+
 def test_parent_traversal_is_still_rejected(tmp_path: Path) -> None:
     archive_path = tmp_path / "unsafe.tar.xz"
     info = tarfile.TarInfo("../escape")
