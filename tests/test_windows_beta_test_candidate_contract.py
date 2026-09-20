@@ -12,17 +12,23 @@ VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
+    assert "push:" in workflow
+    assert "branches: [main]" in workflow
+    assert '"kaliphonestudio/physical_first_test_session.py"' in workflow
+    assert '"tests/test_physical_first_test_session.py"' in workflow
     assert "runs-on: windows-latest" in workflow
     assert 'python-version: "3.12"' in workflow
     assert "./scripts/build_windows.ps1" in workflow
     assert "tests/test_windows_beta_test_candidate_contract.py" in workflow
     assert "tests/test_operator_beta_release_evidence_cli.py" in workflow
     assert "tests/test_physical_fastboot_capture.py" in workflow
+    assert "tests/test_physical_first_test_session.py" in workflow
     assert "tests/test_stock_baseline_ingress.py" in workflow
     assert "tests/test_physical_candidate_operator.py" in workflow
     assert "tests/test_temporary_boot_execution.py" in workflow
 
     for command in (
+        "begin-physical-test-session",
         "capture-fastboot-baseline",
         "extract-stock-boot-from-ota",
         "bind-physical-stock-baseline",
@@ -41,6 +47,7 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
     assert "$global:LASTEXITCODE = 0" in workflow
 
     for refused_path in (
+        "dist/should-not-session",
         "dist/should-not-capture",
         "dist/should-not-stock",
         "dist/should-not-probe.json",
@@ -55,8 +62,8 @@ def test_beta_test_candidate_is_bound_to_exact_source_head_not_pr_merge_sha() ->
     exact_source_expression = "${{ github.event.pull_request.head.sha || github.sha }}"
 
     # pull_request normally sets github.sha to a synthetic merge commit. The
-    # distributable candidate must checkout, record and name the exact source
-    # head instead so its bytes can be tied to one reviewable repository commit.
+    # candidate must use the PR head there, while push/workflow_dispatch naturally
+    # resolve to the exact checked-out commit through github.sha.
     assert f"ref: {exact_source_expression}" in workflow
     assert f'git_commit = "{exact_source_expression}"' in workflow
     assert f"KaliPhoneStudio-AC2003-beta-test-candidate-{exact_source_expression}" in workflow
@@ -153,6 +160,7 @@ def test_ac2003_first_test_runbook_is_recovery_first_and_exact_evidence_driven()
     assert "full firmware fingerprint" in runbook
 
     for command in (
+        "begin-physical-test-session",
         "capture-fastboot-baseline",
         "extract-stock-boot-from-ota",
         "bind-physical-stock-baseline",
