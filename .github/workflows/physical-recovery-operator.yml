@@ -1,0 +1,159 @@
+name: physical-recovery-operator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_boot_identity_operator.py"
+      - "kaliphonestudio/physical_recovery_operator.py"
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "docs/AC2003_FIRST_TEST.md"
+      - "tests/test_physical_boot_identity_operator.py"
+      - "tests/test_physical_recovery_operator.py"
+      - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_recovery_readiness.py"
+      - ".github/workflows/physical-recovery-operator.yml"
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_boot_identity_operator.py"
+      - "kaliphonestudio/physical_recovery_operator.py"
+      - "kaliphonestudio/physical_boot_identity_binding.py"
+      - "kaliphonestudio/physical_recovery_readiness.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "docs/AC2003_FIRST_TEST.md"
+      - "tests/test_physical_boot_identity_operator.py"
+      - "tests/test_physical_recovery_operator.py"
+      - "tests/test_physical_boot_identity_binding.py"
+      - "tests/test_physical_recovery_readiness.py"
+      - ".github/workflows/physical-recovery-operator.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-operator-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt && python -m pip install pytest
+      - name: Compile recovery operator boundaries
+        run: >-
+          python -m py_compile
+          main.py
+          kaliphonestudio/physical_boot_identity_operator.py
+          kaliphonestudio/physical_recovery_operator.py
+          tests/test_physical_boot_identity_operator.py
+          tests/test_physical_recovery_operator.py
+      - name: Test exact boot/recovery operator chain
+        run: >-
+          python -m pytest -q
+          tests/test_physical_boot_identity_operator.py
+          tests/test_physical_recovery_operator.py
+          tests/test_physical_boot_identity_binding.py
+          tests/test_physical_recovery_readiness.py
+      - name: Assert host-only operator boundary
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+
+          forbidden = {"subprocess", "requests", "urllib", "httpx", "socket"}
+          failures = {}
+          for path in (
+              Path("kaliphonestudio/physical_boot_identity_operator.py"),
+              Path("kaliphonestudio/physical_recovery_operator.py"),
+          ):
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              imported = set()
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      imported.update(alias.name for alias in node.names)
+                  elif isinstance(node, ast.ImportFrom) and node.module:
+                      imported.add(node.module)
+              direct = sorted(imported & forbidden)
+              if direct:
+                  failures[str(path)] = direct
+          if failures:
+              raise SystemExit(f"recovery operator imported device/network execution primitives: {failures}")
+          print("host-only recovery operator boundary: PASS")
+
+  frozen-windows-recovery-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install frozen-build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+      - name: Build frozen Windows host CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Verify frozen recovery commands fail closed
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          foreach ($Command in @(
+            "bind-physical-boot-identity",
+            "build-physical-recovery-readiness"
+          )) {
+            & $Cli $Command --help | Set-Content -Encoding utf8 ("dist/help-" + $Command + ".txt")
+            if ($LASTEXITCODE -ne 0) { throw "Frozen help failed for $Command : $LASTEXITCODE" }
+          }
+
+          & $Cli bind-physical-boot-identity `
+            --profile-id oneplus/avicii `
+            --physical-baseline "dist/missing-physical.json" `
+            --physical-candidate-gate "dist/missing-gate.json" `
+            --stock-provenance "dist/missing-provenance.json" `
+            --boot-plan "dist/missing-plan.json" `
+            --stock-boot "dist/missing-stock-boot.img" `
+            --candidate-boot "dist/missing-candidate-boot.img" `
+            --candidate-dtbo "dist/missing-candidate-dtbo.img" `
+            --out "dist/should-not-boot-identity.json" 2> "dist/refusal-boot-identity.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen boot identity command did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-boot-identity.json") { throw "Refused boot identity command created output" }
+
+          & $Cli build-physical-recovery-readiness `
+            --profile-id oneplus/avicii `
+            --baseline-evidence "dist/missing-baseline.json" `
+            --physical-baseline "dist/missing-physical.json" `
+            --boot-identity-binding "dist/missing-binding.json" `
+            --stock-boot "dist/missing-stock-boot.img" `
+            --out "dist/should-not-recovery-readiness.json" 2> "dist/refusal-recovery-readiness.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen recovery-readiness command did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-recovery-readiness.json") { throw "Refused recovery command created output" }
+
+          $BootHelp = " " + ((Get-Content "dist/help-bind-physical-boot-identity.txt" -Raw).ToLowerInvariant() -replace "\s+", " ") + " "
+          $RecoveryHelp = " " + ((Get-Content "dist/help-build-physical-recovery-readiness.txt" -Raw).ToLowerInvariant() -replace "\s+", " ") + " "
+          if (-not $BootHelp.Contains(" --candidate-dtbo ")) { throw "Frozen boot identity help lost external DTBO input" }
+          if (-not $BootHelp.Contains(" no device i/o")) { throw "Frozen boot identity help lost no-device boundary" }
+          if (-not $RecoveryHelp.Contains(" --stock-boot ")) { throw "Frozen recovery help lost exact stock boot input" }
+          if (-not $RecoveryHelp.Contains(" no device command")) { throw "Frozen recovery help lost no-device boundary" }
+
+          # Both negative commands intentionally returned 2 after verified refusals.
+          $global:LASTEXITCODE = 0
+          exit 0
