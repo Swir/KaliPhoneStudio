@@ -23,6 +23,7 @@ on:
       - "tests/test_phosh_reproducibility.py"
       - "tests/test_phosh_candidate_artifact.py"
       - "tests/test_phosh_rootfs_authority.py"
+      - "tests/test_phosh_repro_workflow_budget.py"
       - "docs/PHOSH_ROOTFS_AUTHORITY_REVIEW.md"
       - ".github/workflows/phosh-rootfs-reproducibility.yml"
 
@@ -57,6 +58,7 @@ jobs:
           tests/test_phosh_reproducibility.py
           tests/test_phosh_candidate_artifact.py
           tests/test_phosh_rootfs_authority.py
+          tests/test_phosh_repro_workflow_budget.py
       - name: Test fail-closed Phosh A/B, materialization and authority review
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -65,6 +67,7 @@ jobs:
           tests/test_phosh_reproducibility.py
           tests/test_phosh_candidate_artifact.py
           tests/test_phosh_rootfs_authority.py
+          tests/test_phosh_repro_workflow_budget.py
 
   real-build:
     name: Real Phosh rootfs build ${{ matrix.build-id }}
@@ -75,7 +78,8 @@ jobs:
       matrix:
         build-id: [a, b]
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Two sequential build stages each use --timeout 6600 below; keep 20 minutes for setup, canonicalization and upload.
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v5
 
