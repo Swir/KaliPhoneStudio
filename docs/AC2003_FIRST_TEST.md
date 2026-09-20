@@ -31,7 +31,7 @@ Stop immediately if any of these are true:
 - Fastboot reports an unexpected serial, product, slot count or security state;
 - the exact OTA matching the phone firmware is unavailable;
 - extracted `boot.img` does not validate against the selected profile;
-- a required evidence file already exists or any command reports identity/hash drift;
+- a required evidence file or intended session directory already exists, or any command reports identity/hash drift;
 - recovery/rollback is not understood before temporary boot;
 - a command requests a persistent `flash`, `erase`, `set_active`, `flashing` or other write action that is not part of the reviewed runbook.
 
@@ -59,35 +59,49 @@ Use an exact Fastboot executable accepted by `operator-pack/fastboot-tool-policy
 
 Before moving the phone into Fastboot mode, record the exact OxygenOS build and full firmware fingerprint from the device/system information available on the phone. These two strings are operator inputs to the guarded baseline capture; do not guess or shorten them.
 
-Create one new session directory, for example:
+Choose a new session path, but **do not create it**. The guarded first-test command creates it itself and refuses any existing file, directory or symlink so evidence from different attempts cannot be mixed:
 
 ```powershell
 $Session = Join-Path $PWD "evidence\ac2003-first-test-01"
-New-Item -ItemType Directory -Path $Session | Out-Null
+if (Test-Path $Session) { throw "Choose a new session path; this one already exists." }
 ```
 
-Do not reuse this directory after a failed or changed-firmware attempt.
+Do not reuse this path after a failed or changed-firmware attempt. Choose a new session name instead.
 
-## 2. Read-only Fastboot baseline
+## 2. One-command read-only Fastboot first-test session
 
-Put the phone in Fastboot/bootloader mode using the normal device controls. Confirm the exact serial shown by the reviewed Fastboot executable, then run the guarded capture.
+Put the phone in Fastboot/bootloader mode using the normal device controls. Confirm the exact serial shown by the reviewed Fastboot executable, then run the guarded first-test session command.
 
 Replace the angle-bracket values with the exact observations from this phone:
 
 ```powershell
-& $Cli capture-fastboot-baseline `
+& $Cli begin-physical-test-session `
   --profile-id oneplus/avicii `
   --serial "<EXACT_FASTBOOT_SERIAL>" `
   --firmware-build "<EXACT_OXYGENOS_BUILD>" `
   --firmware-fingerprint "<EXACT_FIRMWARE_FINGERPRINT>" `
   --confirm-token "AC2003" `
   --fastboot "<PATH_TO_REVIEWED_FASTBOOT_EXE>" `
-  --output-dir "$Session\fastboot"
+  --session-dir "$Session"
 ```
 
-The capture path is restricted to Fastboot version/device/getvar reads. It must create exactly the guarded evidence set and must report no persistent phone write and no Beta credit.
+The command checks the profile confirmation token before creating the session or reaching Fastboot, refuses an existing session path, then reuses the guarded Fastboot version/device/getvar-only capture. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
 
-Do not continue if the observed product/serial/A-B/security state is unexpected.
+`begin-physical-test-session` is the recovery-first wrapper around the existing `capture-fastboot-baseline` primitive. Do not run both against the same session: the wrapper deliberately owns the fresh session directory and exact baseline capture so evidence cannot be duplicated or mixed.
+
+A successful command creates the exact baseline set under `$Session\fastboot` plus the create-only session manifest:
+
+```text
+<session>/physical-first-test-session.json
+<session>/fastboot/fastboot-getvar-all.txt
+<session>/fastboot/fastboot-baseline.json
+<session>/fastboot/fastboot-tool.json
+<session>/fastboot/fastboot-capture-bundle.json
+```
+
+The session manifest binds the selected profile, exact serial, exact firmware strings and Fastboot evidence/tool digests while explicitly keeping temporary boot, phone-storage writes, hardware verification and Beta credit false.
+
+Do not continue if the observed product/serial/A-B/security state is unexpected or the command refuses the session.
 
 ## 3. Obtain the exact matching OxygenOS OTA
 
