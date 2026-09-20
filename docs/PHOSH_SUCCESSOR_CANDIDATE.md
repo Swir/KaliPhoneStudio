@@ -56,10 +56,25 @@ The output is canonical JSON and create-only. Any mismatch in the exact base
 manifest, authority bundle, kernel/device-tree identity, superseded rootfs identity or
 reviewed Phosh binding fails closed.
 
-## Next gate
+## Physical-campaign adapter
 
 This manifest is intentionally not passed to the legacy physical-candidate gate as a
-fake schema-v8 manifest. The next integration step is an explicit physical-candidate
-adapter that binds this successor identity to the real AC2003 physical baseline and
-rootfs staging evidence. Until that adapter and the physical tests exist, this path
-earns no hardware or Beta credit.
+fake schema-v8 manifest. `kaliphonestudio.phosh_physical_candidate_adapter` instead
+cross-binds the successor to the already-reviewed exact physical-candidate gate for the
+same phone, firmware, Fastboot baseline, boot image, kernel and DT identity. It also
+proves that the rootfs superseded by the successor is exactly the rootfs carried by the
+original physical gate.
+
+The adapter is still host-only: it selects no storage target, stages no rootfs, runs no
+Fastboot command and authorizes no temporary boot or write. Its successful state is
+only `ready_for_physical_staging_review=true`, with hardware/Beta credit forced false.
+
+See [`PHOSH_PHYSICAL_CANDIDATE_ADAPTER.md`](PHOSH_PHYSICAL_CANDIDATE_ADAPTER.md).
+
+## Next gate
+
+Bind that exact adapter to real reviewed physical storage/recovery evidence and an
+explicitly approved reversible rootfs staging strategy. A distinct fresh read-only
+storage revalidation and a separate manual trial authorization are still required
+immediately before any write-capable staging attempt. Real AC2003 boot/display/touch
+evidence remains mandatory before this path earns hardware or Beta credit.

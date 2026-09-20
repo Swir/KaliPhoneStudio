@@ -9,12 +9,14 @@ on:
       - "kaliphonestudio/phosh_reproducibility.py"
       - "kaliphonestudio/phosh_first_boot_binding.py"
       - "kaliphonestudio/phosh_successor_candidate.py"
+      - "kaliphonestudio/phosh_physical_candidate_adapter.py"
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_canonical.py"
       - "scripts/run_locked_phosh_rootfs_build.py"
       - "scripts/compare_phosh_rootfs_builds.py"
       - "scripts/build_phosh_first_boot_binding.py"
       - "scripts/build_phosh_successor_candidate.py"
+      - "scripts/build_phosh_physical_candidate_adapter.py"
       - "tools/phosh-source-lock.json"
       - "tools/phosh-rootfs-build-contract.json"
       - "tests/test_phosh.py"
@@ -22,6 +24,7 @@ on:
       - "tests/test_phosh_reproducibility.py"
       - "tests/test_phosh_first_boot_binding.py"
       - "tests/test_phosh_successor_candidate.py"
+      - "tests/test_phosh_physical_candidate_adapter.py"
       - ".github/workflows/phosh-rootfs-build-contract.yml"
       - ".github/workflows/phosh-rootfs-reproducibility.yml"
       - "assets/readme/progress-*.svg"
@@ -36,12 +39,14 @@ on:
       - "kaliphonestudio/phosh_reproducibility.py"
       - "kaliphonestudio/phosh_first_boot_binding.py"
       - "kaliphonestudio/phosh_successor_candidate.py"
+      - "kaliphonestudio/phosh_physical_candidate_adapter.py"
       - "kaliphonestudio/rootfs.py"
       - "kaliphonestudio/rootfs_canonical.py"
       - "scripts/run_locked_phosh_rootfs_build.py"
       - "scripts/compare_phosh_rootfs_builds.py"
       - "scripts/build_phosh_first_boot_binding.py"
       - "scripts/build_phosh_successor_candidate.py"
+      - "scripts/build_phosh_physical_candidate_adapter.py"
       - "tools/phosh-source-lock.json"
       - "tools/phosh-rootfs-build-contract.json"
       - "tests/test_phosh.py"
@@ -49,6 +54,7 @@ on:
       - "tests/test_phosh_reproducibility.py"
       - "tests/test_phosh_first_boot_binding.py"
       - "tests/test_phosh_successor_candidate.py"
+      - "tests/test_phosh_physical_candidate_adapter.py"
       - ".github/workflows/phosh-rootfs-build-contract.yml"
       - ".github/workflows/phosh-rootfs-reproducibility.yml"
       - "assets/readme/progress-*.svg"
@@ -83,16 +89,19 @@ jobs:
           kaliphonestudio/phosh_reproducibility.py
           kaliphonestudio/phosh_first_boot_binding.py
           kaliphonestudio/phosh_successor_candidate.py
+          kaliphonestudio/phosh_physical_candidate_adapter.py
           kaliphonestudio/rootfs.py
           kaliphonestudio/rootfs_canonical.py
           scripts/run_locked_phosh_rootfs_build.py
           scripts/compare_phosh_rootfs_builds.py
           scripts/build_phosh_first_boot_binding.py
           scripts/build_phosh_successor_candidate.py
+          scripts/build_phosh_physical_candidate_adapter.py
           tests/test_phosh_build.py
           tests/test_phosh_reproducibility.py
           tests/test_phosh_first_boot_binding.py
           tests/test_phosh_successor_candidate.py
+          tests/test_phosh_physical_candidate_adapter.py
       - name: Test Phosh source, build, A/B and first-boot successor contracts
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -103,6 +112,7 @@ jobs:
           tests/test_phosh_reproducibility.py
           tests/test_phosh_first_boot_binding.py
           tests/test_phosh_successor_candidate.py
+          tests/test_phosh_physical_candidate_adapter.py
       - name: Verify progress presentation remains deterministic
         run: >-
           python scripts/generate_progress_svgs.py --check
