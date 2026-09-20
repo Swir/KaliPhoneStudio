@@ -50,6 +50,20 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
         assert refused_path in workflow
 
 
+def test_beta_test_candidate_is_bound_to_exact_source_head_not_pr_merge_sha() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    exact_source_expression = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+    # pull_request normally sets github.sha to a synthetic merge commit. The
+    # distributable candidate must checkout, record and name the exact source
+    # head instead so its bytes can be tied to one reviewable repository commit.
+    assert f"ref: {exact_source_expression}" in workflow
+    assert f'git_commit = "{exact_source_expression}"' in workflow
+    assert f"KaliPhoneStudio-AC2003-beta-test-candidate-{exact_source_expression}" in workflow
+    assert 'git_commit = "${{ github.sha }}"' not in workflow
+    assert "KaliPhoneStudio-AC2003-beta-test-candidate-${{ github.sha }}" not in workflow
+
+
 def test_beta_test_candidate_contains_exact_operator_pack_and_integrity_files() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
