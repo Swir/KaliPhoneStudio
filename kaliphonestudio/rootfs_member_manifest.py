@@ -95,8 +95,14 @@ def _safe_member_name(name: Any) -> str:
     if path.is_absolute():
         raise RootfsMemberManifestError("rootfs archive contains an absolute member path")
     parts = tuple(part for part in path.parts if part not in {"", "."})
-    if not parts or ".." in parts:
-        raise RootfsMemberManifestError("rootfs archive contains an unsafe member path")
+    if ".." in parts:
+        raise RootfsMemberManifestError("rootfs archive contains path traversal")
+    # GNU/Python tar writers commonly preserve one explicit root-directory marker
+    # named `.` or `./`.  It is a safe canonical member, not a traversal.  Keep one
+    # stable spelling in the diagnostic manifest so real rootfs A/B artifacts can be
+    # inspected without weakening rejection of absolute paths or `..` components.
+    if not parts:
+        return "."
     return "/".join(parts)
 
 
