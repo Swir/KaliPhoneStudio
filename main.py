@@ -12,6 +12,7 @@ from kaliphonestudio.physical_candidate_operator import (
 )
 from kaliphonestudio.physical_fastboot_capture import main as physical_capture_main
 from kaliphonestudio.physical_first_test_session import main as physical_first_test_session_main
+from kaliphonestudio.physical_recovery_operator import main as physical_recovery_readiness_main
 from kaliphonestudio.profile_registry_audit import main as profile_registry_audit_main
 from kaliphonestudio.stock_baseline_ingress import (
     bind_physical_stock_main,
@@ -25,6 +26,7 @@ EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND = "extract-stock-boot-from-ota"
 PREPARE_STOCK_PROVENANCE_COMMAND = "prepare-stock-provenance"
 BIND_PHYSICAL_STOCK_BASELINE_COMMAND = "bind-physical-stock-baseline"
 BIND_PHYSICAL_CANDIDATE_COMMAND = "bind-physical-candidate-gate"
+BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND = "build-physical-recovery-readiness"
 PREPARE_TEMPORARY_BOOT_OFFER_COMMAND = "prepare-temporary-boot-offer"
 EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND = "execute-temporary-boot-once"
 EVIDENCE_WORKSPACE_COMMAND = "evidence"
@@ -45,6 +47,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return bind_physical_stock_main(args[1:])
     if args and args[0] == BIND_PHYSICAL_CANDIDATE_COMMAND:
         return bind_physical_candidate_main(args[1:])
+    if args and args[0] == BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND:
+        return physical_recovery_readiness_main(args[1:])
     if args and args[0] == PREPARE_TEMPORARY_BOOT_OFFER_COMMAND:
         return prepare_temporary_boot_offer_main(args[1:])
     if args and args[0] == EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND:
