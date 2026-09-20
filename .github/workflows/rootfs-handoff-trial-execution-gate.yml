@@ -9,6 +9,7 @@ on:
       - "kaliphonestudio/rootfs_handoff_trial_plan.py"
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
       - "kaliphonestudio/rootfs_handoff_trial_execution_gate.py"
+      - "scripts/build_rootfs_handoff_trial_execution_gate.py"
       - "tests/test_rootfs_handoff_trial_execution_gate.py"
       - "tools/audit_rootfs_trial_execution_gate.py"
       - "docs/ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md"
@@ -20,6 +21,7 @@ on:
       - "kaliphonestudio/rootfs_handoff_trial_plan.py"
       - "kaliphonestudio/rootfs_handoff_trial_preflight.py"
       - "kaliphonestudio/rootfs_handoff_trial_execution_gate.py"
+      - "scripts/build_rootfs_handoff_trial_execution_gate.py"
       - "tests/test_rootfs_handoff_trial_execution_gate.py"
       - "tools/audit_rootfs_trial_execution_gate.py"
       - "docs/ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md"
@@ -54,6 +56,7 @@ jobs:
           kaliphonestudio/rootfs_handoff_trial_plan.py
           kaliphonestudio/rootfs_handoff_trial_preflight.py
           kaliphonestudio/rootfs_handoff_trial_execution_gate.py
+          scripts/build_rootfs_handoff_trial_execution_gate.py
           tools/audit_rootfs_trial_execution_gate.py
       - name: Run fail-closed execution-gate tests and source audit
         run: >-
