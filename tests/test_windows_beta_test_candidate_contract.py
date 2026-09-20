@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "windows-beta-test-candidate.yml"
 RUNBOOK = ROOT / "docs" / "AC2003_FIRST_TEST.md"
+VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 
 
 def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -> None:
@@ -60,12 +61,15 @@ def test_beta_test_candidate_contains_exact_operator_pack_and_integrity_files() 
         ("devices/oneplus/avicii/profile.json", "dist/operator-pack/profile.json"),
         ("tools/fastboot-tool-policy.json", "dist/operator-pack/fastboot-tool-policy.json"),
         ("tools/extractor-locks.json", "dist/operator-pack/extractor-locks.json"),
+        ("scripts/verify_windows_beta_test_candidate.ps1", "dist/operator-pack/verify-candidate.ps1"),
     ):
         assert source in workflow
         assert staged in workflow
 
     assert "BETA_TEST_CANDIDATE_SHA256.txt" in workflow
     assert "BETA_TEST_CANDIDATE_INFO.json" in workflow
+    assert 'Get-Item "dist/BETA_TEST_CANDIDATE_INFO.json"' in workflow
+    assert '& "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"' in workflow
     assert "KaliPhoneStudio-AC2003-beta-test-candidate.zip" in workflow
     assert "KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256" in workflow
     assert "actions/upload-artifact@v4" in workflow
@@ -94,6 +98,33 @@ def test_candidate_metadata_cannot_claim_physical_or_beta_success() -> None:
     )
     for needle in forbidden_publishers:
         assert needle not in workflow
+
+
+def test_offline_candidate_verifier_checks_hashes_and_non_release_flags() -> None:
+    verifier = VERIFIER.read_text(encoding="utf-8")
+
+    assert "BETA_TEST_CANDIDATE_INFO.json" in verifier
+    assert "BETA_TEST_CANDIDATE_SHA256.txt" in verifier
+    assert "Get-FileHash -Algorithm SHA256" in verifier
+    assert "Manifest path escapes candidate root" in verifier
+    assert "SHA-256 mismatch" in verifier
+    assert '"kaliphonestudio-unsigned-ac2003-beta-test-candidate"' in verifier
+    assert '"oneplus/avicii"' in verifier
+    assert "$Info.physical_gate_passed -ne $false" in verifier
+    assert "$Info.hardware_verified -ne $false" in verifier
+    assert "$Info.beta_release -ne $false" in verifier
+    assert "$Info.beta_gate_credit -ne $false" in verifier
+
+    forbidden = (
+        "Invoke-WebRequest",
+        "Invoke-RestMethod",
+        "Start-BitsTransfer",
+        "fastboot ",
+        "adb ",
+        "gh release",
+    )
+    for needle in forbidden:
+        assert needle not in verifier
 
 
 def test_ac2003_first_test_runbook_is_recovery_first_and_exact_evidence_driven() -> None:
