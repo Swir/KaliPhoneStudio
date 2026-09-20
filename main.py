@@ -16,8 +16,10 @@ from kaliphonestudio.stock_baseline_ingress import (
     bind_physical_stock_main,
     prepare_stock_provenance_main,
 )
+from kaliphonestudio.stock_ota_pipeline import main as stock_ota_pipeline_main
 
 PHYSICAL_FASTBOOT_CAPTURE_COMMAND = "capture-fastboot-baseline"
+EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND = "extract-stock-boot-from-ota"
 PREPARE_STOCK_PROVENANCE_COMMAND = "prepare-stock-provenance"
 BIND_PHYSICAL_STOCK_BASELINE_COMMAND = "bind-physical-stock-baseline"
 BIND_PHYSICAL_CANDIDATE_COMMAND = "bind-physical-candidate-gate"
@@ -31,6 +33,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == PHYSICAL_FASTBOOT_CAPTURE_COMMAND:
         return physical_capture_main(args[1:])
+    if args and args[0] == EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND:
+        return stock_ota_pipeline_main(args[1:])
     if args and args[0] == PREPARE_STOCK_PROVENANCE_COMMAND:
         return prepare_stock_provenance_main(args[1:])
     if args and args[0] == BIND_PHYSICAL_STOCK_BASELINE_COMMAND:
