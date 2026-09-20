@@ -4,6 +4,10 @@ from __future__ import annotations
 import sys
 from typing import Sequence
 
+from .operator_beta_release_evidence_cli import (
+    BETA_RELEASE_EVIDENCE_COMMANDS,
+    main as beta_release_evidence_main,
+)
 from .operator_evidence_cli import EVIDENCE_COMMANDS, main as core_evidence_main
 from .operator_host_evidence_cli import HOST_EVIDENCE_COMMANDS, main as host_evidence_main
 from .operator_payload_evidence_cli import PAYLOAD_EVIDENCE_COMMANDS, main as payload_evidence_main
@@ -16,6 +20,7 @@ _COMMAND_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("core", EVIDENCE_COMMANDS),
     ("host", HOST_EVIDENCE_COMMANDS),
     ("late", LATE_EVIDENCE_COMMANDS),
+    ("beta-release", BETA_RELEASE_EVIDENCE_COMMANDS),
     ("payload", PAYLOAD_EVIDENCE_COMMANDS),
     ("strategy", STRATEGY_EVIDENCE_COMMANDS),
     ("trial", TRIAL_EVIDENCE_COMMANDS),
@@ -93,6 +98,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return strategy_evidence_main(args)
     if owner == "late":
         return release_evidence_main(args)
+    if owner == "beta-release":
+        return beta_release_evidence_main(args)
     return core_evidence_main(args)
 
 
