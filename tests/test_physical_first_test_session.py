@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -24,6 +25,10 @@ def _profile():
     return get_profile(DEVICES, "oneplus/avicii")
 
 
+def _digest(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
 def _result(destinations, *, persistent_write_authorized: bool = False):
     return PhysicalFastbootCaptureResult(
         profile_id="oneplus/avicii",
@@ -35,12 +40,12 @@ def _result(destinations, *, persistent_write_authorized: bool = False):
         secure=True,
         firmware_build=FIRMWARE_BUILD,
         firmware_fingerprint=FIRMWARE_FINGERPRINT,
-        transcript_sha256="1" * 64,
-        baseline_evidence_sha256="2" * 64,
+        transcript_sha256=_digest(destinations.transcript),
+        baseline_evidence_sha256=_digest(destinations.baseline),
         fastboot_platform_tools_version="37.0.1",
         fastboot_executable_sha256="3" * 64,
-        fastboot_tool_evidence_sha256="4" * 64,
-        fastboot_capture_bundle_sha256="5" * 64,
+        fastboot_tool_evidence_sha256=_digest(destinations.tool),
+        fastboot_capture_bundle_sha256=_digest(destinations.capture),
         capture_policy="read-only-fastboot-baseline-v1",
         confirmation_token_verified=True,
         physical_interaction_performed=True,
@@ -56,6 +61,12 @@ def _result(destinations, *, persistent_write_authorized: bool = False):
             "capture_bundle": str(destinations.capture),
         },
     )
+
+
+def _write_fake_capture(destinations) -> None:
+    for path, label in destinations.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(label + "\n", encoding="utf-8")
 
 
 def _install_success(monkeypatch, seen: list[dict[str, object]]):
@@ -86,9 +97,7 @@ def _install_success(monkeypatch, seen: list[dict[str, object]]):
                 "destinations": destinations,
             }
         )
-        for path, label in destinations.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(label + "\n", encoding="utf-8")
+        _write_fake_capture(destinations)
         return _result(destinations)
 
     monkeypatch.setattr(session, "capture_physical_fastboot_baseline", fake_capture)
@@ -186,7 +195,10 @@ def test_success_creates_exact_read_only_session_manifest(monkeypatch, tmp_path:
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["profile_id"] == "oneplus/avicii"
     assert payload["device_serial"] == SERIAL
-    assert payload["fastboot_capture_bundle_sha256"] == "5" * 64
+    assert payload["fastboot_capture_bundle_sha256"] == capture.fastboot_capture_bundle_sha256
+    assert payload["fastboot_transcript_sha256"] == _digest(
+        target / session.FASTBOOT_SUBDIR / "fastboot-getvar-all.txt"
+    )
     assert payload["temporary_boot_performed"] is False
     assert payload["beta_gate_credit"] is False
     assert set((target / session.FASTBOOT_SUBDIR).iterdir()) == {
@@ -222,9 +234,7 @@ def test_capture_failure_cleans_only_empty_wrapper_directories(monkeypatch, tmp_
 def test_non_read_only_capture_result_never_gets_session_manifest(monkeypatch, tmp_path: Path):
     def unsafe_capture(*args, **kwargs):
         destinations = kwargs["destinations"]
-        for path, label in destinations.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(label + "\n", encoding="utf-8")
+        _write_fake_capture(destinations)
         return _result(destinations, persistent_write_authorized=True)
 
     monkeypatch.setattr(session, "capture_physical_fastboot_baseline", unsafe_capture)
@@ -242,6 +252,30 @@ def test_non_read_only_capture_result_never_gets_session_manifest(monkeypatch, t
 
     assert not (target / session.SESSION_MANIFEST_NAME).exists()
     assert (target / session.FASTBOOT_SUBDIR / "fastboot-capture-bundle.json").is_file()
+
+
+def test_tampered_capture_file_fails_before_session_manifest(monkeypatch, tmp_path: Path):
+    def tampered_capture(*args, **kwargs):
+        destinations = kwargs["destinations"]
+        _write_fake_capture(destinations)
+        result = _result(destinations)
+        destinations.baseline.write_text("tampered after capture\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(session, "capture_physical_fastboot_baseline", tampered_capture)
+    target = tmp_path / "session-01"
+
+    with pytest.raises(session.PhysicalFirstTestSessionError, match="digest drifted"):
+        session.begin_physical_first_test_session(
+            _profile(),
+            confirmation_token="AC2003",
+            serial=SERIAL,
+            firmware_build=FIRMWARE_BUILD,
+            firmware_fingerprint=FIRMWARE_FINGERPRINT,
+            session_dir=target,
+        )
+
+    assert not (target / session.SESSION_MANIFEST_NAME).exists()
 
 
 def test_help_and_host_entrypoint_expose_only_explicit_session_command(monkeypatch, capsys):
