@@ -1,0 +1,279 @@
+name: windows-beta-test-candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-beta-test-candidate.yml"
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_workspace.py"
+      - "kaliphonestudio/operator_beta_release_evidence_cli.py"
+      - "kaliphonestudio/beta_release_artifact_inventory.py"
+      - "kaliphonestudio/beta_release_review_manifest.py"
+      - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/stock_ota_pipeline.py"
+      - "kaliphonestudio/stock_baseline_ingress.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/temporary_boot_execution.py"
+      - "devices/oneplus/avicii/profile.json"
+      - "tools/fastboot-tool-policy.json"
+      - "tools/extractor-locks.json"
+      - "BETA_RELEASE_GATE.md"
+      - "BUILD_STATUS.json"
+      - "docs/AC2003_FIRST_TEST.md"
+      - "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md"
+      - "scripts/build_windows.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_windows_beta_test_candidate_contract.py"
+      - "tests/test_windows_packaging_contract.py"
+      - "tests/test_operator_beta_release_evidence_cli.py"
+      - "tests/test_beta_release_artifact_inventory.py"
+      - "tests/test_beta_release_review_manifest.py"
+      - "tests/test_physical_fastboot_capture.py"
+      - "tests/test_stock_baseline_ingress.py"
+      - "tests/test_physical_candidate_operator.py"
+      - "tests/test_temporary_boot_execution.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-beta-test-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install exact host build and test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+          python -m PyInstaller --version
+
+      - name: Verify Beta-test-candidate safety and packaging contracts
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_windows_beta_test_candidate_contract.py
+          tests/test_windows_packaging_contract.py
+          tests/test_operator_beta_release_evidence_cli.py
+          tests/test_beta_release_artifact_inventory.py
+          tests/test_beta_release_review_manifest.py
+          tests/test_physical_fastboot_capture.py
+          tests/test_stock_baseline_ingress.py
+          tests/test_physical_candidate_operator.py
+          tests/test_temporary_boot_execution.py
+
+      - name: Build frozen Windows GUI and CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Smoke-test exact frozen AC2003 operator surface
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          & $Cli --list-profiles --json | Set-Content -Encoding utf8 "dist/profiles.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen profile listing failed: $LASTEXITCODE" }
+          & $Cli --doctor --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/doctor.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen doctor failed: $LASTEXITCODE" }
+          & $Cli --recovery-guide --profile-id oneplus/avicii --json | Set-Content -Encoding utf8 "dist/recovery.json"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen recovery guide failed: $LASTEXITCODE" }
+
+          foreach ($Command in @(
+            "capture-fastboot-baseline",
+            "extract-stock-boot-from-ota",
+            "bind-physical-stock-baseline",
+            "bind-physical-candidate-gate",
+            "prepare-temporary-boot-offer",
+            "execute-temporary-boot-once"
+          )) {
+            & $Cli $Command --help | Set-Content -Encoding utf8 ("dist/help-" + $Command + ".txt")
+            if ($LASTEXITCODE -ne 0) { throw "Frozen help failed for $Command : $LASTEXITCODE" }
+          }
+
+          foreach ($Command in @(
+            "build-beta-artifact-inventory",
+            "build-beta-review-manifest"
+          )) {
+            & $Cli evidence $Command --help | Set-Content -Encoding utf8 ("dist/help-evidence-" + $Command + ".txt")
+            if ($LASTEXITCODE -ne 0) { throw "Frozen evidence help failed for $Command : $LASTEXITCODE" }
+          }
+
+          # Missing the profile confirmation token must refuse before any physical
+          # Fastboot/tool/device interaction and before creating an evidence directory.
+          & $Cli capture-fastboot-baseline `
+            --profile-id oneplus/avicii `
+            --serial NEVER-CONNECTED `
+            --firmware-build TEST `
+            --firmware-fingerprint TEST `
+            --output-dir "dist/should-not-capture" 2> "dist/refusal-capture.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen capture did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-capture") { throw "Refused capture created an output directory" }
+
+          # Exact-OTA extraction must fail closed on a missing local OTA/extractor and
+          # must not create a stock output directory.
+          & $Cli extract-stock-boot-from-ota `
+            --profile-id oneplus/avicii `
+            --ota "dist/missing-ota.zip" `
+            --extractor "dist/missing-payload-dumper-go.exe" `
+            --extractor-platform windows-amd64 `
+            --out-dir "dist/should-not-stock" 2> "dist/refusal-stock.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen stock extraction did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-stock") { throw "Refused stock extraction created an output directory" }
+
+          # The only temporary-boot executor must refuse without the explicit opt-in,
+          # before evidence loading or any physical device probe.
+          & $Cli execute-temporary-boot-once `
+            --profile-id oneplus/avicii `
+            --physical-candidate-gate "dist/missing-gate.json" `
+            --boot-identity-binding "dist/missing-binding.json" `
+            --physical-baseline "dist/missing-physical.json" `
+            --recovery-readiness "dist/missing-recovery.json" `
+            --stock-boot "dist/missing-stock-boot.img" `
+            --capture-bundle "dist/missing-capture.json" `
+            --baseline-evidence "dist/missing-baseline.json" `
+            --fastboot-tool-evidence "dist/missing-tool.json" `
+            --fastboot-executable "dist/missing-fastboot.exe" `
+            --boot-image "dist/missing-candidate-boot.img" `
+            --confirmation "AC2003" `
+            --probe-out "dist/should-not-probe.json" `
+            --execution-out "dist/should-not-execute.json" 2> "dist/refusal-execution.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen temporary boot did not fail closed without opt-in: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-probe.json") { throw "Refused temporary boot created probe evidence" }
+          if (Test-Path "dist/should-not-execute.json") { throw "Refused temporary boot created execution evidence" }
+
+          # Final Beta preparation is also fail closed until reviewed physical inputs exist.
+          & $Cli evidence build-beta-artifact-inventory `
+            --candidate-gate "dist/missing-candidate.json" `
+            --release-gate-audit "dist/missing-release-audit.json" `
+            --strategy-review "dist/missing-strategy.json" `
+            --source-commit "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" `
+            --artifact "candidate_boot=dist/missing-boot.img" `
+            --out "dist/should-not-inventory.json" 2> "dist/refusal-inventory.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen Beta inventory did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-inventory.json") { throw "Refused Beta inventory created output" }
+
+          @'
+          import json
+          from pathlib import Path
+
+          def load(name):
+              return json.loads(Path("dist", name).read_text(encoding="utf-8-sig"))
+
+          def help_text(name):
+              return " ".join(Path("dist", name).read_text(encoding="utf-8-sig").lower().split())
+
+          profiles = load("profiles.json")
+          assert any(item["profile_id"] == "oneplus/avicii" for item in profiles)
+          doctor = load("doctor.json")
+          assert doctor["selected_profile_id"] == "oneplus/avicii"
+          assert doctor["physical_interaction_performed"] is False
+          assert doctor["hardware_verified"] is False
+          assert doctor["beta_gate_credit"] is False
+          recovery = load("recovery.json")
+          assert recovery["persistent_write_authorized"] is False
+          assert recovery["hardware_verified"] is False
+          assert recovery["beta_gate_credit"] is False
+
+          assert "--confirm-token" in help_text("help-capture-fastboot-baseline.txt")
+          assert "--extractor-platform" in help_text("help-extract-stock-boot-from-ota.txt")
+          assert "--physical-baseline" in help_text("help-bind-physical-candidate-gate.txt")
+          assert "not authorize execution" in help_text("help-prepare-temporary-boot-offer.txt")
+          execution_help = help_text("help-execute-temporary-boot-once.txt")
+          assert "--execute-temporary-boot" in execution_help
+          assert "no persistent write verb" in execution_help
+          assert "final manual release review" in help_text("help-evidence-build-beta-artifact-inventory.txt")
+          assert "sha256sums" in help_text("help-evidence-build-beta-review-manifest.txt")
+          '@ | python -
+
+          # The preceding negative commands intentionally returned 2 after verified
+          # refusals. Reset only after every assertion has passed so the smoke step
+          # itself is green without weakening any fail-closed check.
+          $global:LASTEXITCODE = 0
+          exit 0
+
+      - name: Smoke-test frozen GUI bootstrap path
+        shell: pwsh
+        run: |
+          $Gui = (Resolve-Path "dist/KaliPhoneStudio/KaliPhoneStudio.exe").Path
+          $Process = Start-Process -FilePath $Gui -ArgumentList "--version" -Wait -PassThru
+          if ($Process.ExitCode -ne 0) { throw "Frozen GUI bootstrap/version path failed: $($Process.ExitCode)" }
+
+      - name: Stage exact AC2003 operator pack
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "dist/operator-pack" | Out-Null
+          Copy-Item "docs/AC2003_FIRST_TEST.md" "dist/operator-pack/AC2003_FIRST_TEST.md"
+          Copy-Item "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md" "dist/operator-pack/BETA_RELEASE_OPERATOR_WORKSPACE.md"
+          Copy-Item "BETA_RELEASE_GATE.md" "dist/operator-pack/BETA_RELEASE_GATE.md"
+          Copy-Item "BUILD_STATUS.json" "dist/operator-pack/BUILD_STATUS.json"
+          Copy-Item "devices/oneplus/avicii/profile.json" "dist/operator-pack/profile.json"
+          Copy-Item "tools/fastboot-tool-policy.json" "dist/operator-pack/fastboot-tool-policy.json"
+          Copy-Item "tools/extractor-locks.json" "dist/operator-pack/extractor-locks.json"
+
+      - name: Create candidate manifests and ZIP
+        shell: pwsh
+        run: |
+          $Root = (Resolve-Path "dist").Path
+          $Files = @()
+          foreach ($Target in @("dist/KaliPhoneStudio", "dist/KaliPhoneStudioCLI", "dist/operator-pack")) {
+            $Files += Get-ChildItem -Path $Target -Recurse -File
+          }
+          $Lines = $Files |
+            Sort-Object FullName |
+            ForEach-Object {
+              $Hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
+              $Relative = [IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\\', '/')
+              "$Hash  $Relative"
+            }
+          $Lines | Set-Content -Encoding ascii "dist/BETA_TEST_CANDIDATE_SHA256.txt"
+
+          @{
+            schema_version = 1
+            kind = "kaliphonestudio-unsigned-ac2003-beta-test-candidate"
+            git_commit = "${{ github.sha }}"
+            profile_id = "oneplus/avicii"
+            python = "3.12"
+            pyinstaller = "6.22.3"
+            pyinstaller_hooks_contrib = "2026.7"
+            packaging_mode = "onedir"
+            signed = $false
+            physical_gate_passed = $false
+            hardware_verified = $false
+            beta_release = $false
+            beta_gate_credit = $false
+          } | ConvertTo-Json | Set-Content -Encoding utf8 "dist/BETA_TEST_CANDIDATE_INFO.json"
+
+          $Zip = "dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip"
+          Compress-Archive -Path `
+            "dist/KaliPhoneStudio", `
+            "dist/KaliPhoneStudioCLI", `
+            "dist/operator-pack", `
+            "dist/BETA_TEST_CANDIDATE_SHA256.txt", `
+            "dist/BETA_TEST_CANDIDATE_INFO.json" `
+            -DestinationPath $Zip -CompressionLevel Optimal
+          $ZipHash = (Get-FileHash -Algorithm SHA256 -Path $Zip).Hash.ToLowerInvariant()
+          "$ZipHash  KaliPhoneStudio-AC2003-beta-test-candidate.zip" | Set-Content -Encoding ascii "dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256"
+
+      - name: Upload unsigned AC2003 Beta test candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaliPhoneStudio-AC2003-beta-test-candidate-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip
+            dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256
+            dist/BETA_TEST_CANDIDATE_INFO.json
