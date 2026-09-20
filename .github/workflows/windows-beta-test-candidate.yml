@@ -1,7 +1,8 @@
 name: windows-beta-test-candidate
 
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - ".github/workflows/windows-beta-test-candidate.yml"
       - "main.py"
@@ -10,6 +11,7 @@ on:
       - "kaliphonestudio/beta_release_artifact_inventory.py"
       - "kaliphonestudio/beta_release_review_manifest.py"
       - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/physical_first_test_session.py"
       - "kaliphonestudio/stock_ota_pipeline.py"
       - "kaliphonestudio/stock_baseline_ingress.py"
       - "kaliphonestudio/physical_candidate_operator.py"
@@ -31,6 +33,42 @@ on:
       - "tests/test_beta_release_artifact_inventory.py"
       - "tests/test_beta_release_review_manifest.py"
       - "tests/test_physical_fastboot_capture.py"
+      - "tests/test_physical_first_test_session.py"
+      - "tests/test_stock_baseline_ingress.py"
+      - "tests/test_physical_candidate_operator.py"
+      - "tests/test_temporary_boot_execution.py"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-beta-test-candidate.yml"
+      - "main.py"
+      - "kaliphonestudio/operator_evidence_workspace.py"
+      - "kaliphonestudio/operator_beta_release_evidence_cli.py"
+      - "kaliphonestudio/beta_release_artifact_inventory.py"
+      - "kaliphonestudio/beta_release_review_manifest.py"
+      - "kaliphonestudio/physical_fastboot_capture.py"
+      - "kaliphonestudio/physical_first_test_session.py"
+      - "kaliphonestudio/stock_ota_pipeline.py"
+      - "kaliphonestudio/stock_baseline_ingress.py"
+      - "kaliphonestudio/physical_candidate_operator.py"
+      - "kaliphonestudio/temporary_boot_execution.py"
+      - "devices/oneplus/avicii/profile.json"
+      - "tools/fastboot-tool-policy.json"
+      - "tools/extractor-locks.json"
+      - "BETA_RELEASE_GATE.md"
+      - "BUILD_STATUS.json"
+      - "docs/AC2003_FIRST_TEST.md"
+      - "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md"
+      - "scripts/build_windows.ps1"
+      - "scripts/verify_windows_beta_test_candidate.ps1"
+      - "build/windows-requirements.txt"
+      - "requirements.txt"
+      - "tests/test_windows_beta_test_candidate_contract.py"
+      - "tests/test_windows_packaging_contract.py"
+      - "tests/test_operator_beta_release_evidence_cli.py"
+      - "tests/test_beta_release_artifact_inventory.py"
+      - "tests/test_beta_release_review_manifest.py"
+      - "tests/test_physical_fastboot_capture.py"
+      - "tests/test_physical_first_test_session.py"
       - "tests/test_stock_baseline_ingress.py"
       - "tests/test_physical_candidate_operator.py"
       - "tests/test_temporary_boot_execution.py"
@@ -48,7 +86,7 @@ jobs:
         with:
           # pull_request normally exposes github.sha as a synthetic merge commit.
           # The test candidate must instead be built from and identify the exact
-          # development head that will later be reviewed/merged.
+          # development head. On main push/workflow_dispatch, github.sha is exact.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-python@v6
@@ -77,6 +115,7 @@ jobs:
           tests/test_beta_release_artifact_inventory.py
           tests/test_beta_release_review_manifest.py
           tests/test_physical_fastboot_capture.py
+          tests/test_physical_first_test_session.py
           tests/test_stock_baseline_ingress.py
           tests/test_physical_candidate_operator.py
           tests/test_temporary_boot_execution.py
@@ -98,6 +137,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Frozen recovery guide failed: $LASTEXITCODE" }
 
           foreach ($Command in @(
+            "begin-physical-test-session",
             "capture-fastboot-baseline",
             "extract-stock-boot-from-ota",
             "bind-physical-stock-baseline",
@@ -116,6 +156,18 @@ jobs:
             & $Cli evidence $Command --help | Set-Content -Encoding utf8 ("dist/help-evidence-" + $Command + ".txt")
             if ($LASTEXITCODE -ne 0) { throw "Frozen evidence help failed for $Command : $LASTEXITCODE" }
           }
+
+          # The first-test wrapper must reject the profile token before creating a
+          # session directory or reaching the guarded Fastboot capture boundary.
+          & $Cli begin-physical-test-session `
+            --profile-id oneplus/avicii `
+            --serial NEVER-CONNECTED `
+            --firmware-build TEST `
+            --firmware-fingerprint TEST `
+            --confirm-token WRONG `
+            --session-dir "dist/should-not-session" 2> "dist/refusal-session.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen first-test session did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-session") { throw "Refused first-test session created output" }
 
           # Missing the profile confirmation token must refuse before any physical
           # Fastboot/tool/device interaction and before creating an evidence directory.
@@ -193,6 +245,9 @@ jobs:
           assert recovery["hardware_verified"] is False
           assert recovery["beta_gate_credit"] is False
 
+          first_session_help = help_text("help-begin-physical-test-session.txt")
+          assert "--confirm-token" in first_session_help
+          assert "read-only fastboot baseline" in first_session_help
           assert "--confirm-token" in help_text("help-capture-fastboot-baseline.txt")
           assert "--extractor-platform" in help_text("help-extract-stock-boot-from-ota.txt")
           assert "--physical-baseline" in help_text("help-bind-physical-candidate-gate.txt")
