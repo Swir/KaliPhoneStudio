@@ -9,6 +9,7 @@ import tarfile
 
 import pytest
 
+from kaliphonestudio import rootfs_member_manifest as member_manifest_module
 from kaliphonestudio.phosh_repro_diagnostics import (
     PhoshReproDiagnosticError,
     diagnose_phosh_rootfs_builds,
@@ -84,6 +85,42 @@ def test_member_manifest_records_order_content_and_create_only(tmp_path: Path):
     out = tmp_path / "members.json"; assert len(write_rootfs_member_manifest(manifest, out)) == 64
     with pytest.raises(RootfsError, match="overwrite"):
         write_rootfs_member_manifest(manifest, out)
+
+
+def test_member_manifest_streams_xz_once_and_enforces_member_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    rootfs = tmp_path / "stream.tar.xz"
+    with tarfile.open(rootfs, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        for index in range(3):
+            _add_file(archive, f"kali-arm64/usr/share/demo-{index}", b"x")
+
+    real_open = tarfile.open
+    observed_modes: list[str | None] = []
+
+    def tracking_open(*args, **kwargs):
+        mode = kwargs.get("mode")
+        if mode is None and len(args) > 1:
+            mode = args[1]
+        observed_modes.append(mode)
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(member_manifest_module.tarfile, "open", tracking_open)
+    manifest = build_rootfs_member_manifest(rootfs)
+    assert manifest.member_count == 3
+    assert observed_modes == ["r|xz"]
+
+    monkeypatch.setattr(member_manifest_module, "_MAX_MEMBERS", 2)
+    with pytest.raises(RootfsError, match="too many members"):
+        build_rootfs_member_manifest(rootfs)
+
+
+def test_member_manifest_serialized_size_bound_is_fail_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    rootfs = tmp_path / "bounded.tar.xz"
+    with tarfile.open(rootfs, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        _add_file(archive, "kali-arm64/usr/bin/demo", b"payload\n")
+    manifest = build_rootfs_member_manifest(rootfs)
+    monkeypatch.setattr(member_manifest_module, "_MAX_MANIFEST_BYTES", 16)
+    with pytest.raises(RootfsError, match="unexpectedly large"):
+        write_rootfs_member_manifest(manifest, tmp_path / "too-large.json")
 
 
 def test_member_manifest_rejects_noncanonical_or_unsafe_input(tmp_path: Path):
