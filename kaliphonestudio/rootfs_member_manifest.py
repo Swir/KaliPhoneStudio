@@ -23,6 +23,7 @@ from .rootfs import RootfsError
 # ceiling. The manifest remains hard-bounded by both member count and serialized bytes.
 _MAX_MEMBERS = 400_000
 _MAX_MANIFEST_BYTES = 192 * 1024 * 1024
+_PAX_VALUE_PREFIX = "hex:"
 
 
 @dataclass(frozen=True)
@@ -98,7 +99,7 @@ def _safe_member_name(name: Any) -> str:
     if ".." in parts:
         raise RootfsMemberManifestError("rootfs archive contains path traversal")
     # GNU/Python tar writers commonly preserve one explicit root-directory marker
-    # named `.` or `./`.  It is a safe canonical member, not a traversal.  Keep one
+    # named `.` or `./`. It is a safe canonical member, not a traversal. Keep one
     # stable spelling in the diagnostic manifest so real rootfs A/B artifacts can be
     # inspected without weakening rejection of absolute paths or `..` components.
     if not parts:
@@ -114,10 +115,29 @@ def _stable_text(value: Any, label: str) -> str:
     return value
 
 
+def _encoded_pax_value(value: Any) -> str:
+    """Return one lossless, JSON/log-safe representation of a PAX value.
+
+    Linux rootfs archives legitimately carry binary extended-attribute values such as
+    ``SCHILY.xattr.security.capability``. ``tarfile`` exposes PAX records as ``str``
+    and can preserve undecodable bytes through surrogate escapes, so rejecting control
+    characters makes real package payloads impossible to diagnose. Encode the exact
+    UTF-8/surrogateescaped byte sequence as lowercase hexadecimal instead. This is
+    diagnostic representation only; the original archive bytes are never modified.
+    """
+    if not isinstance(value, str):
+        raise RootfsMemberManifestError("PAX header value must be text")
+    try:
+        payload = value.encode("utf-8", errors="surrogateescape")
+    except UnicodeEncodeError as exc:
+        raise RootfsMemberManifestError("PAX header value cannot be represented safely") from exc
+    return _PAX_VALUE_PREFIX + payload.hex()
+
+
 def _pax_headers(raw: dict[str, str]) -> tuple[tuple[str, str], ...]:
     result: list[tuple[str, str]] = []
     for key, value in sorted(raw.items()):
-        result.append((_stable_text(key, "PAX header key"), _stable_text(value, "PAX header value")))
+        result.append((_stable_text(key, "PAX header key"), _encoded_pax_value(value)))
     return tuple(result)
 
 
