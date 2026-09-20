@@ -71,3 +71,48 @@ jobs:
           if found:
               raise SystemExit(f"first-test session safety boundary violated: {found}")
           print("first-test session direct-write/device boundary: PASS")
+
+  frozen-windows-first-test-session-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install frozen-build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+      - name: Build frozen Windows host CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Verify frozen first-test session command and fail-closed token gate
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+
+          & $Cli begin-physical-test-session --help | Set-Content -Encoding utf8 "dist/help-begin-physical-test-session.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen first-test session help failed: $LASTEXITCODE" }
+
+          $Help = (Get-Content -Raw "dist/help-begin-physical-test-session.txt").ToLowerInvariant()
+          foreach ($Expected in @("--profile-id", "--serial", "--firmware-build", "--firmware-fingerprint", "--confirm-token", "--session-dir", "--fastboot")) {
+            if (-not $Help.Contains($Expected)) { throw "Frozen first-test session help missing $Expected" }
+          }
+
+          & $Cli begin-physical-test-session `
+            --profile-id oneplus/avicii `
+            --serial "NEVER-CONNECTED" `
+            --firmware-build "TEST" `
+            --firmware-fingerprint "TEST" `
+            --confirm-token "WRONG" `
+            --fastboot "dist/missing-fastboot.exe" `
+            --session-dir "dist/should-not-session" 2> "dist/refusal-first-test-session.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen first-test session did not fail closed on wrong token: $LASTEXITCODE" }
+          if (Test-Path "dist/should-not-session") { throw "Refused first-test session created a workspace" }
+
+          $global:LASTEXITCODE = 0
+          exit 0
