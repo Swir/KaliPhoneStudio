@@ -1,0 +1,74 @@
+name: rootfs-handoff-trial-payload-manifest
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaliphonestudio/stable_file.py"
+      - "kaliphonestudio/rootfs_handoff_trial_execution_gate.py"
+      - "kaliphonestudio/rootfs_handoff_trial_payload.py"
+      - "scripts/build_rootfs_handoff_trial_payload_manifest.py"
+      - "tests/test_rootfs_handoff_trial_payload.py"
+      - "docs/ROOTFS_HANDOFF_TRIAL_PAYLOAD_MANIFEST.md"
+      - ".github/workflows/rootfs-handoff-trial-payload-manifest.yml"
+  pull_request:
+    paths:
+      - "kaliphonestudio/stable_file.py"
+      - "kaliphonestudio/rootfs_handoff_trial_execution_gate.py"
+      - "kaliphonestudio/rootfs_handoff_trial_payload.py"
+      - "scripts/build_rootfs_handoff_trial_payload_manifest.py"
+      - "tests/test_rootfs_handoff_trial_payload.py"
+      - "docs/ROOTFS_HANDOFF_TRIAL_PAYLOAD_MANIFEST.md"
+      - ".github/workflows/rootfs-handoff-trial-payload-manifest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  payload-manifest-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt && python -m pip install pytest
+      - name: Compile exact payload-manifest boundary
+        run: >-
+          python -m py_compile
+          kaliphonestudio/stable_file.py
+          kaliphonestudio/rootfs_handoff_trial_execution_gate.py
+          kaliphonestudio/rootfs_handoff_trial_payload.py
+          scripts/build_rootfs_handoff_trial_payload_manifest.py
+          tests/test_rootfs_handoff_trial_payload.py
+      - name: Run fail-closed payload-manifest tests
+        run: python -m pytest -q tests/test_rootfs_handoff_trial_payload.py
+      - name: Assert source boundary remains host-only and non-writing
+        shell: python
+        run: |
+          from pathlib import Path
+          text = Path("kaliphonestudio/rootfs_handoff_trial_payload.py").read_text(encoding="utf-8")
+          forbidden = (
+              "subprocess",
+              "os.system",
+              "fastboot ",
+              "adb ",
+              "mount(",
+              "extractall(",
+              "persistent_write_authorized=True",
+              "phone_storage_written=True",
+              "beta_gate_credit=True",
+          )
+          found = [needle for needle in forbidden if needle in text]
+          if found:
+              raise SystemExit(f"payload manifest crossed non-writing boundary: {found}")
+          print("payload-manifest source boundary: PASS")
