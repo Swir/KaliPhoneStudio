@@ -169,17 +169,6 @@ jobs:
           test -s evidence/phosh-packages.tsv
           test -s evidence/phosh-canonical.json
 
-      - name: Create exact member-level drift evidence
-        shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          python scripts/build_rootfs_member_manifest.py \
-            --rootfs artifacts/phosh-${{ matrix.build-id }}.tar.xz \
-            --out evidence/phosh-members.json
-          test -s evidence/phosh-members.json
-
       - name: Upload exact non-release build evidence
         uses: actions/upload-artifact@v4
         with:
@@ -188,16 +177,14 @@ jobs:
             evidence/phosh-build.json
             evidence/phosh-canonical.json
             evidence/phosh-packages.tsv
-            evidence/phosh-members.json
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload build-A rootfs payload for post-A/B materialization
-        if: matrix.build-id == 'a'
+      - name: Upload exact rootfs payload for strict comparison diagnostics and materialization
         uses: actions/upload-artifact@v4
         with:
-          name: phosh-rootfs-real-build-a-payload
-          path: artifacts/phosh-a.tar.xz
+          name: phosh-rootfs-real-build-${{ matrix.build-id }}-payload
+          path: artifacts/phosh-${{ matrix.build-id }}.tar.xz
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
@@ -206,7 +193,8 @@ jobs:
     name: Compare independent Phosh A/B outputs
     needs: real-build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The success path is fast. The larger budget is reserved only for mismatch diagnostics.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -218,30 +206,9 @@ jobs:
           pattern: phosh-rootfs-real-build-*-evidence
           path: repro-evidence
 
-      - name: Diagnose exact A/B member drift without promoting authority
-        shell: bash
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          python scripts/diagnose_phosh_rootfs_builds.py \
-            --build-a repro-evidence/phosh-rootfs-real-build-a-evidence/phosh-build.json \
-            --build-b repro-evidence/phosh-rootfs-real-build-b-evidence/phosh-build.json \
-            --members-a repro-evidence/phosh-rootfs-real-build-a-evidence/phosh-members.json \
-            --members-b repro-evidence/phosh-rootfs-real-build-b-evidence/phosh-members.json \
-            --out repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
-          test -s repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
-
-      - name: Upload non-promoting A/B drift diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phosh-rootfs-reproducibility-diagnostic
-          path: repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Create review-required A/B reproducibility candidate
+        id: strict_compare
+        continue-on-error: true
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -256,12 +223,77 @@ jobs:
           test -s repro-evidence/phosh-rootfs-reproducibility-candidate.json
 
       - name: Upload reproducibility-candidate evidence
+        if: steps.strict_compare.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: phosh-rootfs-reproducibility-candidate
           path: repro-evidence/phosh-rootfs-reproducibility-candidate.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Download exact A/B payloads for mismatch diagnostics
+        if: steps.strict_compare.outcome == 'failure'
+        uses: actions/download-artifact@v5
+        with:
+          pattern: phosh-rootfs-real-build-*-payload
+          path: repro-payloads
+
+      - name: Create exact member-level drift evidence after strict mismatch
+        id: member_evidence
+        if: steps.strict_compare.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/build_rootfs_member_manifest.py \
+            --rootfs repro-payloads/phosh-rootfs-real-build-a-payload/phosh-a.tar.xz \
+            --out repro-evidence/phosh-rootfs-real-build-a-members.json
+          python scripts/build_rootfs_member_manifest.py \
+            --rootfs repro-payloads/phosh-rootfs-real-build-b-payload/phosh-b.tar.xz \
+            --out repro-evidence/phosh-rootfs-real-build-b-members.json
+          test -s repro-evidence/phosh-rootfs-real-build-a-members.json
+          test -s repro-evidence/phosh-rootfs-real-build-b-members.json
+
+      - name: Diagnose exact A/B member drift without promoting authority
+        id: drift_diagnostic
+        if: steps.strict_compare.outcome == 'failure' && steps.member_evidence.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/diagnose_phosh_rootfs_builds.py \
+            --build-a repro-evidence/phosh-rootfs-real-build-a-evidence/phosh-build.json \
+            --build-b repro-evidence/phosh-rootfs-real-build-b-evidence/phosh-build.json \
+            --members-a repro-evidence/phosh-rootfs-real-build-a-members.json \
+            --members-b repro-evidence/phosh-rootfs-real-build-b-members.json \
+            --out repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
+          test -s repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
+
+      - name: Upload best-effort mismatch diagnostics
+        if: always() && steps.strict_compare.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-reproducibility-diagnostic
+          path: |
+            repro-evidence/phosh-rootfs-real-build-a-members.json
+            repro-evidence/phosh-rootfs-real-build-b-members.json
+            repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Fail closed after strict A/B mismatch
+        if: always() && steps.strict_compare.outcome == 'failure'
+        shell: bash
+        run: |
+          printf '%s\n' \
+            "strict_ab_comparison=failed" \
+            "member_evidence_outcome=${{ steps.member_evidence.outcome }}" \
+            "drift_diagnostic_outcome=${{ steps.drift_diagnostic.outcome }}"
+          exit 2
 
   materialize-candidate:
     name: Materialize verified Phosh rootfs candidate payload
