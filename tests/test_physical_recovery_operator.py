@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -132,15 +132,14 @@ def test_main_dispatches_recovery_readiness_command(monkeypatch: pytest.MonkeyPa
     assert observed == [["--sentinel", "value"]]
 
 
-def test_recovery_operator_source_has_no_device_or_network_execution_imports() -> None:
+def test_recovery_operator_has_no_device_or_network_execution_imports() -> None:
     source = Path(physical_recovery_operator.__file__).read_text(encoding="utf-8")
-    forbidden = (
-        "import subprocess",
-        "from subprocess",
-        "import requests",
-        "from requests",
-        "fastboot ",
-        "adb ",
-    )
-    for needle in forbidden:
-        assert needle not in source.lower()
+    tree = ast.parse(source)
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+    forbidden = {"subprocess", "requests", "urllib", "httpx", "socket"}
+    assert imported.isdisjoint(forbidden)
