@@ -148,7 +148,7 @@ After the baseline and stock provenance both exist:
 
 This remains offline and does not authorize temporary boot.
 
-## 6. Build/bind the exact physical candidate
+## 6. Bind the exact physical candidate
 
 Do not invent these inputs. Use only the exact reviewed candidate files generated from the same repository candidate/authority chain:
 
@@ -157,8 +157,7 @@ Do not invent these inputs. Use only the exact reviewed candidate files generate
 - temporary-boot authorization;
 - boot build plan;
 - candidate boot image;
-- boot-identity binding;
-- physical recovery-readiness evidence.
+- external candidate DTBO when required by the profile.
 
 Bind the exact physical candidate only after those files match the real stock baseline:
 
@@ -172,6 +171,23 @@ Bind the exact physical candidate only after those files match the real stock ba
   --boot-plan "<EXACT_BOOT_PLAN_JSON>" `
   --out "$Session\physical-candidate-gate.json"
 ```
+
+Now re-inspect and bind the exact local stock/candidate boot-chain bytes to that physical candidate. For the current `oneplus/avicii` profile, provide the exact external candidate DTBO required by the reviewed boot plan:
+
+```powershell
+& $Cli bind-physical-boot-identity `
+  --profile-id oneplus/avicii `
+  --physical-baseline "$Session\physical-stock-baseline.json" `
+  --physical-candidate-gate "$Session\physical-candidate-gate.json" `
+  --stock-provenance "$Session\stock\stock-provenance.json" `
+  --boot-plan "<EXACT_BOOT_PLAN_JSON>" `
+  --stock-boot "$Session\stock\partitions\boot.img" `
+  --candidate-boot "<EXACT_CANDIDATE_BOOT_IMG>" `
+  --candidate-dtbo "<EXACT_CANDIDATE_DTBO_IMG>" `
+  --out "$Session\physical-boot-identity.json"
+```
+
+This command is offline. It re-inspects boot components and optional AVB layout, hashes the exact local bytes again and refuses identity drift. It performs no Fastboot/ADB operation and grants no hardware/Beta credit.
 
 Then prepare, but do not execute, the serial-bound temporary-boot offer:
 
@@ -188,17 +204,23 @@ Then prepare, but do not execute, the serial-bound temporary-boot offer:
 
 Review the generated argv and evidence before any physical boot.
 
-## 7. Recovery-readiness gate before temporary boot
+## 7. Build the recovery-readiness gate before temporary boot
 
-Do not run the temporary executor until the exact real baseline has a reviewed recovery-readiness record bound to:
+Create the exact recovery-readiness record from the same captured baseline, physical stock baseline and boot-identity binding. The command re-hashes the locally present matching stock `boot.img` and binds the captured A/B slot context; it does not access the phone:
 
-- the captured A/B slot context;
-- matching local stock `boot.img`;
-- exact boot identity;
-- physical candidate gate;
-- reviewed boot plan.
+```powershell
+& $Cli build-physical-recovery-readiness `
+  --profile-id oneplus/avicii `
+  --baseline-evidence "$Session\fastboot\fastboot-baseline.json" `
+  --physical-baseline "$Session\physical-stock-baseline.json" `
+  --boot-identity-binding "$Session\physical-boot-identity.json" `
+  --stock-boot "$Session\stock\partitions\boot.img" `
+  --out "$Session\physical-recovery-readiness.json"
+```
 
-The temporary executor requires all of those inputs again and performs a fresh read-only device/slot probe immediately before the one allowed temporary boot.
+Do not continue unless this exact output has been reviewed and still reports `ready_for_temporary_boot_safety_review=true` while keeping slot switching, inactive-slot writes, persistent writes, rollback/recovery verification, hardware verification and Beta credit false.
+
+The temporary executor requires all of those exact inputs again and performs a fresh read-only device/slot probe immediately before the one allowed temporary boot.
 
 ## 8. One-shot temporary boot — explicit manual action
 
@@ -208,9 +230,9 @@ Only when the recovery-readiness evidence has been reviewed and the candidate is
 & $Cli execute-temporary-boot-once `
   --profile-id oneplus/avicii `
   --physical-candidate-gate "$Session\physical-candidate-gate.json" `
-  --boot-identity-binding "<EXACT_BOOT_IDENTITY_BINDING_JSON>" `
+  --boot-identity-binding "$Session\physical-boot-identity.json" `
   --physical-baseline "$Session\physical-stock-baseline.json" `
-  --recovery-readiness "<EXACT_PHYSICAL_RECOVERY_READINESS_JSON>" `
+  --recovery-readiness "$Session\physical-recovery-readiness.json" `
   --stock-boot "$Session\stock\partitions\boot.img" `
   --capture-bundle "$Session\fastboot\fastboot-capture-bundle.json" `
   --baseline-evidence "$Session\fastboot\fastboot-baseline.json" `
