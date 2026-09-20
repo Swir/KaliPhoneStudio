@@ -19,8 +19,10 @@ from typing import Any
 from .rootfs import RootfsError
 
 
-_MAX_MEMBERS = 250_000
-_MAX_MANIFEST_BYTES = 96 * 1024 * 1024
+# A graphical Kali/Phosh rootfs can legitimately exceed the old 250k diagnostic-entry
+# ceiling. The manifest remains hard-bounded by both member count and serialized bytes.
+_MAX_MEMBERS = 400_000
+_MAX_MANIFEST_BYTES = 192 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -136,13 +138,12 @@ def build_rootfs_member_manifest(path: Path) -> RootfsMemberManifest:
     records: list[RootfsMemberRecord] = []
     seen: set[str] = set()
     try:
-        with tarfile.open(candidate, mode="r:xz") as archive:
-            members = archive.getmembers()
-            if not members:
-                raise RootfsMemberManifestError("canonical rootfs archive has no members")
-            if len(members) > _MAX_MEMBERS:
-                raise RootfsMemberManifestError("canonical rootfs archive has too many members")
-            for index, member in enumerate(members):
+        # Stream the compressed archive exactly once. This avoids retaining every TarInfo
+        # and avoids seek/re-decompression churn when hashing a large graphical rootfs.
+        with tarfile.open(candidate, mode="r|xz") as archive:
+            for index, member in enumerate(archive):
+                if index >= _MAX_MEMBERS:
+                    raise RootfsMemberManifestError("canonical rootfs archive has too many members")
                 name = _safe_member_name(member.name)
                 if name in seen:
                     raise RootfsMemberManifestError(
@@ -180,6 +181,8 @@ def build_rootfs_member_manifest(path: Path) -> RootfsMemberManifest:
             raise
         raise RootfsMemberManifestError(f"cannot inspect canonical rootfs archive: {exc}") from exc
 
+    if not records:
+        raise RootfsMemberManifestError("canonical rootfs archive has no members")
     return RootfsMemberManifest(
         schema_version=1,
         artifact_sha256=artifact_sha256,
@@ -205,7 +208,9 @@ def write_rootfs_member_manifest(
         raise RootfsMemberManifestError("invalid rootfs member manifest policy")
     payload = manifest.canonical_json().encode("utf-8")
     if len(payload) > _MAX_MANIFEST_BYTES:
-        raise RootfsMemberManifestError("rootfs member manifest is unexpectedly large")
+        raise RootfsMemberManifestError(
+            f"rootfs member manifest is unexpectedly large: {len(payload)} bytes"
+        )
     destination = Path(destination)
     if destination.exists() or destination.is_symlink():
         raise RootfsMemberManifestError("refusing to overwrite rootfs member manifest")
