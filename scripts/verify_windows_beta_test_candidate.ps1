@@ -42,7 +42,7 @@ $Lines = Get-Content -Encoding ascii $ManifestPath
 if ($Lines.Count -eq 0) { throw "Candidate SHA-256 manifest is empty" }
 
 $RootPrefix = $Root.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-$Seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$Seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $Verified = 0
 
 foreach ($Line in $Lines) {
