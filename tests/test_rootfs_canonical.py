@@ -28,6 +28,10 @@ def _fixture(
     password_hash: bytes,
     cache: bytes,
     fake_clock: bytes,
+    apt_index: bytes = b"Packages: stable\n",
+    build_log: bytes = b"build log\n",
+    font_cache: bytes = b"font cache\n",
+    random_seed: bytes = b"random seed\n",
 ) -> None:
     prefix = "kali-arm64"
     with tarfile.open(path, "w:xz", format=tarfile.PAX_FORMAT) as archive:
@@ -47,7 +51,11 @@ def _fixture(
             mtime + 4,
         )
         _add_file(archive, f"{prefix}/var/cache/ldconfig/aux-cache", cache, mtime + 5)
-        _add_file(archive, f"{prefix}/usr/bin/unchanged", b"real package payload\n", mtime + 6)
+        _add_file(archive, f"{prefix}/var/lib/apt/lists/mirror_Packages", apt_index, mtime + 6)
+        _add_file(archive, f"{prefix}/var/log/apt/term.log", build_log, mtime + 7)
+        _add_file(archive, f"{prefix}/var/cache/fontconfig/random.cache-8", font_cache, mtime + 8)
+        _add_file(archive, f"{prefix}/var/lib/systemd/random-seed", random_seed, mtime + 9)
+        _add_file(archive, f"{prefix}/usr/bin/unchanged", b"real package payload\n", mtime + 10)
 
 
 def _member_bytes(path: Path, name: str) -> bytes:
@@ -70,6 +78,10 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         password_hash=b"$y$random-salt-a$hash-a",
         cache=b"cache-a",
         fake_clock=b"2026-09-16 20:00:00\n",
+        apt_index=b"network-index-a",
+        build_log=b"wall-clock-log-a",
+        font_cache=b"derived-cache-a",
+        random_seed=b"host-entropy-a",
     )
     _fixture(
         second,
@@ -78,6 +90,10 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         password_hash=b"$y$random-salt-b$hash-b",
         cache=b"cache-b",
         fake_clock=b"2026-09-16 20:01:00\n",
+        apt_index=b"network-index-b",
+        build_log=b"wall-clock-log-b",
+        font_cache=b"derived-cache-b",
+        random_seed=b"host-entropy-b",
     )
 
     evidence_a = canonicalize_rootfs_archive(first, out_a)
@@ -88,7 +104,7 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
     assert evidence_a.beta_gate_credit is False
     assert evidence_a.zeroed_volatile_files == 3
     assert evidence_a.locked_password_entries == 2
-    assert evidence_a.dropped_cache_entries == 1
+    assert evidence_a.dropped_cache_entries == 5
     assert evidence_a.normalized_mtime_count == 6
 
     prefix = "kali-arm64"
@@ -101,9 +117,33 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
     assert _member_bytes(out_a, f"{prefix}/usr/bin/unchanged") == b"real package payload\n"
 
     with tarfile.open(out_a, "r:xz") as archive:
-        names = archive.getnames()
+        names = set(archive.getnames())
         assert f"{prefix}/var/cache/ldconfig/aux-cache" not in names
+        assert f"{prefix}/var/lib/apt/lists/mirror_Packages" not in names
+        assert f"{prefix}/var/log/apt/term.log" not in names
+        assert f"{prefix}/var/cache/fontconfig/random.cache-8" not in names
+        assert f"{prefix}/var/lib/systemd/random-seed" not in names
         assert all(member.mtime == 0 for member in archive.getmembers())
+
+
+def test_canonicalization_preserves_configuration_and_package_payload(tmp_path):
+    source = tmp_path / "input.tar.xz"
+    out = tmp_path / "canonical.tar.xz"
+    prefix = "kali-arm64"
+    with tarfile.open(source, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        _add_file(
+            archive,
+            f"{prefix}/var/lib/dpkg/status",
+            b"Package: base-files\nStatus: install ok installed\nVersion: 1\nArchitecture: arm64\n\n",
+            100,
+        )
+        _add_file(archive, f"{prefix}/etc/ssh/sshd_config", b"PermitRootLogin no\n", 101)
+        _add_file(archive, f"{prefix}/usr/lib/libpayload.so", b"\x7fELFpayload", 102)
+
+    canonicalize_rootfs_archive(source, out)
+
+    assert _member_bytes(out, f"{prefix}/etc/ssh/sshd_config") == b"PermitRootLogin no\n"
+    assert _member_bytes(out, f"{prefix}/usr/lib/libpayload.so") == b"\x7fELFpayload"
 
 
 def test_canonicalization_rejects_ambiguous_dpkg_status_layout(tmp_path):

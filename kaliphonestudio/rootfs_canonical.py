@@ -1,9 +1,10 @@
 """Deterministic, security-preserving canonicalization for built Kali rootfs archives.
 
 The pinned NetHunter builder is authoritative for package selection and filesystem
-contents, but it necessarily creates a few machine-local values and records wall-clock
-mtimes. This module removes only that explicitly reviewed volatile state and rewrites
-the tar.xz deterministically before independent A/B artifacts are compared.
+contents, but it necessarily creates machine-local values, build logs, mutable package
+indexes/caches and wall-clock mtimes. This module removes only explicitly reviewed
+volatile or regenerable state and rewrites the tar.xz deterministically before
+independent A/B artifacts are compared.
 
 It never extracts the archive to the host filesystem and never grants hardware/Beta
 credit. Package selection remains verified separately from dpkg status and strict
@@ -29,7 +30,23 @@ _ZERO_CONTENT_PATHS = {
     "etc/machine-id",
     "var/lib/dbus/machine-id",
 }
-_DROP_PATHS = {"var/cache/ldconfig/aux-cache"}
+# Exact generated state which is safe to recreate on the target. In particular,
+# random seeds must never be cloned from a build host into multiple devices.
+_DROP_PATHS = {
+    "var/cache/ldconfig/aux-cache",
+    "var/lib/systemd/random-seed",
+    "var/lib/urandom/random-seed",
+}
+# Prefixes below contain only build/runtime logs, network-derived package indexes or
+# derived caches. Keep their top-level directories but omit children so normal runtime
+# tools can repopulate them. Do not add configuration/state paths here.
+_DROP_PREFIXES = (
+    "var/cache/apt/archives/",
+    "var/cache/fontconfig/",
+    "var/cache/man/",
+    "var/lib/apt/lists/",
+    "var/log/",
+)
 _SHADOW_PATH = "etc/shadow"
 _MAX_SHADOW_BYTES = 8 * 1024 * 1024
 
@@ -106,6 +123,12 @@ def _logical_path(parts: tuple[str, ...], prefix: tuple[str, ...]) -> str:
     return "/".join(parts)
 
 
+def _drop_volatile_path(logical: str) -> bool:
+    if logical in _DROP_PATHS:
+        return True
+    return any(logical.startswith(prefix) for prefix in _DROP_PREFIXES)
+
+
 def _canonical_shadow(data: bytes) -> tuple[bytes, int]:
     if len(data) > _MAX_SHADOW_BYTES:
         raise RootfsError("rootfs shadow file is unreasonably large")
@@ -158,9 +181,12 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
     * all tar member mtimes -> epoch 0;
     * machine-id/dbus machine-id/fake-hwclock payloads -> empty;
     * password hashes and password-aging build dates in /etc/shadow -> locked/canonical;
-    * ldconfig auxiliary cache -> omitted because it is regenerated from libraries.
+    * package-download/index caches, font/man/ldconfig caches and build logs -> omitted;
+    * runtime random seeds -> omitted so target devices never inherit build-host entropy.
 
-    No other regular-file payload is changed.
+    No package payload, configuration file or persistent application state is otherwise
+    changed. The legacy ``dropped_cache_entries`` evidence counter intentionally counts
+    all reviewed omitted volatile entries to preserve evidence schema compatibility.
     """
     source_path = source_path.resolve(strict=True)
     destination_path = destination_path.resolve(strict=False)
@@ -196,7 +222,7 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
                 for member in members:
                     parts = _safe_parts(member.name)
                     logical = _logical_path(parts, prefix)
-                    if logical in _DROP_PATHS:
+                    if _drop_volatile_path(logical):
                         dropped += 1
                         continue
 
