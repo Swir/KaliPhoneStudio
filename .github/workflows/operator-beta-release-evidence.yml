@@ -147,3 +147,9 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen review manifest did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/should-not-manifest.json") { throw "Refused manifest created output" }
           if (Test-Path "dist/should-not-SHA256SUMS") { throw "Refused manifest created SHA256SUMS" }
+
+          # Both negative smoke commands intentionally return 2 after a verified refusal.
+          # Reset the native exit code only after every fail-closed assertion above passed,
+          # so the PowerShell step itself reports success without weakening the refusal checks.
+          $global:LASTEXITCODE = 0
+          exit 0
