@@ -48,7 +48,9 @@ _ENTRY_FIELDS = {
     "content_sha256",
 }
 _RECORD_COMPARE_FIELDS = tuple(sorted(_ENTRY_FIELDS - {"index"}))
-_MAX_MANIFEST_BYTES = 96 * 1024 * 1024
+# Consume the complete bounded output produced by rootfs_member_manifest. A diagnostic
+# reader must not reject a manifest that the paired writer is explicitly allowed to emit.
+_MAX_MANIFEST_BYTES = 192 * 1024 * 1024
 _MAX_DIFFERENCES = 200
 
 
@@ -62,6 +64,22 @@ def _safe_text(value: Any, label: str, *, allow_empty: bool = True) -> str:
     if any(ord(char) < 32 or ord(char) == 127 for char in value):
         raise PhoshReproDiagnosticError(f"{label} contains control characters")
     return value
+
+
+def _safe_manifest_path(value: Any) -> str:
+    """Validate the normalized member spelling emitted by rootfs_member_manifest."""
+    name = _safe_text(value, "rootfs member path", allow_empty=False)
+    parsed = PurePosixPath(name)
+    if parsed.is_absolute() or ".." in parsed.parts:
+        raise PhoshReproDiagnosticError("rootfs member manifest contains an unsafe path")
+    parts = tuple(part for part in parsed.parts if part not in {"", "."})
+    if not parts:
+        if name != ".":
+            raise PhoshReproDiagnosticError("rootfs member manifest contains an unsafe path")
+        return name
+    if name != "/".join(parts):
+        raise PhoshReproDiagnosticError("rootfs member manifest contains an unsafe path")
+    return name
 
 
 def _nonnegative_int(value: Any, label: str) -> int:
@@ -170,12 +188,7 @@ def _load_member_manifest(
             raise PhoshReproDiagnosticError("unexpected rootfs member record fields")
         if entry.get("index") != expected_index:
             raise PhoshReproDiagnosticError("rootfs member manifest index sequence is invalid")
-        name = _safe_text(entry.get("path"), "rootfs member path", allow_empty=False)
-        parsed = PurePosixPath(name)
-        if parsed.is_absolute() or ".." in parsed.parts or name != "/".join(
-            part for part in parsed.parts if part not in {"", "."}
-        ):
-            raise PhoshReproDiagnosticError("rootfs member manifest contains an unsafe path")
+        name = _safe_manifest_path(entry.get("path"))
         if name in seen:
             raise PhoshReproDiagnosticError("rootfs member manifest contains duplicate path")
         seen.add(name)
@@ -198,7 +211,16 @@ def _load_member_manifest(
             if not isinstance(pair, list) or len(pair) != 2:
                 raise PhoshReproDiagnosticError("rootfs member PAX headers are invalid")
             _safe_text(pair[0], "rootfs member PAX key", allow_empty=False)
-            _safe_text(pair[1], "rootfs member PAX value")
+            value = _safe_text(pair[1], "rootfs member PAX value", allow_empty=False)
+            if not value.startswith("hex:"):
+                raise PhoshReproDiagnosticError(
+                    "rootfs member PAX value must use the exact hex encoding"
+                )
+            encoded = value[4:]
+            if len(encoded) % 2 or any(char not in "0123456789abcdef" for char in encoded):
+                raise PhoshReproDiagnosticError(
+                    "rootfs member PAX value has invalid hex encoding"
+                )
     return raw, sha256(payload).hexdigest()
 
 
