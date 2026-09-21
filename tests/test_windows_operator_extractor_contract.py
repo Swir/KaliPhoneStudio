@@ -30,13 +30,17 @@ def test_windows_extractor_builder_is_source_locked_and_hash_gated() -> None:
         "$Lock.source.commit",
         "$Lock.build.toolchain_version",
         "$Lock.artifacts.'windows-amd64'.sha256",
+        'if ($env:CGO_ENABLED -ne "1")',
+        "Reviewed Windows extractor build requires an explicit MinGW CC",
         "git fetch --quiet --depth 1 origin $ExpectedCommit",
         "git rev-parse HEAD",
+        "Extractor go.mod/toolchain drift",
         "go build -trimpath -buildvcs=false '-ldflags=-buildid='",
         "Get-FileHash -Algorithm SHA256",
         "Extractor SHA-256 mismatch",
         "payload-dumper-go-LICENSE.txt",
         'kind = "kaliphonestudio-windows-operator-extractor"',
+        "cgo_enabled = $true",
         "source_lock_verified = $true",
         "executable_hash_verified = $true",
         "hardware_verified = $false",
@@ -61,18 +65,26 @@ def test_windows_extractor_builder_is_source_locked_and_hash_gated() -> None:
 def test_windows_extractor_workflow_builds_exact_non_release_artifact() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "runs-on: windows-latest" in workflow
-    assert "actions/setup-go@v6" in workflow
-    assert 'go-version: "1.27.0"' in workflow
-    assert "./scripts/build_windows_operator_extractor.ps1" in workflow
-    assert "tools/extractor-locks.json" in workflow
-    assert "operator-extractor-manifest.json" in workflow
-    assert "payload-dumper-go.exe" in workflow
-    assert "payload-dumper-go-LICENSE.txt" in workflow
-    assert "actions/upload-artifact@v4" in workflow
-    assert "retention-days: 7" in workflow
-    assert "KaliPhoneStudio-windows-operator-extractor-" in workflow
-    assert "github.event.pull_request.head.sha || github.sha" in workflow
+    for needle in (
+        "runs-on: windows-latest",
+        "actions/setup-go@v6",
+        'go-version: "1.27.0"',
+        "mingw-w64-x86_64-gcc",
+        "mingw-w64-x86_64-xz",
+        "CGO_ENABLED=1",
+        "CGO_CFLAGS=-IC:/msys64/mingw64/include",
+        "CGO_LDFLAGS=-LC:/msys64/mingw64/lib",
+        "./scripts/build_windows_operator_extractor.ps1",
+        "tools/extractor-locks.json",
+        "operator-extractor-manifest.json",
+        "payload-dumper-go.exe",
+        "payload-dumper-go-LICENSE.txt",
+        "actions/upload-artifact@v4",
+        "retention-days: 7",
+        "KaliPhoneStudio-windows-operator-extractor-",
+        "github.event.pull_request.head.sha || github.sha",
+    ):
+        assert needle in workflow
 
     forbidden_publishers = (
         "softprops/action-gh-release",
