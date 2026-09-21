@@ -49,7 +49,7 @@ def test_workflow_builds_exact_integrated_windows_candidate() -> None:
         "gh release create",
         "actions/create-release",
     ):
-        assert needle not in workflow
+        assert forbidden not in workflow
 
 
 def test_frozen_smoke_covers_bundled_extractor_and_fail_closed_operator_surface() -> None:
