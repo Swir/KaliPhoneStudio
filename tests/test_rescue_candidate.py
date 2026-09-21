@@ -33,12 +33,24 @@ def _fixture(tmp_path: Path):
     (repo / "rescue").mkdir(parents=True)
     config = repo / "rescue" / "busybox-minimal.config"
     init = repo / "rescue" / "init"
+    helper = repo / "rescue" / "kps-rootfs-stage-once"
     config.write_text("CONFIG_STATIC=y\nCONFIG_ASH=y\n", encoding="utf-8", newline="\n")
     init.write_text(
         "#!/bin/sh\necho 'network=disabled ssh=disabled'\nexec sh\n",
         encoding="utf-8", newline="\n",
     )
     init.chmod(0o755)
+    helper.write_text(
+        "#!/bin/sh\n"
+        'KPS_POLICY="interactive-rootfs-stage-v1"\n'
+        "# fixture only: runtime helper contract markers\n"
+        "# \"execution_gate_passed\":true\n"
+        "# \"explicit_operator_confirmation_required\":true\n"
+        "echo KPS_ROOTFS_STAGE_BETA_CREDIT=false\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    helper.chmod(0o700)
     source = tmp_path / "busybox.tar.bz2"
     source.write_bytes(b"busybox-source")
     lock = {
