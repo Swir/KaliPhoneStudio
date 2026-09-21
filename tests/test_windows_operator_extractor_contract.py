@@ -10,6 +10,7 @@ BUILDER = ROOT / "scripts" / "build_windows_operator_extractor.ps1"
 LOCKS = ROOT / "tools" / "extractor-locks.json"
 DOC = ROOT / "docs" / "WINDOWS_OPERATOR_EXTRACTOR.md"
 
+# Refreshed only after exact A/B reproducibility evidence is accepted.
 WINDOWS_SHA256 = "3a772fda1ac854f11ce9da26d33097f927266004357fc95bceff85de70158bde"
 EXPECTED_NATIVE_PACKAGES = {
     "mingw-w64-x86_64-binutils": "2.47-3",
@@ -31,9 +32,12 @@ def test_extractor_lock_is_exact_and_has_windows_native_authority() -> None:
     assert data["source"]["commit"] == "05fe59e21c9f271fba38398c7c040993313ecd04"
     assert data["build"]["toolchain"] == "go"
     assert data["build"]["toolchain_version"] == "1.27.0"
-    assert data["build"]["command"] == [
-        "go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", "payload-dumper-go", ".",
-    ]
+
+    windows_build = data["build"]["platform_overrides"]["windows-amd64"]
+    assert windows_build == {
+        "linkage": "static",
+        "ldflags": "-buildid= -extldflags=-static",
+    }
 
     native = data["build"]["native_dependencies"]["windows-amd64"]
     assert native["distribution"] == "MSYS2 mingw64"
@@ -45,7 +49,7 @@ def test_extractor_lock_is_exact_and_has_windows_native_authority() -> None:
     int(digest, 16)
 
 
-def test_windows_extractor_builder_is_source_native_and_hash_gated() -> None:
+def test_windows_extractor_builder_is_source_native_static_and_hash_gated() -> None:
     script = BUILDER.read_text(encoding="utf-8")
 
     for needle in (
@@ -54,6 +58,9 @@ def test_windows_extractor_builder_is_source_native_and_hash_gated() -> None:
         "$Lock.build.toolchain_version",
         "$Lock.artifacts.'windows-amd64'.sha256",
         "$Lock.build.native_dependencies.'windows-amd64'",
+        "$Lock.build.platform_overrides.'windows-amd64'",
+        'linkage -ne "static"',
+        '"-buildid= -extldflags=-static"',
         "MSYS2 pacman is unavailable for native dependency verification",
         "pacman.exe",
         "Native package drift",
@@ -62,13 +69,13 @@ def test_windows_extractor_builder_is_source_native_and_hash_gated() -> None:
         "git fetch --quiet --depth 1 origin $ExpectedCommit",
         "git rev-parse HEAD",
         "Extractor go.mod/toolchain drift",
-        "go build -trimpath -buildvcs=false '-ldflags=-buildid='",
+        'go build -trimpath -buildvcs=false "-ldflags=$WindowsLdFlags"',
         "Get-FileHash -Algorithm SHA256",
         "Extractor SHA-256 mismatch",
         "payload-dumper-go-LICENSE.txt",
         'kind = "kaliphonestudio-windows-operator-extractor"',
+        'linkage = "static"',
         "native_package_versions = $VerifiedNativePackages",
-        "cgo_enabled = $true",
         "source_lock_verified = $true",
         "native_dependencies_verified = $true",
         "executable_hash_verified = $true",
@@ -109,6 +116,8 @@ def test_windows_extractor_workflow_builds_exact_non_release_artifact() -> None:
         "payload-dumper-go.exe",
         "payload-dumper-go-LICENSE.txt",
         "native_dependencies_verified",
+        "Smoke-test extractor without MSYS2 on PATH",
+        "$env:SystemRoot\\System32;$env:SystemRoot",
         "actions/upload-artifact@v4",
         "retention-days: 7",
         "KaliPhoneStudio-windows-operator-extractor-",
@@ -133,6 +142,7 @@ def test_operator_extractor_doc_keeps_fastboot_and_beta_separate() -> None:
     assert "Apache-2.0" in doc
     assert WINDOWS_SHA256 in doc
     assert "MSYS2 mingw64" in doc
+    assert "static" in doc.lower()
     assert "native dependency" in doc.lower()
     assert "does not bundle Android Platform-Tools" in doc
     assert "not a Beta release" in doc
