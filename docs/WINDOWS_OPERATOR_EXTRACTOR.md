@@ -4,7 +4,7 @@ KaliPhoneStudio can build a short-lived **Windows operator extractor artifact** 
 
 This artifact is **not a Beta release**, does not contact a phone and grants no hardware/Beta credit.
 
-## Exact source contract
+## Exact source and native-build contract
 
 The build reads [`tools/extractor-locks.json`](../tools/extractor-locks.json) as the only source of truth and refuses drift. The current Windows contract is:
 
@@ -12,10 +12,13 @@ The build reads [`tools/extractor-locks.json`](../tools/extractor-locks.json) as
 - source commit: `05fe59e21c9f271fba38398c7c040993313ecd04`;
 - Go toolchain: `1.27.0`;
 - target: `windows-amd64`;
+- native environment: **MSYS2 mingw64** with the exact package revisions recorded in the lock;
 - build flags: `-trimpath -buildvcs=false -ldflags=-buildid=`;
-- required executable SHA-256: `35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5`.
+- required executable SHA-256: `3a772fda1ac854f11ce9da26d33097f927266004357fc95bceff85de70158bde`.
 
-The builder fetches that exact commit, verifies `HEAD`, builds with the exact Go toolchain/flags, hashes the resulting executable and refuses the artifact unless the digest matches the already reviewed lock.
+The Windows native dependency set is part of the authority because an upstream MSYS2 runtime revision changed the resulting executable even though the source commit, Go version and build flags had not changed. A fresh rerun of the repository's existing extractor A/B reproducibility job on **2026-09-21** built the pinned source twice with the currently recorded native package set, proved the two Windows outputs byte-for-byte identical and produced the SHA-256 above. The operator builder now checks every recorded MSYS2 package version with `pacman -Q` and fails closed if a future runner silently changes that native environment.
+
+The builder then fetches the exact source commit, verifies `HEAD`, confirms the pinned `go.mod` requirement, builds with the exact Go/native environment, hashes the resulting executable and refuses the artifact unless the digest matches the reviewed lock.
 
 ## License
 
@@ -32,7 +35,7 @@ payload-dumper-go-LICENSE.txt
 operator-extractor-manifest.json
 ```
 
-The manifest records the exact source commit, Go version, build flags, executable/license hashes and explicit non-authorizing safety state.
+The manifest records the exact source commit, Go version, native dependency versions, build flags, executable/license hashes and explicit non-authorizing safety state.
 
 ## Use during the first AC2003 campaign
 
@@ -65,7 +68,7 @@ This artifact intentionally **does not bundle Android Platform-Tools / Fastboot*
 The phone-side sequence therefore remains:
 
 1. use one reviewed Fastboot executable accepted by `fastboot-tool-policy.json` for the entire evidence session;
-2. use the exact source/hash-verified `payload-dumper-go.exe` from this artifact for OTA extraction;
+2. use the exact source/native-dependency/hash-verified `payload-dumper-go.exe` from this artifact for OTA extraction;
 3. preserve all evidence under one fresh session directory;
 4. stop on any identity, firmware, slot, provenance or hash drift;
 5. perform the separately gated one-shot temporary boot only after recovery-readiness review.
