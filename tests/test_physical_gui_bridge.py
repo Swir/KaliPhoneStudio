@@ -163,6 +163,8 @@ def test_gui_surface_exposes_gated_physical_flow_and_keeps_flash_locked() -> Non
     wizard = (ROOT / "kaliphonestudio" / "physical_gui_wizard.py").read_text(encoding="utf-8")
 
     assert 'Physical phone test…' in app
+    assert "DEFAULT SAFE MODE" in app
+    assert "this window never executes adb/fastboot" not in app
     for label in (
         "Detect Fastboot phone",
         "Create read-only baseline",
