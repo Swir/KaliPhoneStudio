@@ -1,0 +1,379 @@
+name: Phosh rootfs A/B reproducibility candidate
+
+on:
+  pull_request:
+    paths:
+      - "kaliphonestudio/phosh.py"
+      - "kaliphonestudio/phosh_build.py"
+      - "kaliphonestudio/phosh_reproducibility.py"
+      - "kaliphonestudio/phosh_repro_diagnostics.py"
+      - "kaliphonestudio/phosh_candidate_artifact.py"
+      - "kaliphonestudio/phosh_rootfs_authority.py"
+      - "kaliphonestudio/rootfs.py"
+      - "kaliphonestudio/rootfs_canonical.py"
+      - "kaliphonestudio/rootfs_member_manifest.py"
+      - "kaliphonestudio/stable_file.py"
+      - "scripts/run_locked_phosh_rootfs_build.py"
+      - "scripts/compare_phosh_rootfs_builds.py"
+      - "scripts/build_rootfs_member_manifest.py"
+      - "scripts/diagnose_phosh_rootfs_builds.py"
+      - "scripts/prepare_phosh_rootfs_candidate_artifact.py"
+      - "scripts/prepare_phosh_rootfs_review_packet.py"
+      - "scripts/review_phosh_rootfs_authority.py"
+      - "tools/phosh-source-lock.json"
+      - "tools/phosh-rootfs-build-contract.json"
+      - "tests/test_phosh.py"
+      - "tests/test_phosh_build.py"
+      - "tests/test_phosh_reproducibility.py"
+      - "tests/test_phosh_repro_diagnostics.py"
+      - "tests/test_phosh_candidate_artifact.py"
+      - "tests/test_phosh_rootfs_authority.py"
+      - "tests/test_phosh_repro_workflow_budget.py"
+      - "docs/PHOSH_ROOTFS_AUTHORITY_REVIEW.md"
+      - ".github/workflows/phosh-rootfs-reproducibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  comparator-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install pytest
+      - name: Compile Phosh A/B, diagnostics, materialization and authority-review boundaries
+        run: >-
+          python -m py_compile
+          kaliphonestudio/phosh_reproducibility.py
+          kaliphonestudio/phosh_repro_diagnostics.py
+          kaliphonestudio/rootfs_member_manifest.py
+          kaliphonestudio/phosh_candidate_artifact.py
+          kaliphonestudio/phosh_rootfs_authority.py
+          scripts/compare_phosh_rootfs_builds.py
+          scripts/build_rootfs_member_manifest.py
+          scripts/diagnose_phosh_rootfs_builds.py
+          scripts/prepare_phosh_rootfs_candidate_artifact.py
+          scripts/prepare_phosh_rootfs_review_packet.py
+          scripts/review_phosh_rootfs_authority.py
+          tests/test_phosh_reproducibility.py
+          tests/test_phosh_repro_diagnostics.py
+          tests/test_phosh_candidate_artifact.py
+          tests/test_phosh_rootfs_authority.py
+          tests/test_phosh_repro_workflow_budget.py
+      - name: Test fail-closed Phosh A/B diagnostics, materialization and authority review
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_phosh_reproducibility.py
+          tests/test_phosh_repro_diagnostics.py
+          tests/test_phosh_candidate_artifact.py
+          tests/test_phosh_rootfs_authority.py
+          tests/test_phosh_repro_workflow_budget.py
+
+  real-build:
+    name: Real Phosh rootfs build ${{ matrix.build-id }}
+    if: github.event_name == 'pull_request'
+    needs: comparator-contract
+    strategy:
+      fail-fast: false
+      matrix:
+        build-id: [a, b]
+    runs-on: ubuntu-latest
+    # Two bounded build stages can consume up to 220 minutes; keep 80 minutes for setup, canonicalization and artifact upload.
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install real-build host prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binfmt-support ca-certificates debos git qemu-user-static xz-utils
+          if [ -e /dev/kvm ]; then
+            sudo chmod a+rw /dev/kvm
+          fi
+          host_kernel="/boot/vmlinuz-$(uname -r)"
+          if [ -f "$host_kernel" ]; then
+            sudo chmod a+r "$host_kernel"
+            test -r "$host_kernel"
+          fi
+          command -v debos
+          command -v qemu-aarch64-static
+
+      - name: Load exact pinned upstream source
+        id: source
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from kaliphonestudio.phosh import load_phosh_source_lock
+
+          lock = load_phosh_source_lock(Path("tools/phosh-source-lock.json"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"repository={lock.upstream_repository}", file=out)
+              print(f"commit={lock.upstream_commit}", file=out)
+          print(f"phosh_source_lock_sha256={lock.lock_sha256()}")
+          PY
+
+      - name: Prepare exact detached upstream checkout
+        shell: bash
+        env:
+          SOURCE_REPOSITORY: ${{ steps.source.outputs.repository }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git init --quiet upstream-phosh
+          git -C upstream-phosh remote add origin "$SOURCE_REPOSITORY"
+          git -C upstream-phosh fetch --quiet --depth=1 origin "$SOURCE_COMMIT"
+          test "$(git -C upstream-phosh rev-parse FETCH_HEAD)" = "$SOURCE_COMMIT"
+          git -C upstream-phosh checkout --quiet --detach "$SOURCE_COMMIT"
+          test "$(git -C upstream-phosh rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test -z "$(git -C upstream-phosh status --porcelain --untracked-files=no)"
+
+      - name: Build canonical Phosh ARM64 rootfs candidate
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts evidence
+          python scripts/run_locked_phosh_rootfs_build.py \
+            --checkout upstream-phosh \
+            --out artifacts/phosh-${{ matrix.build-id }}.tar.xz \
+            --package-manifest evidence/phosh-packages.tsv \
+            --build-evidence evidence/phosh-build.json \
+            --canonicalization-evidence evidence/phosh-canonical.json \
+            --timeout 6600
+          test -s artifacts/phosh-${{ matrix.build-id }}.tar.xz
+          test -s evidence/phosh-build.json
+          test -s evidence/phosh-packages.tsv
+          test -s evidence/phosh-canonical.json
+
+      - name: Upload exact non-release build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-real-build-${{ matrix.build-id }}-evidence
+          path: |
+            evidence/phosh-build.json
+            evidence/phosh-canonical.json
+            evidence/phosh-packages.tsv
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload exact rootfs payload for strict comparison diagnostics and materialization
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-real-build-${{ matrix.build-id }}-payload
+          path: artifacts/phosh-${{ matrix.build-id }}.tar.xz
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  compare:
+    name: Compare independent Phosh A/B outputs
+    needs: real-build
+    runs-on: ubuntu-latest
+    # The success path is fast. The larger budget is reserved only for mismatch diagnostics.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: phosh-rootfs-real-build-*-evidence
+          path: repro-evidence
+
+      - name: Create review-required A/B reproducibility candidate
+        id: strict_compare
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/compare_phosh_rootfs_builds.py \
+            --build-a repro-evidence/phosh-rootfs-real-build-a-evidence/phosh-build.json \
+            --build-b repro-evidence/phosh-rootfs-real-build-b-evidence/phosh-build.json \
+            --origin-a "github-actions/${{ github.repository }}/${{ github.run_id }}/${{ github.run_attempt }}/build-a" \
+            --origin-b "github-actions/${{ github.repository }}/${{ github.run_id }}/${{ github.run_attempt }}/build-b" \
+            --out repro-evidence/phosh-rootfs-reproducibility-candidate.json
+          test -s repro-evidence/phosh-rootfs-reproducibility-candidate.json
+
+      - name: Upload reproducibility-candidate evidence
+        if: steps.strict_compare.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-reproducibility-candidate
+          path: repro-evidence/phosh-rootfs-reproducibility-candidate.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Download exact A/B payloads for mismatch diagnostics
+        if: steps.strict_compare.outcome == 'failure'
+        uses: actions/download-artifact@v5
+        with:
+          pattern: phosh-rootfs-real-build-*-payload
+          path: repro-payloads
+
+      - name: Create exact member-level drift evidence after strict mismatch
+        id: member_evidence
+        if: steps.strict_compare.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/build_rootfs_member_manifest.py \
+            --rootfs repro-payloads/phosh-rootfs-real-build-a-payload/phosh-a.tar.xz \
+            --out repro-evidence/phosh-rootfs-real-build-a-members.json
+          python scripts/build_rootfs_member_manifest.py \
+            --rootfs repro-payloads/phosh-rootfs-real-build-b-payload/phosh-b.tar.xz \
+            --out repro-evidence/phosh-rootfs-real-build-b-members.json
+          test -s repro-evidence/phosh-rootfs-real-build-a-members.json
+          test -s repro-evidence/phosh-rootfs-real-build-b-members.json
+
+      - name: Diagnose exact A/B member drift without promoting authority
+        id: drift_diagnostic
+        if: steps.strict_compare.outcome == 'failure' && steps.member_evidence.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/diagnose_phosh_rootfs_builds.py \
+            --build-a repro-evidence/phosh-rootfs-real-build-a-evidence/phosh-build.json \
+            --build-b repro-evidence/phosh-rootfs-real-build-b-evidence/phosh-build.json \
+            --members-a repro-evidence/phosh-rootfs-real-build-a-members.json \
+            --members-b repro-evidence/phosh-rootfs-real-build-b-members.json \
+            --out repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
+          test -s repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
+
+      - name: Upload best-effort mismatch diagnostics
+        if: always() && steps.strict_compare.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-reproducibility-diagnostic
+          path: |
+            repro-evidence/phosh-rootfs-real-build-a-members.json
+            repro-evidence/phosh-rootfs-real-build-b-members.json
+            repro-evidence/phosh-rootfs-reproducibility-diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Fail closed after strict A/B mismatch
+        if: always() && steps.strict_compare.outcome == 'failure'
+        shell: bash
+        run: |
+          printf '%s\n' \
+            "strict_ab_comparison=failed" \
+            "member_evidence_outcome=${{ steps.member_evidence.outcome }}" \
+            "drift_diagnostic_outcome=${{ steps.drift_diagnostic.outcome }}"
+          exit 2
+
+  materialize-candidate:
+    name: Materialize verified Phosh rootfs candidate payload
+    needs: compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: phosh-rootfs-real-build-a-payload
+          path: candidate-input
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: phosh-rootfs-real-build-a-evidence
+          path: candidate-evidence/build-a
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: phosh-rootfs-reproducibility-candidate
+          path: candidate-evidence/repro
+
+      - name: Bind exact payload to successful A/B equality evidence
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          mkdir -p candidate-output
+          python scripts/prepare_phosh_rootfs_candidate_artifact.py \
+            --rootfs candidate-input/phosh-a.tar.xz \
+            --package-manifest candidate-evidence/build-a/phosh-packages.tsv \
+            --build-evidence candidate-evidence/build-a/phosh-build.json \
+            --reproducibility-candidate candidate-evidence/repro/phosh-rootfs-reproducibility-candidate.json \
+            --selected-origin "github-actions/${{ github.repository }}/${{ github.run_id }}/${{ github.run_attempt }}/build-a" \
+            --out candidate-output/phosh-rootfs-candidate-artifact.json
+          cp candidate-input/phosh-a.tar.xz candidate-output/phosh-arm64-rootfs-candidate.tar.xz
+          cp candidate-evidence/build-a/phosh-packages.tsv candidate-output/phosh-packages.tsv
+          cp candidate-evidence/build-a/phosh-build.json candidate-output/phosh-build-a.json
+          cp candidate-evidence/repro/phosh-rootfs-reproducibility-candidate.json \
+            candidate-output/phosh-rootfs-reproducibility-candidate.json
+          test -s candidate-output/phosh-arm64-rootfs-candidate.tar.xz
+          test -s candidate-output/phosh-rootfs-candidate-artifact.json
+
+      - name: Create exact authority-review packet
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python scripts/prepare_phosh_rootfs_review_packet.py \
+            --candidate-artifact candidate-output/phosh-rootfs-candidate-artifact.json \
+            --reproducibility-candidate candidate-output/phosh-rootfs-reproducibility-candidate.json \
+            --build-evidence candidate-output/phosh-build-a.json \
+            --repository "${{ github.repository }}" \
+            --source-run-id "${{ github.run_id }}" \
+            --source-run-attempt "${{ github.run_attempt }}" \
+            --source-commit "${{ github.event.pull_request.head.sha }}" \
+            --out candidate-output/phosh-rootfs-review-packet.json
+          test -s candidate-output/phosh-rootfs-review-packet.json
+
+      - name: Upload exact non-release first-boot assembly candidate
+        id: assembly_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phosh-rootfs-first-boot-assembly-candidate
+          path: candidate-output/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Print future review binding identity
+        shell: bash
+        run: |
+          printf '%s\n' \
+            "authority_run_id=${{ github.run_id }}" \
+            "authority_commit=${{ github.event.pull_request.head.sha }}" \
+            "authority_artifact_id=${{ steps.assembly_artifact.outputs.artifact-id }}"

@@ -20,6 +20,30 @@ def _add_file(archive: tarfile.TarFile, name: str, data: bytes, mtime: int) -> N
     archive.addfile(info, io.BytesIO(data))
 
 
+def _add_hardlink(
+    archive: tarfile.TarFile,
+    name: str,
+    target: str,
+    mtime: int,
+    *,
+    pax_mtime: bool = False,
+) -> None:
+    info = tarfile.TarInfo(name)
+    info.type = tarfile.LNKTYPE
+    info.linkname = target
+    # A hardlink shares inode metadata with its payload owner. Keep the synthetic
+    # fixture metadata equal so this test isolates only the real A/B orientation drift.
+    info.mode = 0o644
+    info.uid = 0
+    info.gid = 0
+    info.uname = "root"
+    info.gname = "root"
+    info.mtime = mtime
+    if pax_mtime:
+        info.pax_headers = {"mtime": str(mtime)}
+    archive.addfile(info)
+
+
 def _fixture(
     path: Path,
     *,
@@ -28,6 +52,10 @@ def _fixture(
     password_hash: bytes,
     cache: bytes,
     fake_clock: bytes,
+    apt_index: bytes = b"Packages: stable\n",
+    build_log: bytes = b"build log\n",
+    font_cache: bytes = b"font cache\n",
+    random_seed: bytes = b"random seed\n",
 ) -> None:
     prefix = "kali-arm64"
     with tarfile.open(path, "w:xz", format=tarfile.PAX_FORMAT) as archive:
@@ -47,7 +75,11 @@ def _fixture(
             mtime + 4,
         )
         _add_file(archive, f"{prefix}/var/cache/ldconfig/aux-cache", cache, mtime + 5)
-        _add_file(archive, f"{prefix}/usr/bin/unchanged", b"real package payload\n", mtime + 6)
+        _add_file(archive, f"{prefix}/var/lib/apt/lists/mirror_Packages", apt_index, mtime + 6)
+        _add_file(archive, f"{prefix}/var/log/apt/term.log", build_log, mtime + 7)
+        _add_file(archive, f"{prefix}/var/cache/fontconfig/random.cache-8", font_cache, mtime + 8)
+        _add_file(archive, f"{prefix}/var/lib/systemd/random-seed", random_seed, mtime + 9)
+        _add_file(archive, f"{prefix}/usr/bin/unchanged", b"real package payload\n", mtime + 10)
 
 
 def _member_bytes(path: Path, name: str) -> bytes:
@@ -70,6 +102,10 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         password_hash=b"$y$random-salt-a$hash-a",
         cache=b"cache-a",
         fake_clock=b"2026-09-16 20:00:00\n",
+        apt_index=b"network-index-a",
+        build_log=b"wall-clock-log-a",
+        font_cache=b"derived-cache-a",
+        random_seed=b"host-entropy-a",
     )
     _fixture(
         second,
@@ -78,6 +114,10 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         password_hash=b"$y$random-salt-b$hash-b",
         cache=b"cache-b",
         fake_clock=b"2026-09-16 20:01:00\n",
+        apt_index=b"network-index-b",
+        build_log=b"wall-clock-log-b",
+        font_cache=b"derived-cache-b",
+        random_seed=b"host-entropy-b",
     )
 
     evidence_a = canonicalize_rootfs_archive(first, out_a)
@@ -88,7 +128,7 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
     assert evidence_a.beta_gate_credit is False
     assert evidence_a.zeroed_volatile_files == 3
     assert evidence_a.locked_password_entries == 2
-    assert evidence_a.dropped_cache_entries == 1
+    assert evidence_a.dropped_cache_entries == 5
     assert evidence_a.normalized_mtime_count == 6
 
     prefix = "kali-arm64"
@@ -101,9 +141,137 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
     assert _member_bytes(out_a, f"{prefix}/usr/bin/unchanged") == b"real package payload\n"
 
     with tarfile.open(out_a, "r:xz") as archive:
-        names = archive.getnames()
+        names = set(archive.getnames())
         assert f"{prefix}/var/cache/ldconfig/aux-cache" not in names
+        assert f"{prefix}/var/lib/apt/lists/mirror_Packages" not in names
+        assert f"{prefix}/var/log/apt/term.log" not in names
+        assert f"{prefix}/var/cache/fontconfig/random.cache-8" not in names
+        assert f"{prefix}/var/lib/systemd/random-seed" not in names
         assert all(member.mtime == 0 for member in archive.getmembers())
+
+
+def test_canonicalization_normalizes_real_phosh_ab_drift_classes(tmp_path):
+    first = tmp_path / "phosh-a.tar.xz"
+    second = tmp_path / "phosh-b.tar.xz"
+    out_a = tmp_path / "canonical-a.tar.xz"
+    out_b = tmp_path / "canonical-b.tar.xz"
+    prefix = "kali-arm64"
+    status = b"Package: base-files\nStatus: install ok installed\nVersion: 1\nArchitecture: arm64\n\n"
+    shared_binary = b"PK\x03\x04same-unzip-payload"
+
+    with tarfile.open(first, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        _add_file(archive, f"{prefix}/var/lib/dpkg/status", status, 100)
+        _add_file(archive, f"{prefix}/usr/bin/unzip", shared_binary, 101)
+        _add_hardlink(archive, f"{prefix}/usr/bin/zipinfo", f"{prefix}/usr/bin/unzip", 102)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key", b"host-key-a", 103)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key.pub", b"host-key-a-pub", 104)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db", b"db-a", 105)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db.metadata", b"meta-a", 106)
+        runit = tarfile.TarInfo(f"{prefix}/etc/runit")
+        runit.type = tarfile.DIRTYPE
+        runit.mode = 0o755
+        runit.mtime = 107
+        archive.addfile(runit)
+
+    with tarfile.open(second, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        runit = tarfile.TarInfo(f"{prefix}/etc/runit")
+        runit.type = tarfile.DIRTYPE
+        runit.mode = 0o755
+        runit.mtime = 999
+        runit.pax_headers = {"mtime": "999.5"}
+        archive.addfile(runit)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db.metadata", b"meta-b", 998)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db", b"db-b-longer", 997)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key.pub", b"host-key-b-pub", 996)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key", b"host-key-b", 995)
+        _add_file(archive, f"{prefix}/usr/bin/zipinfo", shared_binary, 994)
+        _add_hardlink(archive, f"{prefix}/usr/bin/unzip", f"{prefix}/usr/bin/zipinfo", 993, pax_mtime=True)
+        _add_file(archive, f"{prefix}/var/lib/dpkg/status", status, 992)
+
+    evidence_a = canonicalize_rootfs_archive(first, out_a)
+    evidence_b = canonicalize_rootfs_archive(second, out_b)
+
+    assert out_a.read_bytes() == out_b.read_bytes()
+    assert evidence_a.output_sha256 == evidence_b.output_sha256
+    assert evidence_a.member_count_output == evidence_b.member_count_output
+    assert evidence_a.dropped_cache_entries == 4
+    assert evidence_b.dropped_cache_entries == 4
+
+    with tarfile.open(out_a, "r:xz") as archive:
+        members = archive.getmembers()
+        names = archive.getnames()
+        assert names == sorted(names)
+        assert f"{prefix}/etc/ssh/ssh_host_ed25519_key" not in names
+        assert f"{prefix}/etc/ssh/ssh_host_ed25519_key.pub" not in names
+        assert f"{prefix}/var/lib/command-not-found/commands.db" not in names
+        assert f"{prefix}/var/lib/command-not-found/commands.db.metadata" not in names
+        runit = archive.getmember(f"{prefix}/etc/runit")
+        assert "mtime" not in runit.pax_headers
+        unzip = archive.getmember(f"{prefix}/usr/bin/unzip")
+        zipinfo = archive.getmember(f"{prefix}/usr/bin/zipinfo")
+        assert unzip.isfile()
+        assert _member_bytes(out_a, f"{prefix}/usr/bin/unzip") == shared_binary
+        assert zipinfo.islnk()
+        assert zipinfo.linkname == f"{prefix}/usr/bin/unzip"
+        assert all(member.mtime == 0 for member in members)
+
+
+def test_gzip_seekable_spool_preserves_canonical_bytes_and_retires_intermediate(tmp_path):
+    staged_gz = tmp_path / "staged.tar.gz"
+    staged_xz = tmp_path / "staged.tar.xz"
+    out_gz = tmp_path / "canonical-from-gzip.tar.xz"
+    out_xz = tmp_path / "canonical-from-xz.tar.xz"
+    prefix = "kali-arm64"
+    status = (
+        b"Package: base-files\n"
+        b"Status: install ok installed\n"
+        b"Version: 1\n"
+        b"Architecture: arm64\n\n"
+    )
+
+    def write_fixture(path: Path, mode: str) -> None:
+        with tarfile.open(path, mode, format=tarfile.PAX_FORMAT) as archive:
+            # Deliberately reverse lexical order so canonicalization must seek payloads
+            # after sorting rather than relying on the incoming tar order.
+            _add_file(archive, f"{prefix}/usr/bin/z-payload", b"payload-z\n", 102)
+            _add_file(archive, f"{prefix}/var/lib/dpkg/status", status, 100)
+            _add_file(archive, f"{prefix}/usr/bin/a-payload", b"payload-a\n", 101)
+
+    write_fixture(staged_gz, "w:gz")
+    write_fixture(staged_xz, "w:xz")
+
+    evidence_gz = canonicalize_rootfs_archive(
+        staged_gz,
+        out_gz,
+        discard_input_after_spool=True,
+    )
+    evidence_xz = canonicalize_rootfs_archive(staged_xz, out_xz)
+
+    assert not staged_gz.exists()
+    assert not out_gz.with_name(out_gz.name + ".source.tar.tmp").exists()
+    assert out_gz.read_bytes() == out_xz.read_bytes()
+    assert evidence_gz.output_sha256 == evidence_xz.output_sha256
+    assert evidence_gz.member_count_output == 3
+
+
+def test_canonicalization_preserves_configuration_and_package_payload(tmp_path):
+    source = tmp_path / "input.tar.xz"
+    out = tmp_path / "canonical.tar.xz"
+    prefix = "kali-arm64"
+    with tarfile.open(source, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        _add_file(
+            archive,
+            f"{prefix}/var/lib/dpkg/status",
+            b"Package: base-files\nStatus: install ok installed\nVersion: 1\nArchitecture: arm64\n\n",
+            100,
+        )
+        _add_file(archive, f"{prefix}/etc/ssh/sshd_config", b"PermitRootLogin no\n", 101)
+        _add_file(archive, f"{prefix}/usr/lib/libpayload.so", b"\x7fELFpayload", 102)
+
+    canonicalize_rootfs_archive(source, out)
+
+    assert _member_bytes(out, f"{prefix}/etc/ssh/sshd_config") == b"PermitRootLogin no\n"
+    assert _member_bytes(out, f"{prefix}/usr/lib/libpayload.so") == b"\x7fELFpayload"
 
 
 def test_canonicalization_rejects_ambiguous_dpkg_status_layout(tmp_path):
