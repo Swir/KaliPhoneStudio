@@ -13,6 +13,7 @@ from kaliphonestudio.extractor import (
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_LOCK = ROOT / "tools" / "extractor-locks.json"
+WINDOWS_REVIEWED_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
 
 
 def _direct_lock(tool: Path, digest: str, *, source_commit: str = "a" * 40) -> ExtractorLock:
@@ -52,7 +53,7 @@ def test_repository_manifest_authorizes_reviewed_platform_hashes(tmp_path: Path)
     tool = tmp_path / "payload-dumper-go.exe"
     tool.write_bytes(b"not the reviewed binary")
     lock = lock_from_manifest(tool, REPO_LOCK, "windows-amd64")
-    assert lock.sha256 == "35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5"
+    assert lock.sha256 == WINDOWS_REVIEWED_SHA256
     with pytest.raises(ExtractionError, match="mismatch"):
         verify_extractor(lock)
 

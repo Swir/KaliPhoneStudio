@@ -5,12 +5,14 @@ on:
     paths:
       - "tools/extractor-locks.json"
       - ".github/workflows/extractor-repro.yml"
+      - "scripts/stage_windows_extractor_runtime.ps1"
       - "kaliphonestudio/tool_locks.py"
       - "tests/test_tool_locks.py"
   pull_request:
     paths:
       - "tools/extractor-locks.json"
       - ".github/workflows/extractor-repro.yml"
+      - "scripts/stage_windows_extractor_runtime.ps1"
       - "kaliphonestudio/tool_locks.py"
       - "tests/test_tool_locks.py"
   workflow_dispatch:
@@ -91,17 +93,30 @@ jobs:
         shell: pwsh
         run: |
           & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-xz'
+          if ($LASTEXITCODE -ne 0) { throw "MSYS2 extractor prerequisites failed: $LASTEXITCODE" }
           'C:\msys64\mingw64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           'CC=C:\msys64\mingw64\bin\gcc.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CXX=C:\msys64\mingw64\bin\g++.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CGO_CFLAGS=-IC:/msys64/mingw64/include' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CGO_LDFLAGS=-LC:/msys64/mingw64/lib' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Verify Windows native toolchain visibility
+      - name: Verify Windows native authority and toolchain visibility
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $Lock = Get-Content -Raw -Encoding UTF8 "tools/extractor-locks.json" | ConvertFrom-Json
+          $Native = $Lock.build.native_dependencies.'windows-amd64'
+          $Windows = $Lock.build.platform_overrides.'windows-amd64'
+          if ($Windows.linkage -ne 'mixed-side-by-side') { throw 'Windows linkage policy drift' }
+          if ($Windows.ldflags -ne '-buildid= -extldflags=-static') { throw 'Windows ldflags drift' }
+          if ($Windows.runtime_dependency_policy -ne 'recursive-non-system-pe-import-closure') { throw 'Windows runtime policy drift' }
+          foreach ($Package in $Native.packages.PSObject.Properties) {
+            $Actual = (& 'C:\msys64\usr\bin\pacman.exe' -Q $Package.Name 2>&1 | Out-String).Trim()
+            $Expected = "$($Package.Name) $($Package.Value)"
+            if ($Actual -ne $Expected) { throw "Native package drift: expected '$Expected', got '$Actual'" }
+          }
           if (-not (Test-Path 'C:\msys64\mingw64\include\lzma.h')) { throw 'lzma.h is not installed' }
+          if (-not (Test-Path 'C:\msys64\mingw64\bin\objdump.exe')) { throw 'MinGW objdump is not installed' }
           & $env:CC --version
           if ($LASTEXITCODE -ne 0) { throw 'MinGW GCC is not executable' }
 
@@ -111,28 +126,52 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: |
-          go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-a .
-          go clean -cache
-          go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-b .
+          if [ "${{ matrix.platform }}" = "windows-amd64" ]; then
+            go build -trimpath -buildvcs=false -ldflags='-buildid= -extldflags=-static' -o ../extractor-a .
+            go clean -cache
+            go build -trimpath -buildvcs=false -ldflags='-buildid= -extldflags=-static' -o ../extractor-b .
+          else
+            go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-a .
+            go clean -cache
+            go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-b .
+          fi
 
-      - name: Prove byte-for-byte reproducibility and report SHA-256
+      - name: Prove byte-for-byte reproducibility and exact locked SHA-256
         shell: python
         run: |
-          import hashlib
+          import hashlib, json
           from pathlib import Path
           a = Path("extractor-a").read_bytes()
           b = Path("extractor-b").read_bytes()
           if a != b:
               raise SystemExit("pinned extractor builds are not byte-for-byte reproducible")
           digest = hashlib.sha256(a).hexdigest()
+          lock = json.loads(Path("tools/extractor-locks.json").read_text(encoding="utf-8"))
+          expected = lock["artifacts"]["${{ matrix.platform }}"]["sha256"]
+          if digest != expected:
+              raise SystemExit(f"${{ matrix.platform }} digest drift: expected {expected}, got {digest}")
           print("${{ matrix.platform }} SHA-256:", digest)
           Path("extractor-${{ matrix.platform }}.sha256").write_text(
               f"{digest}  payload-dumper-go\n", encoding="ascii"
           )
 
+      - name: Stage and smoke-test self-contained Windows runtime closure
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/stage_windows_extractor_runtime.ps1 `
+            -Executable "extractor-a" `
+            -OutputDir "extractor-runtime-bundle"
+          if ($LASTEXITCODE -ne 0) { throw "Runtime closure staging failed: $LASTEXITCODE" }
+          $Runtime = Get-Content -Raw -Encoding UTF8 "extractor-runtime-bundle/operator-extractor-runtime.json" | ConvertFrom-Json
+          if ($Runtime.all_non_system_imports_resolved -ne $true) { throw "Runtime closure is incomplete" }
+          if ($Runtime.executable_sha256 -ne ((Get-Content -Raw "extractor-windows-amd64.sha256").Split()[0])) { throw "Runtime executable hash drift" }
+
       - name: Upload reproducibility evidence
         uses: actions/upload-artifact@v4
         with:
           name: extractor-repro-${{ matrix.platform }}
-          path: extractor-${{ matrix.platform }}.sha256
-          if-no-files-found: error
+          path: |
+            extractor-${{ matrix.platform }}.sha256
+            extractor-runtime-bundle/
+          if-no-files-found: ignore

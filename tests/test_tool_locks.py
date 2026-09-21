@@ -7,6 +7,7 @@ from kaliphonestudio.tool_locks import ToolLockError, load_tool_lock
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "tools" / "extractor-locks.json"
+WINDOWS_REVIEWED_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
 
 
 def test_repository_extractor_lock_is_pinned_and_authorized():
@@ -20,7 +21,7 @@ def test_repository_extractor_lock_is_pinned_and_authorized():
     assert "-ldflags=-buildid=" in lock.build_command
     assert set(lock.artifacts) == {"linux-amd64", "windows-amd64"}
     assert lock.require_artifact("linux-amd64").sha256 == "a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0"
-    assert lock.require_artifact("windows-amd64").sha256 == "35fbcd36c553f81375a904ceca58aef5289da2e2e067fc0e6c835390588edfa5"
+    assert lock.require_artifact("windows-amd64").sha256 == WINDOWS_REVIEWED_SHA256
     with pytest.raises(ToolLockError, match="no locked extractor artifact"):
         lock.require_artifact("darwin-amd64")
 
