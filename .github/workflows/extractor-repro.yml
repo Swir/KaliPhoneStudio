@@ -91,16 +91,26 @@ jobs:
         shell: pwsh
         run: |
           & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-xz'
+          if ($LASTEXITCODE -ne 0) { throw "MSYS2 extractor prerequisites failed: $LASTEXITCODE" }
           'C:\msys64\mingw64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           'CC=C:\msys64\mingw64\bin\gcc.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CXX=C:\msys64\mingw64\bin\g++.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CGO_CFLAGS=-IC:/msys64/mingw64/include' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CGO_LDFLAGS=-LC:/msys64/mingw64/lib' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Verify Windows native toolchain visibility
+      - name: Verify Windows native authority and toolchain visibility
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $Lock = Get-Content -Raw -Encoding UTF8 "tools/extractor-locks.json" | ConvertFrom-Json
+          $Native = $Lock.build.native_dependencies.'windows-amd64'
+          if ($Lock.build.platform_overrides.'windows-amd64'.linkage -ne 'static') { throw 'Windows linkage authority is not static' }
+          if ($Lock.build.platform_overrides.'windows-amd64'.ldflags -ne '-buildid= -extldflags=-static') { throw 'Windows static ldflags drift' }
+          foreach ($Package in $Native.packages.PSObject.Properties) {
+            $Actual = (& 'C:\msys64\usr\bin\pacman.exe' -Q $Package.Name 2>&1 | Out-String).Trim()
+            $Expected = "$($Package.Name) $($Package.Value)"
+            if ($Actual -ne $Expected) { throw "Native package drift: expected '$Expected', got '$Actual'" }
+          }
           if (-not (Test-Path 'C:\msys64\mingw64\include\lzma.h')) { throw 'lzma.h is not installed' }
           & $env:CC --version
           if ($LASTEXITCODE -ne 0) { throw 'MinGW GCC is not executable' }
@@ -111,9 +121,15 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: |
-          go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-a .
-          go clean -cache
-          go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-b .
+          if [ "${{ matrix.platform }}" = "windows-amd64" ]; then
+            go build -trimpath -buildvcs=false -ldflags='-buildid= -extldflags=-static' -o ../extractor-a .
+            go clean -cache
+            go build -trimpath -buildvcs=false -ldflags='-buildid= -extldflags=-static' -o ../extractor-b .
+          else
+            go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-a .
+            go clean -cache
+            go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-b .
+          fi
 
       - name: Prove byte-for-byte reproducibility and report SHA-256
         shell: python
@@ -130,9 +146,27 @@ jobs:
               f"{digest}  payload-dumper-go\n", encoding="ascii"
           )
 
+      - name: Smoke-test static Windows extractor without MSYS2 on PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $Exe = (Resolve-Path "extractor-a").Path
+          $SavedPath = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            & $Exe -h *> "extractor-clean-path-help.txt"
+            $ExitCode = $LASTEXITCODE
+          }
+          finally {
+            $env:PATH = $SavedPath
+          }
+          if ($ExitCode -ne 0) { throw "Static extractor failed on clean Windows PATH: $ExitCode" }
+
       - name: Upload reproducibility evidence
         uses: actions/upload-artifact@v4
         with:
           name: extractor-repro-${{ matrix.platform }}
-          path: extractor-${{ matrix.platform }}.sha256
-          if-no-files-found: error
+          path: |
+            extractor-${{ matrix.platform }}.sha256
+            extractor-clean-path-help.txt
+          if-no-files-found: ignore
