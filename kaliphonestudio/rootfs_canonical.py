@@ -15,9 +15,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 import copy
+import gzip
 import io
 import json
 from pathlib import Path, PurePosixPath
+import shutil
 import tarfile
 
 from .rootfs import RootfsError
@@ -50,6 +52,7 @@ _DROP_PREFIXES = (
 )
 _SHADOW_PATH = "etc/shadow"
 _MAX_SHADOW_BYTES = 8 * 1024 * 1024
+_SPOOL_COPY_BYTES = 8 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -267,7 +270,59 @@ def _hardlink_plan(
     return by_logical, plan
 
 
-def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> RootfsCanonicalizationEvidence:
+def _is_gzip_tar(path: Path) -> bool:
+    name = path.name.lower()
+    return name.endswith(".tar.gz") or name.endswith(".tgz")
+
+
+def _spool_seekable_gzip_tar(
+    source_path: Path,
+    destination_path: Path,
+    *,
+    discard_source: bool,
+) -> Path:
+    """Expand one gzip tar sequentially into a temporary seekable tar.
+
+    The real Phosh stage emits a large .tar.gz. Reading that compressed tar once to
+    collect members and then seeking backwards for lexicographically sorted payloads
+    makes tarfile repeatedly re-decompress large prefixes and can consume hours.
+    A single sequential spool preserves exact tar bytes/metadata while making every
+    later payload lookup an O(1) seek in the uncompressed tar.
+
+    This is still archive-only processing: no member is extracted onto the host
+    filesystem. When discard_source is true the generated staged gzip is removed
+    only after the complete spool has been validated as a tar, reclaiming runner disk
+    before the final canonical .tar.xz is written.
+    """
+    spool = destination_path.with_name(destination_path.name + ".source.tar.tmp")
+    if spool.exists() or spool.is_symlink():
+        raise RootfsError(f"refusing stale canonicalization spool: {spool}")
+    try:
+        with gzip.open(source_path, "rb") as compressed, spool.open("xb") as seekable:
+            shutil.copyfileobj(compressed, seekable, length=_SPOOL_COPY_BYTES)
+        if spool.stat().st_size <= 0:
+            raise RootfsError("canonicalization spool is empty")
+        with tarfile.open(spool, mode="r:") as probe:
+            if probe.next() is None:
+                raise RootfsError("canonicalization spool has no tar members")
+        if discard_source:
+            source_path.unlink()
+        return spool
+    except (RootfsError, tarfile.TarError, OSError, EOFError) as exc:
+        try:
+            spool.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if isinstance(exc, RootfsError):
+            raise
+        raise RootfsError(f"cannot create seekable rootfs spool: {exc}") from exc
+
+def canonicalize_rootfs_archive(
+    source_path: Path,
+    destination_path: Path,
+    *,
+    discard_input_after_spool: bool = False,
+) -> RootfsCanonicalizationEvidence:
     """Rewrite one built rootfs into the deterministic comparison/release form.
 
     Reviewed normalization policy:
@@ -283,6 +338,12 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
     No package payload, configuration file or persistent application state is otherwise
     changed. The legacy ``dropped_cache_entries`` evidence counter intentionally counts
     all reviewed omitted volatile entries to preserve evidence schema compatibility.
+
+    Large gzip stage archives are first streamed once into a temporary uncompressed tar
+    so sorted payload reads are seekable instead of repeatedly decompressing from the
+    beginning. This does not extract archive members. discard_input_after_spool is
+    intended only for generated intermediate stage artifacts whose package manifest has
+    already been captured.
     """
     source_path = source_path.resolve(strict=True)
     destination_path = destination_path.resolve(strict=False)
@@ -301,9 +362,21 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
     output_count = 0
     members: list[tarfile.TarInfo] = []
     prefix: tuple[str, ...] = ()
+    spool_path: Path | None = None
+    working_source = source_path
+    source_mode = "r:*"
+
+    if _is_gzip_tar(source_path):
+        spool_path = _spool_seekable_gzip_tar(
+            source_path,
+            destination_path,
+            discard_source=discard_input_after_spool,
+        )
+        working_source = spool_path
+        source_mode = "r:"
 
     try:
-        with tarfile.open(source_path, mode="r:*") as source:
+        with tarfile.open(working_source, mode=source_mode) as source:
             members = source.getmembers()
             if not members:
                 raise RootfsError("rootfs archive has no members")
@@ -382,6 +455,12 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
         if isinstance(exc, RootfsError):
             raise
         raise RootfsError(f"cannot canonicalize rootfs archive: {exc}") from exc
+    finally:
+        if spool_path is not None:
+            try:
+                spool_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     output_sha, output_size = _sha256_and_size(destination_path)
     evidence = RootfsCanonicalizationEvidence(
