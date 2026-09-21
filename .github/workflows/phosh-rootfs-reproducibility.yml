@@ -89,8 +89,8 @@ jobs:
       matrix:
         build-id: [a, b]
     runs-on: ubuntu-latest
-    # Two sequential build stages each use --timeout 6600 below; keep 20 minutes for setup, canonicalization and upload.
-    timeout-minutes: 240
+    # Two bounded build stages can consume up to 220 minutes; keep 80 minutes for setup, canonicalization and artifact upload.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v5
 
