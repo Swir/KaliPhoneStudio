@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import io
 from pathlib import Path
+import tarfile
 
 import pytest
 
@@ -10,6 +12,7 @@ from kaliphonestudio.phosh_build import (
     PhoshBuildError, create_phosh_rootfs_build_evidence, create_phosh_rootfs_build_plan,
     load_phosh_rootfs_build_contract, render_family_supplement_recipe,
 )
+from kaliphonestudio.rootfs_canonical import canonicalize_rootfs_archive
 
 LOCK = Path("tools/phosh-source-lock.json")
 CONTRACT = Path("tools/phosh-rootfs-build-contract.json")
@@ -28,6 +31,8 @@ def test_build_contract_is_bound_and_non_promoting():
     assert contract.environment == "phosh"
     assert contract.family == "qcom"
     assert contract.mirror.startswith("https://")
+    assert contract.generic_artifact.endswith(".tar.xz")
+    assert contract.staged_artifact.endswith(".tar.gz")
     assert contract.double_build_required is True
     assert contract.canonicalization_required is True
     assert contract.physical_validation_required is True
@@ -68,6 +73,38 @@ def test_family_stage_installs_only_locked_qcom_phosh_supplement():
     assert "sdm845" not in recipe
     assert "avicii" not in recipe
     assert "action: pack" in recipe
+    assert "compression: gz" in recipe
+    assert "compression: xz" not in recipe
+
+
+def test_fast_gzip_stage_is_accepted_by_canonicalizer(tmp_path: Path):
+    staged = tmp_path / "staged.tar.gz"
+    canonical = tmp_path / "canonical.tar.xz"
+    prefix = "kali-arm64"
+    status = (
+        b"Package: base-files\n"
+        b"Status: install ok installed\n"
+        b"Version: 1\n"
+        b"Architecture: arm64\n\n"
+    )
+    with tarfile.open(staged, "w:gz", format=tarfile.PAX_FORMAT) as archive:
+        for name, data in (
+            (f"{prefix}/var/lib/dpkg/status", status),
+            (f"{prefix}/usr/bin/payload", b"payload\n"),
+        ):
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            member.mode = 0o644
+            member.mtime = 123
+            archive.addfile(member, io.BytesIO(data))
+
+    evidence = canonicalize_rootfs_archive(staged, canonical)
+
+    assert evidence.member_count_input == 2
+    assert evidence.member_count_output == 2
+    assert evidence.beta_gate_credit is False
+    with tarfile.open(canonical, "r:xz") as archive:
+        assert archive.getnames() == sorted(archive.getnames())
 
 
 def test_bad_source_lock_binding_fails_closed():

@@ -19,7 +19,7 @@ from .phosh import PhoshSourceLock, validate_phosh_source_lock
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SIZE_RE = re.compile(r"^[1-9][0-9]*[KMG]$")
-_SAFE_ARTIFACT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*\.tar\.xz$")
+_SAFE_ARTIFACT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*\.tar\.(?:xz|gz)$")
 
 
 class PhoshBuildError(ValueError):
@@ -106,7 +106,7 @@ def _text(value: Any, label: str) -> str:
 def _safe_artifact(value: Any, label: str) -> str:
     name = _text(value, label)
     if PurePath(name).name != name or not _SAFE_ARTIFACT_RE.fullmatch(name):
-        raise PhoshBuildError(f"{label} must be a safe tar.xz basename")
+        raise PhoshBuildError(f"{label} must be a safe .tar.xz/.tar.gz basename")
     return name
 
 
@@ -208,7 +208,7 @@ def render_family_supplement_recipe(source_lock: PhoshSourceLock, contract: Phos
         f"{package_lines}\n\n"
         "  - action: pack\n"
         "    file: {{ $output }}\n"
-        "    compression: xz\n"
+        "    compression: gz\n"
     )
     return text.encode("utf-8")
 

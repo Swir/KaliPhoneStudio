@@ -52,6 +52,13 @@ def _require_fresh_artifact(path: Path, label: str) -> Path:
     return path
 
 
+def _remove_intermediate(path: Path, label: str) -> None:
+    try:
+        path.unlink()
+    except OSError as exc:
+        raise PhoshBuildError(f"cannot remove completed {label}: {exc}") from exc
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Build one host-only Phosh ARM64 rootfs candidate. This does not create a reviewed reproducibility authority and grants no hardware/Beta credit.")
     result.add_argument("--lock", type=Path, default=Path("tools/phosh-source-lock.json"))
@@ -116,9 +123,18 @@ def main() -> int:
         except OSError:
             pass
 
-    canonical = canonicalize_rootfs_archive(staged, args.out)
-    package_manifest, package_count = package_manifest_from_rootfs(args.out)
+    # The generic base archive is no longer needed once the QCOM userspace stage has
+    # completed. Drop it before canonicalization to preserve runner disk headroom.
+    _remove_intermediate(generic, "generic Phosh rootfs artifact")
+
+    # Read dpkg status from the faster staged gzip once. Canonicalization intentionally
+    # does not change dpkg status, so reopening the final xz solely for this manifest is
+    # redundant and was a material part of the previous five-hour A/B timeout.
+    package_manifest, package_count = package_manifest_from_rootfs(staged)
     package_digest = sha256(package_manifest).hexdigest()
+
+    canonical = canonicalize_rootfs_archive(staged, args.out)
+    _remove_intermediate(staged, "staged Phosh rootfs artifact")
     package_evidence = evaluate_phosh_package_manifest(source_lock, package_manifest, rootfs_artifact_sha256=canonical.output_sha256)
     if not package_evidence.host_userspace_package_contract_satisfied:
         args.out.unlink(missing_ok=True)

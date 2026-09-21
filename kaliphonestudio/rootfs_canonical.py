@@ -303,7 +303,7 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
     prefix: tuple[str, ...] = ()
 
     try:
-        with tarfile.open(source_path, mode="r:xz") as source:
+        with tarfile.open(source_path, mode="r:*") as source:
             members = source.getmembers()
             if not members:
                 raise RootfsError("rootfs archive has no members")

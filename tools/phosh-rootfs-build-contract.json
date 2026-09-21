@@ -12,7 +12,7 @@
     "nonfree": true,
     "scratch_size": "8G",
     "generic_artifact": "rootfs-arm64-phosh-nonfree.tar.xz",
-    "staged_artifact": "kaliphonestudio-arm64-phosh-qcom.raw.tar.xz",
+    "staged_artifact": "kaliphonestudio-arm64-phosh-qcom.raw.tar.gz",
     "double_build_required": true,
     "canonicalization_required": true
   },
