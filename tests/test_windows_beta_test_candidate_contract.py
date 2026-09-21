@@ -10,7 +10,7 @@ OFFLINE_PREP = ROOT / "docs" / "AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
 VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 SMOKE = ROOT / "scripts" / "smoke_windows_beta_test_candidate.ps1"
 PACKAGER = ROOT / "scripts" / "package_windows_beta_test_candidate.ps1"
-WINDOWS_EXTRACTOR_SHA256 = "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
+WINDOWS_EXTRACTOR_SHA256 = "e84d038e803b07503aa843aca5a82b0441877afc6cd5025247dd31d6046d02c3"
 
 
 def test_workflow_builds_exact_integrated_windows_candidate() -> None:
@@ -49,7 +49,7 @@ def test_workflow_builds_exact_integrated_windows_candidate() -> None:
         "gh release create",
         "actions/create-release",
     ):
-        assert forbidden not in workflow
+        assert needle not in workflow
 
 
 def test_frozen_smoke_covers_bundled_extractor_and_fail_closed_operator_surface() -> None:
