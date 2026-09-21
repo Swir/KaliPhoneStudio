@@ -216,6 +216,44 @@ def test_canonicalization_normalizes_real_phosh_ab_drift_classes(tmp_path):
         assert all(member.mtime == 0 for member in members)
 
 
+def test_gzip_seekable_spool_preserves_canonical_bytes_and_retires_intermediate(tmp_path):
+    staged_gz = tmp_path / "staged.tar.gz"
+    staged_xz = tmp_path / "staged.tar.xz"
+    out_gz = tmp_path / "canonical-from-gzip.tar.xz"
+    out_xz = tmp_path / "canonical-from-xz.tar.xz"
+    prefix = "kali-arm64"
+    status = (
+        b"Package: base-files\n"
+        b"Status: install ok installed\n"
+        b"Version: 1\n"
+        b"Architecture: arm64\n\n"
+    )
+
+    def write_fixture(path: Path, mode: str) -> None:
+        with tarfile.open(path, mode, format=tarfile.PAX_FORMAT) as archive:
+            # Deliberately reverse lexical order so canonicalization must seek payloads
+            # after sorting rather than relying on the incoming tar order.
+            _add_file(archive, f"{prefix}/usr/bin/z-payload", b"payload-z\n", 102)
+            _add_file(archive, f"{prefix}/var/lib/dpkg/status", status, 100)
+            _add_file(archive, f"{prefix}/usr/bin/a-payload", b"payload-a\n", 101)
+
+    write_fixture(staged_gz, "w:gz")
+    write_fixture(staged_xz, "w:xz")
+
+    evidence_gz = canonicalize_rootfs_archive(
+        staged_gz,
+        out_gz,
+        discard_input_after_spool=True,
+    )
+    evidence_xz = canonicalize_rootfs_archive(staged_xz, out_xz)
+
+    assert not staged_gz.exists()
+    assert not out_gz.with_name(out_gz.name + ".source.tar.tmp").exists()
+    assert out_gz.read_bytes() == out_xz.read_bytes()
+    assert evidence_gz.output_sha256 == evidence_xz.output_sha256
+    assert evidence_gz.member_count_output == 3
+
+
 def test_canonicalization_preserves_configuration_and_package_payload(tmp_path):
     source = tmp_path / "input.tar.xz"
     out = tmp_path / "canonical.tar.xz"
