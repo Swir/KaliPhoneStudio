@@ -59,6 +59,7 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             self._detected_serial: str | None = None
             self._process: QProcess | None = None
             self._pending_stage: str | None = None
+            self._busy = False
 
             root = QVBoxLayout(self)
             root.setContentsMargins(16, 16, 16, 16)
@@ -184,7 +185,7 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             root.addWidget(self.log, 1)
 
             close = QPushButton("Close")
-            close.clicked.connect(self.close)
+            close.clicked.connect(self.reject)
             root.addWidget(close, alignment=Qt.AlignmentFlag.AlignRight)
 
             self._load_profiles(initial_profile_id)
@@ -276,6 +277,7 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
                 f"READ-ONLY DETECTION PASS: serial={detection.serial} "
                 f"fastboot={detection.platform_tools_version}"
             )
+            self._update_action_states()
 
         def _start_baseline(self) -> None:
             try:
@@ -403,18 +405,36 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
                 )
 
         def _set_busy(self, busy: bool) -> None:
-            for button in (self.detect_button, self.baseline_button, self.prepare_button, self.boot_button):
-                button.setEnabled(not busy)
+            self._busy = busy
+            self._update_action_states()
+
+        def _update_action_states(self) -> None:
+            self.detect_button.setEnabled(not self._busy)
+            baseline_ready = False
+            candidate_ready = False
+            text = self.session_dir.text().strip()
+            if text:
+                try:
+                    state = inspect_session_state(text)
+                    baseline_ready = state.baseline_ready
+                    candidate_ready = state.offline_candidate_ready
+                except OSError:
+                    pass
+            self.baseline_button.setEnabled(not self._busy and bool(self._detected_serial) and not baseline_ready)
+            self.prepare_button.setEnabled(not self._busy and baseline_ready and not candidate_ready)
+            self.boot_button.setEnabled(not self._busy and candidate_ready)
 
         def _refresh_state(self) -> None:
             text = self.session_dir.text().strip()
             if not text:
                 self.stage_status.setText("Stage: host preparation")
+                self._update_action_states()
                 return
             try:
                 state = inspect_session_state(text)
             except OSError:
                 self.stage_status.setText("Stage: invalid session path")
+                self._update_action_states()
                 return
             if state.temporary_boot_recorded:
                 self.stage_status.setText("Stage: temporary boot evidence recorded — continue physical review")
@@ -424,15 +444,26 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
                 self.stage_status.setText("Stage: read-only baseline complete — exact OTA/candidate needed")
             else:
                 self.stage_status.setText("Stage: fresh session not captured yet")
+            self._update_action_states()
+
+        def _warn_running(self) -> None:
+            QMessageBox.warning(
+                self,
+                "Operation running",
+                "Do not close the wizard while an evidence-producing stage is running.",
+            )
 
         def reject(self) -> None:
             if self._process is not None:
-                QMessageBox.warning(
-                    self,
-                    "Operation running",
-                    "Do not close the wizard while an evidence-producing stage is running.",
-                )
+                self._warn_running()
                 return
             super().reject()
+
+        def closeEvent(self, event) -> None:
+            if self._process is not None:
+                self._warn_running()
+                event.ignore()
+                return
+            super().closeEvent(event)
 
     return PhysicalTestDialog()
