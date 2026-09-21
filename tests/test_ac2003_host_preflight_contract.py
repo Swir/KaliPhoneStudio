@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PREFLIGHT = ROOT / "scripts" / "preflight_ac2003_first_test.ps1"
 PACKAGER = ROOT / "scripts" / "package_windows_beta_test_candidate.ps1"
+VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 WORKFLOW = ROOT / ".github" / "workflows" / "windows-beta-test-candidate.yml"
 
 
@@ -64,6 +65,22 @@ def test_windows_candidate_packages_and_executes_host_preflight_smoke() -> None:
     assert "fastboot --version" in text
     for forbidden in ("fastboot flash ", "fastboot erase ", "fastboot set_active "):
         assert forbidden not in text.lower()
+
+
+def test_integrity_verifier_fail_closes_host_preflight_and_fastboot_policy() -> None:
+    text = VERIFIER.read_text(encoding="utf-8")
+
+    for needle in (
+        "host_preflight_included -ne $true",
+        "host_preflight_device_interaction -ne $false",
+        'Join-Path $OperatorPack "host-preflight.ps1"',
+        'Join-Path $OperatorPack "fastboot-tool-policy.json"',
+        "Packaged Fastboot policy is not exact",
+        "platform_tools_version",
+        "unsafe hardware/Beta claims",
+        "Host preflight device interaction: false",
+    ):
+        assert needle in text
 
 
 def test_windows_candidate_ci_tracks_and_runs_host_preflight_contract() -> None:

@@ -27,6 +27,8 @@ if ([string]$Info.git_commit -notmatch '^[0-9a-f]{40}$') { throw "Candidate comm
 if ($Info.operator_extractor_included -ne $true) { throw "Candidate does not declare bundled extractor" }
 if ($Info.operator_extractor_platform -ne "windows-amd64") { throw "Unexpected bundled extractor platform" }
 if ([string]$Info.operator_extractor_sha256 -notmatch '^[0-9a-f]{64}$') { throw "Bundled extractor digest is malformed" }
+if ($Info.host_preflight_included -ne $true) { throw "Candidate does not declare the AC2003 host preflight" }
+if ($Info.host_preflight_device_interaction -ne $false) { throw "Candidate host preflight unexpectedly claims device interaction" }
 if ($Info.signed -ne $false) { throw "Candidate unexpectedly claims signing" }
 if ($Info.physical_gate_passed -ne $false) { throw "Candidate unexpectedly claims physical gate success" }
 if ($Info.hardware_verified -ne $false) { throw "Candidate unexpectedly claims hardware verification" }
@@ -57,14 +59,21 @@ if ($Verified -lt 6) { throw "Candidate manifest contains too few files" }
 $OperatorPack = Join-Path $Root "operator-pack"
 $ToolsRoot = Join-Path $Root "operator-tools"
 $PackagedLockPath = Join-Path $OperatorPack "extractor-locks.json"
+$FastbootPolicyPath = Join-Path $OperatorPack "fastboot-tool-policy.json"
+$HostPreflightPath = Join-Path $OperatorPack "host-preflight.ps1"
 $ExtractorPath = Join-Path $ToolsRoot "payload-dumper-go.exe"
 $ExtractorManifestPath = Join-Path $ToolsRoot "operator-extractor-manifest.json"
 $RuntimeManifestPath = Join-Path $ToolsRoot "operator-extractor-runtime.json"
 $LicensePath = Join-Path $ToolsRoot "payload-dumper-go-LICENSE.txt"
-foreach ($Path in @($PackagedLockPath, $ExtractorPath, $ExtractorManifestPath, $RuntimeManifestPath, $LicensePath, (Join-Path $OperatorPack "START_HERE.txt"))) {
+foreach ($Path in @($PackagedLockPath, $FastbootPolicyPath, $HostPreflightPath, $ExtractorPath, $ExtractorManifestPath, $RuntimeManifestPath, $LicensePath, (Join-Path $OperatorPack "START_HERE.txt"))) {
     if (-not (Test-Path $Path -PathType Leaf)) { throw "Bundled operator-tool file missing: $Path" }
 }
 $Lock = Get-Content -Raw -Encoding UTF8 $PackagedLockPath | ConvertFrom-Json
+$FastbootPolicy = Get-Content -Raw -Encoding UTF8 $FastbootPolicyPath | ConvertFrom-Json
+if ([string]$FastbootPolicy.tool -ne "fastboot") { throw "Packaged Fastboot policy tool drift" }
+if ([string]$FastbootPolicy.version_policy -ne "exact") { throw "Packaged Fastboot policy is not exact" }
+if ([string]::IsNullOrWhiteSpace([string]$FastbootPolicy.platform_tools_version)) { throw "Packaged Fastboot policy version missing" }
+if ($FastbootPolicy.hardware_verified -ne $false -or $FastbootPolicy.beta_gate_credit -ne $false) { throw "Packaged Fastboot policy contains unsafe hardware/Beta claims" }
 $ExtractorManifest = Get-Content -Raw -Encoding UTF8 $ExtractorManifestPath | ConvertFrom-Json
 $RuntimeManifest = Get-Content -Raw -Encoding UTF8 $RuntimeManifestPath | ConvertFrom-Json
 $ExpectedExtractorSha = ([string]$Lock.artifacts.'windows-amd64'.sha256).ToLowerInvariant()
@@ -90,6 +99,8 @@ Write-Host "Commit: $($Info.git_commit)"
 Write-Host "Profile: $($Info.profile_id)"
 Write-Host "Verified files: $Verified"
 Write-Host "Bundled extractor SHA-256: $ExpectedExtractorSha"
+Write-Host "Host-only AC2003 preflight included: true"
+Write-Host "Host preflight device interaction: false"
 Write-Host "Physical gate passed: false"
 Write-Host "Hardware verified: false"
 Write-Host "Beta release: false"
