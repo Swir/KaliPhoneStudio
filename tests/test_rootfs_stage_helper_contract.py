@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from kaliphonestudio.rescue_candidate import _install_rootfs_stage_helper
 
@@ -27,12 +31,68 @@ def test_repository_rootfs_stage_helper_is_explicit_fail_closed_and_not_auto_run
     assert 'tar -xpf "$archive" -C "$temporary_path"' in helper
     assert 'IFS= read -r answer' in helper
     assert '[ "$answer" = "$confirmation" ]' in helper
+    assert 'target-mount-source-changed-after-confirmation' in helper
+    assert 'target-filesystem-changed-after-confirmation' in helper
+    assert 'insufficient-live-free-space-after-confirmation' in helper
+    assert 'staging-parent-symlink-refused' in helper
+    assert 'json_number_field_equals "required_free_bytes"' in helper
+    assert 'grep -F "\\\"$key\\\":$value,"' in helper
+    assert 'grep -F "\\\"$key\\\":$value}"' in helper
+    assert 'grep -F "\\\"required_free_bytes\\\":$required_free_bytes"' not in helper
     executable_lines = [line.strip().lower() for line in helper.splitlines()]
     assert not any(line.startswith("mkfs") for line in executable_lines)
     assert not any(line.startswith("fastboot") for line in executable_lines)
     assert not any(line.startswith("set_active") for line in executable_lines)
     assert not any(line.startswith("reboot") for line in executable_lines)
     assert "/sbin/kps-rootfs-stage-once" not in init
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="POSIX shell is unavailable")
+@pytest.mark.parametrize(
+    "staging_subpath",
+    [
+        "../escape",
+        "a/../escape",
+        "a/./escape",
+        "a/..",
+        "a/.",
+        "a/",
+        ".",
+        "..",
+    ],
+)
+def test_rootfs_stage_helper_rejects_noncanonical_staging_paths_before_file_or_mount_access(
+    staging_subpath: str,
+) -> None:
+    shell = shutil.which("sh")
+    assert shell is not None
+    helper = Path("rescue/kps-rootfs-stage-once")
+    result = subprocess.run(
+        [
+            shell,
+            str(helper),
+            "--execution-gate",
+            "missing-gate.json",
+            "--execution-gate-sha256",
+            "0" * 64,
+            "--archive",
+            "missing-rootfs.tar.xz",
+            "--rootfs-sha256",
+            "1" * 64,
+            "--target-mount",
+            "/mnt/kps-test",
+            "--staging-subpath",
+            staging_subpath,
+            "--required-free-bytes",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 65
+    assert "KPS_ROOTFS_STAGE_ERROR=staging-subpath-unsafe" in result.stderr
+    assert "execution-gate-not-regular-file" not in result.stderr
 
 
 def test_repository_busybox_contract_contains_only_needed_local_stage_applets() -> None:

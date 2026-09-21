@@ -38,6 +38,48 @@ require_sha256() {
     esac
 }
 
+json_number_field_equals() {
+    key="$1"
+    value="$2"
+    file="$3"
+    grep -F "\"$key\":$value," "$file" >/dev/null ||
+        grep -F "\"$key\":$value}" "$file" >/dev/null
+}
+
+validate_staging_parent_chain() {
+    base="$1"
+    relative="$2"
+    cursor="$base"
+    remaining="$relative"
+    while [ "${remaining#*/}" != "$remaining" ]; do
+        component="${remaining%%/*}"
+        remaining="${remaining#*/}"
+        cursor="$cursor/$component"
+        [ ! -L "$cursor" ] || fail "staging-parent-symlink-refused"
+        if [ -e "$cursor" ] && [ ! -d "$cursor" ]; then
+            fail "staging-parent-is-not-directory"
+        fi
+    done
+}
+
+create_staging_parent_chain() {
+    base="$1"
+    relative="$2"
+    cursor="$base"
+    remaining="$relative"
+    while [ "${remaining#*/}" != "$remaining" ]; do
+        component="${remaining%%/*}"
+        remaining="${remaining#*/}"
+        cursor="$cursor/$component"
+        [ ! -L "$cursor" ] || fail "staging-parent-symlink-refused"
+        if [ -e "$cursor" ]; then
+            [ -d "$cursor" ] || fail "staging-parent-is-not-directory"
+        else
+            mkdir "$cursor" || fail "staging-parent-create-failed"
+        fi
+    done
+}
+
 gate_file=""
 gate_sha=""
 archive=""
@@ -110,12 +152,22 @@ case "$target_mount" in
     *) fail "target-mount-outside-kps-namespace" ;;
 esac
 case "$target_mount" in
-    *[!A-Za-z0-9._/-]*|*"/../"*|*"/./"*|*//*)
+    *[!A-Za-z0-9._/-]*|*/|*//*)
+        fail "target-mount-unsafe"
+        ;;
+esac
+case "/$target_mount/" in
+    *"/../"*|*"/./"*)
         fail "target-mount-unsafe"
         ;;
 esac
 case "$staging_subpath" in
-    /*|""|*[!A-Za-z0-9._/-]*|*"/../"*|*"/./"*|*//*)
+    /*|""|.|..|*/|*[!A-Za-z0-9._/-]*|*//*)
+        fail "staging-subpath-unsafe"
+        ;;
+esac
+case "/$staging_subpath/" in
+    *"/../"*|*"/./"*)
         fail "staging-subpath-unsafe"
         ;;
 esac
@@ -126,6 +178,8 @@ esac
 [ ! -L "$archive" ] || fail "rootfs-archive-symlink-refused"
 [ -d "$target_mount" ] || fail "target-mount-directory-missing"
 [ ! -L "$target_mount" ] || fail "target-mount-symlink-refused"
+target_mount_resolved="$(readlink -f "$target_mount")" || fail "target-mount-canonicalization-failed"
+[ "$target_mount_resolved" = "$target_mount" ] || fail "target-mount-not-canonical"
 mountpoint -q "$target_mount" || fail "target-is-not-a-mountpoint"
 
 actual_gate_sha="$(sha256sum "$gate_file" | cut -d ' ' -f1)"
@@ -157,7 +211,7 @@ grep -F "\"rootfs_artifact_sha256\":\"$rootfs_sha\"" "$gate_file" >/dev/null ||
     fail "execution-gate-rootfs-mismatch"
 grep -F "\"staging_subpath\":\"$staging_subpath\"" "$gate_file" >/dev/null ||
     fail "execution-gate-staging-subpath-mismatch"
-grep -F "\"required_free_bytes\":$required_free_bytes" "$gate_file" >/dev/null ||
+json_number_field_equals "required_free_bytes" "$required_free_bytes" "$gate_file" ||
     fail "execution-gate-capacity-contract-mismatch"
 
 mount_source=""
@@ -214,8 +268,8 @@ while IFS= read -r member; do
     esac
 done < "$members"
 
+validate_staging_parent_chain "$target_mount" "$staging_subpath"
 final_path="$target_mount/$staging_subpath"
-parent_path="${final_path%/*}"
 gate_prefix="$(printf '%s' "$gate_sha" | cut -c1-12)"
 rootfs_prefix="$(printf '%s' "$rootfs_sha" | cut -c1-12)"
 temporary_path="$target_mount/.kps-rootfs-stage-$gate_prefix"
@@ -245,7 +299,41 @@ printf '> '
 IFS= read -r answer
 [ "$answer" = "$confirmation" ] || fail "operator-confirmation-mismatch"
 
-mkdir -p "$parent_path"
+# Recheck the live mount and destination boundary after confirmation so no write
+# starts against stale or redirected state.
+mountpoint -q "$target_mount" || fail "target-is-not-a-mountpoint-after-confirmation"
+target_mount_resolved="$(readlink -f "$target_mount")" || fail "target-mount-canonicalization-failed"
+[ "$target_mount_resolved" = "$target_mount" ] || fail "target-mount-not-canonical"
+post_mount_source=""
+post_mount_fstype=""
+post_mount_options=""
+while read -r source mount_point fs_type options rest; do
+    if [ "$mount_point" = "$target_mount" ]; then
+        post_mount_source="$source"
+        post_mount_fstype="$fs_type"
+        post_mount_options="$options"
+        break
+    fi
+done < /proc/mounts
+[ "$post_mount_source" = "$mount_source" ] || fail "target-mount-source-changed-after-confirmation"
+[ "$post_mount_fstype" = "$mount_fstype" ] || fail "target-filesystem-changed-after-confirmation"
+case ",$post_mount_options," in
+    *,rw,*) ;;
+    *) fail "target-mount-not-read-write-after-confirmation" ;;
+esac
+post_available_kib="$(df -Pk "$target_mount" | tail -n 1 | tr -s ' ' | cut -d ' ' -f4)"
+case "$post_available_kib" in
+    *[!0-9]*|"") fail "cannot-read-target-free-space-after-confirmation" ;;
+esac
+post_available_bytes=$((post_available_kib * 1024))
+[ "$post_available_bytes" -ge "$required_free_bytes" ] ||
+    fail "insufficient-live-free-space-after-confirmation"
+
+create_staging_parent_chain "$target_mount" "$staging_subpath"
+[ ! -e "$final_path" ] && [ ! -L "$final_path" ] ||
+    fail "final-staging-path-changed-after-confirmation"
+[ ! -e "$temporary_path" ] && [ ! -L "$temporary_path" ] ||
+    fail "temporary-staging-path-changed-after-confirmation"
 mkdir "$temporary_path"
 echo "KPS_ROOTFS_STAGE_WRITE_BEGIN=$temporary_path"
 if ! tar -xpf "$archive" -C "$temporary_path"; then
