@@ -98,8 +98,14 @@ def test_fast_gzip_stage_is_accepted_by_canonicalizer(tmp_path: Path):
             member.mtime = 123
             archive.addfile(member, io.BytesIO(data))
 
-    evidence = canonicalize_rootfs_archive(staged, canonical)
+    evidence = canonicalize_rootfs_archive(
+        staged,
+        canonical,
+        discard_input_after_spool=True,
+    )
 
+    assert not staged.exists()
+    assert not canonical.with_name(canonical.name + ".source.tar.tmp").exists()
     assert evidence.member_count_input == 2
     assert evidence.member_count_output == 2
     assert evidence.beta_gate_credit is False
