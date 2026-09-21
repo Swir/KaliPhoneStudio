@@ -79,7 +79,7 @@ try {
     }
 
     $GoMod = Get-Content -Raw -Encoding UTF8 (Join-Path $Scratch "go.mod")
-    $GoRequirement = [regex]::Match($GoMod, '(?m)^go\s+([^\s]+)$')
+    $GoRequirement = [regex]::Match($GoMod, '(?m)^go\s+([^\s]+)$'.Replace('\\', '\'))
     if (-not $GoRequirement.Success) {
         throw "Pinned extractor go.mod has no Go version"
     }
