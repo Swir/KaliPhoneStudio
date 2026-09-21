@@ -49,7 +49,8 @@ $CommonArgs = @(
     "--add-data", "${ToolsPath};tools",
     "--add-data", "${BuildStatusPath};.",
     "--add-data", "${BetaGatePath};.",
-    "--hidden-import", "PySide6.QtSvg"
+    "--hidden-import", "PySide6.QtSvg",
+    "--hidden-import", "kaliphonestudio.physical_gui_wizard"
 )
 
 function Invoke-KpsBuild {
