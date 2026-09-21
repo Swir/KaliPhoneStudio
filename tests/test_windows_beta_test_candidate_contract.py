@@ -10,7 +10,7 @@ OFFLINE_PREP = ROOT / "docs" / "AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
 VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 SMOKE = ROOT / "scripts" / "smoke_windows_beta_test_candidate.ps1"
 PACKAGER = ROOT / "scripts" / "package_windows_beta_test_candidate.ps1"
-WINDOWS_EXTRACTOR_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
+WINDOWS_EXTRACTOR_SHA256 = "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
 
 
 def test_workflow_builds_exact_integrated_windows_candidate() -> None:
