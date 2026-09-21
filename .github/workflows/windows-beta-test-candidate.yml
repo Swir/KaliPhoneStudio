@@ -114,6 +114,7 @@ jobs:
           tests/test_windows_packaging_contract.py
           tests/test_windows_operator_extractor_contract.py
           tests/test_ac2003_host_preflight_contract.py
+          tests/test_physical_gui_bridge.py
           tests/test_extractor.py
           tests/test_tool_locks.py
           tests/test_operator_beta_release_evidence_cli.py

@@ -33,6 +33,7 @@ def test_windows_build_is_onedir_and_bundles_offline_safety_inputs() -> None:
         assert f"${{{variable[1:]}}};{destination}" in script
     assert "--specpath" in script
     assert '"PySide6.QtSvg"' in script
+    assert '"kaliphonestudio.physical_gui_wizard"' in script
     assert "unsigned development host artifacts" in script
     assert "Beta releases" in script
 
