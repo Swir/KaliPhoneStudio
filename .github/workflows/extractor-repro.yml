@@ -136,10 +136,11 @@ jobs:
             go build -trimpath -buildvcs=false -ldflags=-buildid= -o ../extractor-b .
           fi
 
-      - name: Prove byte-for-byte reproducibility and exact locked SHA-256
+      - name: Prove byte-for-byte reproducibility and record observed SHA-256
+        id: proof
         shell: python
         run: |
-          import hashlib, json
+          import hashlib, json, os
           from pathlib import Path
           a = Path("extractor-a").read_bytes()
           b = Path("extractor-b").read_bytes()
@@ -148,12 +149,16 @@ jobs:
           digest = hashlib.sha256(a).hexdigest()
           lock = json.loads(Path("tools/extractor-locks.json").read_text(encoding="utf-8"))
           expected = lock["artifacts"]["${{ matrix.platform }}"]["sha256"]
-          if digest != expected:
-              raise SystemExit(f"${{ matrix.platform }} digest drift: expected {expected}, got {digest}")
-          print("${{ matrix.platform }} SHA-256:", digest)
+          matches_lock = digest == expected
           Path("extractor-${{ matrix.platform }}.sha256").write_text(
               f"{digest}  payload-dumper-go\n", encoding="ascii"
           )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              print(f"digest={digest}", file=f)
+              print(f"matches_lock={'true' if matches_lock else 'false'}", file=f)
+              print(f"expected={expected}", file=f)
+          print("${{ matrix.platform }} observed SHA-256:", digest)
+          print("${{ matrix.platform }} locked SHA-256:", expected)
 
       - name: Stage and smoke-test self-contained Windows runtime closure
         if: runner.os == 'Windows'
@@ -167,11 +172,22 @@ jobs:
           if ($Runtime.all_non_system_imports_resolved -ne $true) { throw "Runtime closure is incomplete" }
           if ($Runtime.executable_sha256 -ne ((Get-Content -Raw "extractor-windows-amd64.sha256").Split()[0])) { throw "Runtime executable hash drift" }
 
-      - name: Upload reproducibility evidence
+      - name: Upload reproducibility evidence with observed digest
+        if: always() && steps.proof.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: extractor-repro-${{ matrix.platform }}
+          name: extractor-repro-${{ matrix.platform }}-${{ steps.proof.outputs.digest }}
           path: |
             extractor-${{ matrix.platform }}.sha256
             extractor-runtime-bundle/
           if-no-files-found: ignore
+
+      - name: Enforce reviewed extractor digest lock
+        if: steps.proof.outcome == 'success' && steps.proof.outputs.matches_lock != 'true'
+        shell: python
+        run: |
+          raise SystemExit(
+              "${{ matrix.platform }} digest drift: expected "
+              "${{ steps.proof.outputs.expected }}, got ${{ steps.proof.outputs.digest }}. "
+              "A/B equality and runtime evidence were preserved for explicit review; update the lock only after reviewing this exact-head evidence."
+          )
