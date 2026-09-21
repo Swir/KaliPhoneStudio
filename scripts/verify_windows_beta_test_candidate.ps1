@@ -29,6 +29,9 @@ if ($Info.operator_extractor_platform -ne "windows-amd64") { throw "Unexpected b
 if ([string]$Info.operator_extractor_sha256 -notmatch '^[0-9a-f]{64}$') { throw "Bundled extractor digest is malformed" }
 if ($Info.host_preflight_included -ne $true) { throw "Candidate does not declare the AC2003 host preflight" }
 if ($Info.host_preflight_device_interaction -ne $false) { throw "Candidate host preflight unexpectedly claims device interaction" }
+if ($Info.readonly_baseline_launcher_included -ne $true) { throw "Candidate does not declare the AC2003 read-only baseline launcher" }
+if ($Info.readonly_baseline_device_interaction -ne $true) { throw "Read-only baseline launcher must declare physical read-only interaction" }
+if ($Info.readonly_baseline_persistent_write_authorized -ne $false) { throw "Read-only baseline launcher unexpectedly authorizes persistent writes" }
 if ($Info.signed -ne $false) { throw "Candidate unexpectedly claims signing" }
 if ($Info.physical_gate_passed -ne $false) { throw "Candidate unexpectedly claims physical gate success" }
 if ($Info.hardware_verified -ne $false) { throw "Candidate unexpectedly claims hardware verification" }
@@ -61,11 +64,12 @@ $ToolsRoot = Join-Path $Root "operator-tools"
 $PackagedLockPath = Join-Path $OperatorPack "extractor-locks.json"
 $FastbootPolicyPath = Join-Path $OperatorPack "fastboot-tool-policy.json"
 $HostPreflightPath = Join-Path $OperatorPack "host-preflight.ps1"
+$ReadonlyBaselinePath = Join-Path $OperatorPack "readonly-baseline.ps1"
 $ExtractorPath = Join-Path $ToolsRoot "payload-dumper-go.exe"
 $ExtractorManifestPath = Join-Path $ToolsRoot "operator-extractor-manifest.json"
 $RuntimeManifestPath = Join-Path $ToolsRoot "operator-extractor-runtime.json"
 $LicensePath = Join-Path $ToolsRoot "payload-dumper-go-LICENSE.txt"
-foreach ($Path in @($PackagedLockPath, $FastbootPolicyPath, $HostPreflightPath, $ExtractorPath, $ExtractorManifestPath, $RuntimeManifestPath, $LicensePath, (Join-Path $OperatorPack "START_HERE.txt"))) {
+foreach ($Path in @($PackagedLockPath, $FastbootPolicyPath, $HostPreflightPath, $ReadonlyBaselinePath, $ExtractorPath, $ExtractorManifestPath, $RuntimeManifestPath, $LicensePath, (Join-Path $OperatorPack "START_HERE.txt"))) {
     if (-not (Test-Path $Path -PathType Leaf)) { throw "Bundled operator-tool file missing: $Path" }
 }
 $Lock = Get-Content -Raw -Encoding UTF8 $PackagedLockPath | ConvertFrom-Json
@@ -101,6 +105,8 @@ Write-Host "Verified files: $Verified"
 Write-Host "Bundled extractor SHA-256: $ExpectedExtractorSha"
 Write-Host "Host-only AC2003 preflight included: true"
 Write-Host "Host preflight device interaction: false"
+Write-Host "One-command AC2003 read-only baseline launcher included: true"
+Write-Host "Read-only baseline persistent write authorized: false"
 Write-Host "Physical gate passed: false"
 Write-Host "Hardware verified: false"
 Write-Host "Beta release: false"

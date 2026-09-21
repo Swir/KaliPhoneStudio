@@ -24,6 +24,7 @@ on:
       - "scripts/smoke_windows_beta_test_candidate.ps1"
       - "scripts/package_windows_beta_test_candidate.ps1"
       - "scripts/preflight_ac2003_first_test.ps1"
+      - "scripts/start_ac2003_readonly_baseline.ps1"
       - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
@@ -50,6 +51,7 @@ on:
       - "scripts/smoke_windows_beta_test_candidate.ps1"
       - "scripts/package_windows_beta_test_candidate.ps1"
       - "scripts/preflight_ac2003_first_test.ps1"
+      - "scripts/start_ac2003_readonly_baseline.ps1"
       - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
@@ -139,7 +141,7 @@ jobs:
         shell: pwsh
         run: ./scripts/smoke_windows_beta_test_candidate.ps1 -CandidateRoot "dist"
 
-      - name: Package, host-preflight and self-verify integrated AC2003 host test candidate
+      - name: Package, host-preflight, read-only baseline launcher and self-verify integrated AC2003 host test candidate
         shell: pwsh
         run: >-
           ./scripts/package_windows_beta_test_candidate.ps1

@@ -62,6 +62,7 @@ $StageMap = [ordered]@{
     "tools/extractor-locks.json" = "extractor-locks.json"
     "scripts/verify_windows_beta_test_candidate.ps1" = "verify-candidate.ps1"
     "scripts/preflight_ac2003_first_test.ps1" = "host-preflight.ps1"
+    "scripts/start_ac2003_readonly_baseline.ps1" = "readonly-baseline.ps1"
 }
 foreach ($Entry in $StageMap.GetEnumerator()) {
     $Source = Join-Path $RepoRoot $Entry.Key
@@ -82,19 +83,27 @@ KaliPhoneStudio AC2003 host test candidate
    This re-verifies the full candidate integrity set, checks the exact Fastboot version,
    records its SHA-256 on screen, and runs ONLY `fastboot --version` (no device command).
 
-3. Frozen CLI:
+3. After recording the exact OxygenOS build/fingerprint and putting the phone in Fastboot,
+   create the fresh read-only physical baseline in one command:
+   pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 -CandidateRoot . -FastbootExecutable "`$Fastboot" -Serial "<EXACT_FASTBOOT_SERIAL>" -FirmwareBuild "<EXACT_OXYGENOS_BUILD>" -FirmwareFingerprint "<EXACT_FIRMWARE_FINGERPRINT>" -SessionDir ".\evidence\ac2003-first-test-01"
+
+   The launcher re-runs host preflight, then executes only the frozen
+   begin-physical-test-session path (Fastboot version/devices/getvar capture). It does not
+   boot, reboot, flash, erase, change slots, mount storage or authorize a persistent write.
+
+4. Frozen CLI:
    .\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe
 
-4. Exact bundled OTA extractor (no separate download/search required):
+5. Exact bundled OTA extractor (no separate download/search required):
    .\operator-tools\payload-dumper-go.exe
 
-5. Start the physical campaign with:
+6. Continue the physical campaign with:
    .\operator-pack\AC2003_FIRST_TEST.md
 
-6. For the one-command host-only OTA/candidate preparation details:
+7. For the one-command host-only OTA/candidate preparation details:
    .\operator-pack\AC2003_OFFLINE_CANDIDATE_PREPARATION.md
 
-7. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
+8. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
    .\operator-pack\BETA_RELEASE_OPERATOR_WORKSPACE.md
    .\operator-pack\BETA_RELEASE_ARTIFACT_INVENTORY.md
    .\operator-pack\BETA_RELEASE_REVIEW_MANIFEST.md
@@ -126,6 +135,9 @@ foreach ($Path in @($InfoPath, $ManifestPath, $ZipPath, $ZipShaPath)) {
     operator_extractor_runtime_dependency_count = @($RuntimeManifest.runtime_dependencies).Count
     host_preflight_included = $true
     host_preflight_device_interaction = $false
+    readonly_baseline_launcher_included = $true
+    readonly_baseline_device_interaction = $true
+    readonly_baseline_persistent_write_authorized = $false
     signed = $false
     physical_gate_passed = $false
     hardware_verified = $false
@@ -175,5 +187,6 @@ Write-Host "Integrated AC2003 Windows host test candidate: PASS"
 Write-Host "Source commit: $SourceCommit"
 Write-Host "Bundled extractor SHA-256: $ExpectedExtractorSha"
 Write-Host "Host-only AC2003 preflight: PASS"
+Write-Host "One-command AC2003 read-only baseline launcher: INCLUDED"
 Write-Host "Physical gate passed: false"
 Write-Host "Beta release: false"
