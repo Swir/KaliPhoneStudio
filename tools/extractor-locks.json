@@ -21,24 +21,26 @@
         "distribution": "MSYS2 mingw64",
         "packages": {
           "mingw-w64-x86_64-binutils": "2.47-3",
+          "mingw-w64-x86_64-cc-libs": "16.2.0-4",
           "mingw-w64-x86_64-crt": "14.0.0.r409.g6de5d3b4d-1",
-          "mingw-w64-x86_64-gcc": "16.2.0-3",
-          "mingw-w64-x86_64-gcc-libs": "16.2.0-3",
+          "mingw-w64-x86_64-gcc": "16.2.0-4",
           "mingw-w64-x86_64-headers": "14.0.0.r409.g6de5d3b4d-1",
+          "mingw-w64-x86_64-libgcc": "16.2.0-4",
+          "mingw-w64-x86_64-libstdc++": "16.2.0-4",
           "mingw-w64-x86_64-libwinpthread": "14.0.0.r409.g6de5d3b4d-1",
           "mingw-w64-x86_64-winpthreads": "14.0.0.r409.g6de5d3b4d-1",
           "mingw-w64-x86_64-xz": "5.8.4-1"
         }
       }
     },
-    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. On Windows, A/B run 35554686984 proved the pinned MinGW build byte-for-byte reproducible at SHA-256 72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8, but clean-PATH execution showed that -extldflags=-static did not eliminate every MinGW runtime DLL import. The Windows operator artifact therefore uses a fail-closed side-by-side runtime closure: recursively inspect PE imports, keep Windows system imports external, copy every non-system MinGW dependency from the exact locked package set, hash the copied closure, and require a clean-PATH runtime smoke. This avoids pretending the executable is fully static while still delivering a self-contained operator directory with no manual DLL search."
+    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. Windows exact-head run 35587929913 on 2026-09-21 used the locked MSYS2 mingw64 GCC 16.2.0-4 split runtime package set, built the extractor twice byte-for-byte identically at SHA-256 9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616, produced a side-by-side runtime closure by recursively closing every non-system PE import, and passed the clean-PATH runtime smoke before the digest lock was promoted. This supersedes the earlier 72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8 executable authority that was produced under the previous GCC 16.2.0-3 native package revision. The Windows operator artifact recursively inspects PE imports, keeps Windows system imports external, copies every non-system MinGW dependency from the exact locked package set, hashes the copied closure, and requires a clean-PATH runtime smoke. This avoids pretending the executable is fully static while still delivering a self-contained operator directory with no manual DLL search."
   },
   "artifacts": {
     "linux-amd64": {
       "sha256": "a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0"
     },
     "windows-amd64": {
-      "sha256": "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
+      "sha256": "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
     }
   }
 }

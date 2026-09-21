@@ -13,7 +13,7 @@ from kaliphonestudio.extractor import (
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_LOCK = ROOT / "tools" / "extractor-locks.json"
-WINDOWS_REVIEWED_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
+WINDOWS_REVIEWED_SHA256 = "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
 
 
 def _direct_lock(tool: Path, digest: str, *, source_commit: str = "a" * 40) -> ExtractorLock:

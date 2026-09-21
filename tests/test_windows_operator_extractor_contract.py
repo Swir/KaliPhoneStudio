@@ -12,14 +12,17 @@ RUNTIME_STAGER = ROOT / "scripts" / "stage_windows_extractor_runtime.ps1"
 LOCKS = ROOT / "tools" / "extractor-locks.json"
 DOC = ROOT / "docs" / "WINDOWS_OPERATOR_EXTRACTOR.md"
 
-# A/B run 35554686984 produced byte-identical Windows executables at this digest.
-WINDOWS_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
+# Exact-head A/B run 35587929913 proved the current Windows digest with the
+# locked MinGW 16.2.0-4 native package set and the clean-PATH runtime closure.
+WINDOWS_SHA256 = "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
 EXPECTED_NATIVE_PACKAGES = {
     "mingw-w64-x86_64-binutils": "2.47-3",
+    "mingw-w64-x86_64-cc-libs": "16.2.0-4",
     "mingw-w64-x86_64-crt": "14.0.0.r409.g6de5d3b4d-1",
-    "mingw-w64-x86_64-gcc": "16.2.0-3",
-    "mingw-w64-x86_64-gcc-libs": "16.2.0-3",
+    "mingw-w64-x86_64-gcc": "16.2.0-4",
     "mingw-w64-x86_64-headers": "14.0.0.r409.g6de5d3b4d-1",
+    "mingw-w64-x86_64-libgcc": "16.2.0-4",
+    "mingw-w64-x86_64-libstdc++": "16.2.0-4",
     "mingw-w64-x86_64-libwinpthread": "14.0.0.r409.g6de5d3b4d-1",
     "mingw-w64-x86_64-winpthreads": "14.0.0.r409.g6de5d3b4d-1",
     "mingw-w64-x86_64-xz": "5.8.4-1",
@@ -51,7 +54,7 @@ def test_extractor_lock_is_exact_and_has_windows_runtime_authority() -> None:
     assert len(digest) == 64
     int(digest, 16)
     notes = data["build"]["notes"]
-    assert "35554686984" in notes
+    assert "35587929913" in notes
     assert "side-by-side runtime closure" in notes
     assert "no manual DLL search" in notes
 
@@ -142,11 +145,15 @@ def test_repro_workflow_requires_locked_digest_and_runtime_smoke() -> None:
         "scripts/stage_windows_extractor_runtime.ps1",
         "mixed-side-by-side",
         "recursive-non-system-pe-import-closure",
-        "Prove byte-for-byte reproducibility and exact locked SHA-256",
+        "Prove byte-for-byte reproducibility and record observed SHA-256",
         'lock["artifacts"]["${{ matrix.platform }}"]["sha256"]',
         "Stage and smoke-test self-contained Windows runtime closure",
         "extractor-runtime-bundle/operator-extractor-runtime.json",
         "all_non_system_imports_resolved",
+        "Upload reproducibility evidence with observed digest",
+        "Enforce reviewed extractor digest lock",
+        "steps.proof.outputs.digest",
+        "steps.proof.outputs.matches_lock",
     ):
         assert needle in workflow
 

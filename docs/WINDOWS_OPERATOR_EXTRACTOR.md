@@ -16,11 +16,11 @@ The build reads [`tools/extractor-locks.json`](../tools/extractor-locks.json) as
 - build flags: `-trimpath -buildvcs=false` plus `-buildid= -extldflags=-static`;
 - packaging policy: **mixed side-by-side runtime closure**, not a false claim of a fully static executable;
 - runtime policy: recursively inspect PE imports and bundle every non-system dependency from the exact locked MinGW environment;
-- reviewed executable SHA-256: `72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8`.
+- reviewed executable SHA-256: `9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616`.
 
-A/B reproducibility run `35554686984` on **2026-09-21** built the exact Windows executable twice and proved byte-for-byte equality at the digest above. That run also exposed an important packaging fact: `-extldflags=-static` did **not** eliminate every MinGW runtime DLL import on the Windows runner. The raw executable therefore failed when MSYS2 was removed from `PATH`.
+Exact-head A/B reproducibility run `35587929913` on **2026-09-21** used the current locked MSYS2 mingw64 package set, including GCC `16.2.0-4`. It built the exact Windows executable twice and proved byte-for-byte equality at the digest above. The workflow then recursively staged the non-system PE runtime closure and passed the clean-PATH smoke before that digest was promoted into the lock. This supersedes the earlier executable digest produced under the previous GCC `16.2.0-3` native package revision.
 
-KaliPhoneStudio now treats that fact explicitly instead of labelling the binary fully static. `stage_windows_extractor_runtime.ps1` recursively inspects the executable and every copied DLL with MinGW `objdump`, treats Windows system/API-set imports as operating-system dependencies, and copies each remaining MinGW dependency next to `payload-dumper-go.exe`. Every copied file is re-hashed, the complete closure is recorded in `operator-extractor-runtime.json`, and unresolved non-system imports fail the build.
+The proof also keeps an important packaging fact explicit: `-extldflags=-static` does **not** eliminate every MinGW runtime DLL import on the Windows runner. KaliPhoneStudio therefore does not label the binary fully static. `stage_windows_extractor_runtime.ps1` recursively inspects the executable and every copied DLL with MinGW `objdump`, treats Windows system/API-set imports as operating-system dependencies, and copies each remaining MinGW dependency next to `payload-dumper-go.exe`. Every copied file is re-hashed, the complete closure is recorded in `operator-extractor-runtime.json`, and unresolved non-system imports fail the build.
 
 The delivered directory must then start successfully with `PATH` restricted to Windows system directories. This proves the operator does not need the GitHub runner's MSYS2 installation or a manual DLL search on the user's PC.
 

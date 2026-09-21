@@ -10,7 +10,7 @@ OFFLINE_PREP = ROOT / "docs" / "AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
 VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 SMOKE = ROOT / "scripts" / "smoke_windows_beta_test_candidate.ps1"
 PACKAGER = ROOT / "scripts" / "package_windows_beta_test_candidate.ps1"
-WINDOWS_EXTRACTOR_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
+WINDOWS_EXTRACTOR_SHA256 = "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
 
 
 def test_workflow_builds_exact_integrated_windows_candidate() -> None:
@@ -34,6 +34,9 @@ def test_workflow_builds_exact_integrated_windows_candidate() -> None:
         f'-SourceCommit "{exact_head}"',
         "tests/test_windows_operator_extractor_contract.py",
         "tests/test_windows_beta_test_candidate_contract.py",
+        "docs/AC2003_OFFLINE_CANDIDATE_PREPARATION.md",
+        "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md",
+        "docs/BETA_RELEASE_REVIEW_MANIFEST.md",
         "actions/upload-artifact@v4",
         "KaliPhoneStudio-AC2003-beta-test-candidate.zip",
         "KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256",
@@ -107,6 +110,10 @@ def test_packager_includes_exact_operator_tools_in_integrity_set_and_zip() -> No
         "BETA_TEST_CANDIDATE_INFO.json",
         "START_HERE.txt",
         "AC2003_FIRST_TEST.md",
+        "AC2003_OFFLINE_CANDIDATE_PREPARATION.md",
+        "BETA_RELEASE_OPERATOR_WORKSPACE.md",
+        "BETA_RELEASE_ARTIFACT_INVENTORY.md",
+        "BETA_RELEASE_REVIEW_MANIFEST.md",
         "WINDOWS_OPERATOR_EXTRACTOR.md",
         "verify-candidate.ps1",
         "$Files += Get-ChildItem -Path $Target -Recurse -File",
@@ -116,6 +123,7 @@ def test_packager_includes_exact_operator_tools_in_integrity_set_and_zip() -> No
         "hardware_verified = $false",
         "beta_release = $false",
         "beta_gate_credit = $false",
+        "Release-prep files do not authorize publication",
     ):
         assert needle in packager
 
