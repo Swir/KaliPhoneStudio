@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/windows-operator-extractor.yml"
       - "scripts/build_windows_operator_extractor.ps1"
+      - "scripts/stage_windows_extractor_runtime.ps1"
       - "tools/extractor-locks.json"
       - "tests/test_windows_operator_extractor_contract.py"
       - "docs/WINDOWS_OPERATOR_EXTRACTOR.md"
@@ -13,6 +14,7 @@ on:
     paths:
       - ".github/workflows/windows-operator-extractor.yml"
       - "scripts/build_windows_operator_extractor.ps1"
+      - "scripts/stage_windows_extractor_runtime.ps1"
       - "tools/extractor-locks.json"
       - "tests/test_windows_operator_extractor_contract.py"
       - "docs/WINDOWS_OPERATOR_EXTRACTOR.md"
@@ -69,25 +71,29 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path 'C:\msys64\mingw64\include\lzma.h')) { throw 'lzma.h is not installed' }
+          if (-not (Test-Path 'C:\msys64\mingw64\bin\objdump.exe')) { throw 'objdump.exe is not installed' }
           & $env:CC --version
           if ($LASTEXITCODE -ne 0) { throw 'MinGW GCC is not executable' }
           & go version
           if ($LASTEXITCODE -ne 0) { throw 'Pinned Go toolchain is not executable' }
 
-      - name: Build exact source-locked payload extractor
+      - name: Build exact source-locked payload extractor bundle
         shell: pwsh
         run: ./scripts/build_windows_operator_extractor.ps1 -OutputDir "dist/operator-tools"
 
-      - name: Verify exact artifact and non-authorizing manifest
+      - name: Verify exact artifact, runtime closure and non-authorizing manifest
         shell: pwsh
         run: |
           $Lock = Get-Content -Raw -Encoding UTF8 "tools/extractor-locks.json" | ConvertFrom-Json
           $Manifest = Get-Content -Raw -Encoding UTF8 "dist/operator-tools/operator-extractor-manifest.json" | ConvertFrom-Json
+          $Runtime = Get-Content -Raw -Encoding UTF8 "dist/operator-tools/operator-extractor-runtime.json" | ConvertFrom-Json
           $Exe = "dist/operator-tools/payload-dumper-go.exe"
           $License = "dist/operator-tools/payload-dumper-go-LICENSE.txt"
+          $Help = "dist/operator-tools/payload-dumper-go-help.txt"
 
-          if (-not (Test-Path $Exe -PathType Leaf)) { throw "Extractor executable missing" }
-          if (-not (Test-Path $License -PathType Leaf)) { throw "Apache-2.0 license copy missing" }
+          foreach ($Path in @($Exe, $License, $Help, "dist/operator-tools/operator-extractor-runtime.json")) {
+            if (-not (Test-Path $Path -PathType Leaf)) { throw "Required extractor bundle file missing: $Path" }
+          }
 
           $Actual = (Get-FileHash -Algorithm SHA256 -Path $Exe).Hash.ToLowerInvariant()
           $Expected = ([string]$Lock.artifacts.'windows-amd64'.sha256).ToLowerInvariant()
@@ -96,6 +102,8 @@ jobs:
           if ($Manifest.go_toolchain_version -ne $Lock.build.toolchain_version) { throw "Manifest Go lock drift" }
           if ($Manifest.cgo_enabled -ne $true) { throw "Manifest CGO contract drift" }
           if ($Manifest.native_distribution -ne $Lock.build.native_dependencies.'windows-amd64'.distribution) { throw "Manifest native distribution drift" }
+          if ($Manifest.linkage -ne $Lock.build.platform_overrides.'windows-amd64'.linkage) { throw "Manifest linkage policy drift" }
+          if ($Manifest.runtime_dependency_policy -ne $Lock.build.platform_overrides.'windows-amd64'.runtime_dependency_policy) { throw "Manifest runtime policy drift" }
           if ($Manifest.native_dependencies_verified -ne $true) { throw "Native dependency lock was not verified" }
           foreach ($Package in $Lock.build.native_dependencies.'windows-amd64'.packages.PSObject.Properties) {
             $ActualVersion = [string]$Manifest.native_package_versions.($Package.Name)
@@ -106,6 +114,18 @@ jobs:
           if ($Manifest.executable_sha256 -ne $Expected) { throw "Manifest executable hash drift" }
           if ($Manifest.source_lock_verified -ne $true) { throw "Source lock was not verified" }
           if ($Manifest.executable_hash_verified -ne $true) { throw "Executable hash was not verified" }
+          if ($Manifest.runtime_dependencies_resolved -ne $true) { throw "Runtime dependency closure was not verified" }
+          if ($Manifest.clean_path_smoke_passed -ne $true) { throw "Clean-PATH smoke was not recorded" }
+          if ($Runtime.all_non_system_imports_resolved -ne $true) { throw "Runtime closure is incomplete" }
+          if ($Runtime.executable_sha256 -ne $Expected) { throw "Runtime manifest executable hash drift" }
+          if ([int]$Manifest.runtime_dependency_count -ne @($Runtime.runtime_dependencies).Count) { throw "Runtime dependency count drift" }
+
+          foreach ($Dependency in @($Runtime.runtime_dependencies)) {
+            $Path = Join-Path "dist/operator-tools" ([string]$Dependency.name)
+            if (-not (Test-Path $Path -PathType Leaf)) { throw "Bundled runtime dependency missing: $Path" }
+            $Digest = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant()
+            if ($Digest -ne [string]$Dependency.sha256) { throw "Bundled runtime dependency hash drift: $Path" }
+          }
 
           foreach ($Field in @(
             "physical_interaction_performed",
@@ -121,28 +141,29 @@ jobs:
 
           "$Actual  payload-dumper-go.exe" | Set-Content -Encoding ascii "dist/operator-tools/payload-dumper-go.exe.sha256"
 
-      - name: Smoke-test extractor without MSYS2 on PATH
+      - name: Re-run clean-PATH smoke from the delivered directory
         shell: pwsh
         run: |
-          $Exe = (Resolve-Path "dist/operator-tools/payload-dumper-go.exe").Path
           $SavedPath = $env:PATH
           try {
             $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-            & $Exe -h *> "dist/operator-tools/payload-dumper-go-help.txt"
-            $ExitCode = $LASTEXITCODE
+            Push-Location "dist/operator-tools"
+            try {
+              & ".\payload-dumper-go.exe" -h *> "payload-dumper-go-help-recheck.txt"
+              $ExitCode = $LASTEXITCODE
+            }
+            finally {
+              Pop-Location
+            }
           }
           finally {
             $env:PATH = $SavedPath
           }
-          if ($ExitCode -ne 0) {
-            throw "Extractor is not standalone on a clean Windows PATH: exit $ExitCode"
-          }
-          $Help = Get-Content -Raw -Encoding UTF8 "dist/operator-tools/payload-dumper-go-help.txt"
-          if ($Help -notmatch "payload-dumper-go") {
-            throw "Extractor clean-PATH help smoke returned unexpected output"
+          if ($null -eq $ExitCode -or $ExitCode -ne 0) {
+            throw "Delivered extractor bundle failed clean-PATH smoke: exit=$ExitCode"
           }
 
-      - name: Upload exact non-release operator tool
+      - name: Upload exact non-release operator tool bundle
         uses: actions/upload-artifact@v4
         with:
           name: KaliPhoneStudio-windows-operator-extractor-${{ github.event.pull_request.head.sha || github.sha }}
