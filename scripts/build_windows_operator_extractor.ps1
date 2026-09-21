@@ -26,6 +26,10 @@ if ($Lock.build.toolchain -ne "go" -or -not $Lock.build.toolchain_version) {
 if (-not $Lock.artifacts.'windows-amd64'.sha256) {
     throw "Windows extractor SHA-256 lock is missing"
 }
+$NativeLock = $Lock.build.native_dependencies.'windows-amd64'
+if (-not $NativeLock -or -not $NativeLock.packages) {
+    throw "Windows native dependency lock is missing"
+}
 
 $ExpectedCommit = [string]$Lock.source.commit
 $ExpectedGo = [string]$Lock.build.toolchain_version
@@ -44,6 +48,25 @@ if ($env:CGO_ENABLED -ne "1") {
 }
 if (-not $env:CC) {
     throw "Reviewed Windows extractor build requires an explicit MinGW CC"
+}
+
+$Pacman = "C:\msys64\usr\bin\pacman.exe"
+if (-not (Test-Path $Pacman -PathType Leaf)) {
+    throw "MSYS2 pacman is unavailable for native dependency verification"
+}
+$VerifiedNativePackages = [ordered]@{}
+foreach ($Package in $NativeLock.packages.PSObject.Properties) {
+    $PackageName = [string]$Package.Name
+    $ExpectedVersion = [string]$Package.Value
+    $ActualPackage = (& $Pacman -Q $PackageName 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Required native package is unavailable: $PackageName"
+    }
+    $ExpectedPackage = "$PackageName $ExpectedVersion"
+    if ($ActualPackage -ne $ExpectedPackage) {
+        throw "Native package drift: expected '$ExpectedPackage', got '$ActualPackage'"
+    }
+    $VerifiedNativePackages[$PackageName] = $ExpectedVersion
 }
 
 $Destination = if ([IO.Path]::IsPathRooted($OutputDir)) {
@@ -132,6 +155,8 @@ try {
         source_url = $SourceUrl
         source_commit = $ExpectedCommit
         go_toolchain_version = $ExpectedGo
+        native_distribution = [string]$NativeLock.distribution
+        native_package_versions = $VerifiedNativePackages
         cgo_enabled = $true
         build_flags = @("-trimpath", "-buildvcs=false", "-ldflags=-buildid=")
         executable = "payload-dumper-go.exe"
@@ -141,6 +166,7 @@ try {
         license_sha256 = $LicenseSha256
         notice_sha256 = $NoticeSha256
         source_lock_verified = $true
+        native_dependencies_verified = $true
         executable_hash_verified = $true
         physical_interaction_performed = $false
         external_device_command_executed = $false
@@ -149,7 +175,7 @@ try {
         hardware_verified = $false
         beta_release_authorized = $false
         beta_gate_credit = $false
-    } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $Destination "operator-extractor-manifest.json")
+    } | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $Destination "operator-extractor-manifest.json")
 }
 finally {
     if ($Pushed) {
@@ -160,6 +186,6 @@ finally {
     }
 }
 
-Write-Host "Windows operator extractor built from exact source lock."
+Write-Host "Windows operator extractor built from exact source/native dependency lock."
 Write-Host "payload-dumper-go.exe SHA-256: $ExpectedSha256"
 Write-Host "No phone/device command was executed."
