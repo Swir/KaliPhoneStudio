@@ -108,6 +108,12 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw "Frozen offline candidate command did not fail closed: $LASTEXITCODE" }
           if (Test-Path "dist/missing-session") { throw "Refused offline preparation created a session" }
 
-          $Help = " ".join((Get-Content "dist/help-prepare-physical-candidate-offline.txt").ToLower().Split([char[]]" `r`n`t", [System.StringSplitOptions]::RemoveEmptyEntries))
+          $Help = [string]::Join(" ", (Get-Content "dist/help-prepare-physical-candidate-offline.txt").ToLower().Split([char[]]" `r`n`t", [System.StringSplitOptions]::RemoveEmptyEntries))
           if (-not $Help.Contains("--candidate-dtbo")) { throw "Frozen offline command lost candidate DTBO input" }
           if (-not $Help.Contains("no fastboot/adb command")) { throw "Frozen offline command lost no-device-I/O safety wording" }
+
+          # The negative smoke command intentionally returned 2 after a verified refusal.
+          # Reset the native exit code only after all assertions passed so the CI step
+          # reports the expected safety success without weakening the fail-closed check.
+          $global:LASTEXITCODE = 0
+          exit 0
