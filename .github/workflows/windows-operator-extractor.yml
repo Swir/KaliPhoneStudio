@@ -9,6 +9,8 @@ on:
       - "scripts/stage_windows_extractor_runtime.ps1"
       - "tools/extractor-locks.json"
       - "tests/test_windows_operator_extractor_contract.py"
+      - "tests/test_extractor.py"
+      - "tests/test_tool_locks.py"
       - "docs/WINDOWS_OPERATOR_EXTRACTOR.md"
   pull_request:
     paths:
@@ -17,6 +19,8 @@ on:
       - "scripts/stage_windows_extractor_runtime.ps1"
       - "tools/extractor-locks.json"
       - "tests/test_windows_operator_extractor_contract.py"
+      - "tests/test_extractor.py"
+      - "tests/test_tool_locks.py"
       - "docs/WINDOWS_OPERATOR_EXTRACTOR.md"
   workflow_dispatch:
 
@@ -38,8 +42,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install contract test dependency
         run: python -m pip install pytest
-      - name: Run operator extractor contract tests
-        run: python -m pytest -q tests/test_windows_operator_extractor_contract.py
+      - name: Run operator extractor and lock contract tests
+        run: >-
+          python -m pytest -q
+          tests/test_windows_operator_extractor_contract.py
+          tests/test_extractor.py
+          tests/test_tool_locks.py
 
   build-exact-windows-extractor:
     runs-on: windows-latest
