@@ -45,6 +45,7 @@ _DROP_PREFIXES = (
     "var/cache/fontconfig/",
     "var/cache/man/",
     "var/lib/apt/lists/",
+    "var/lib/command-not-found/",
     "var/log/",
 )
 _SHADOW_PATH = "etc/shadow"
@@ -123,8 +124,32 @@ def _logical_path(parts: tuple[str, ...], prefix: tuple[str, ...]) -> str:
     return "/".join(parts)
 
 
+def _logical_link_path(linkname: str, prefix: tuple[str, ...]) -> str:
+    parts = _safe_parts(linkname)
+    if prefix and len(parts) >= len(prefix) and parts[: len(prefix)] == prefix:
+        parts = parts[len(prefix) :]
+    return "/".join(parts)
+
+
+def _archive_path(logical: str, prefix: tuple[str, ...]) -> str:
+    parts = list(prefix)
+    if logical:
+        parts.extend(PurePosixPath(logical).parts)
+    if not parts:
+        raise RootfsError("cannot create an empty hardlink target path")
+    return "/".join(parts)
+
+
+def _generated_ssh_host_key(logical: str) -> bool:
+    prefix = "etc/ssh/ssh_host_"
+    if not logical.startswith(prefix):
+        return False
+    leaf = logical[len(prefix) :]
+    return bool(leaf) and "/" not in leaf and (leaf.endswith("_key") or leaf.endswith("_key.pub"))
+
+
 def _drop_volatile_path(logical: str) -> bool:
-    if logical in _DROP_PATHS:
+    if logical in _DROP_PATHS or _generated_ssh_host_key(logical):
         return True
     return any(logical.startswith(prefix) for prefix in _DROP_PREFIXES)
 
@@ -164,24 +189,95 @@ def _canonical_shadow(data: bytes) -> tuple[bytes, int]:
 def _canonical_member(member: tarfile.TarInfo) -> tarfile.TarInfo:
     result = copy.copy(member)
     result.mtime = _CANONICAL_MTIME
-    # Preserve security/xattr PAX keys, but remove host-observation timestamps and
-    # normalize an explicit extended mtime when present.
+    # Preserve security/xattr PAX keys and other semantic metadata, but remove PAX
+    # fields whose meaning is already represented by canonical TarInfo attributes.
+    # Keeping an explicit "mtime=0" in only one of two otherwise identical archives
+    # would itself create A/B byte drift, so timestamp PAX keys are omitted entirely.
     result.pax_headers = dict(member.pax_headers)
-    result.pax_headers.pop("atime", None)
-    result.pax_headers.pop("ctime", None)
-    if "mtime" in result.pax_headers:
-        result.pax_headers["mtime"] = str(_CANONICAL_MTIME)
+    for key in ("atime", "ctime", "mtime"):
+        result.pax_headers.pop(key, None)
     return result
+
+
+def _hardlink_plan(
+    members: list[tarfile.TarInfo], prefix: tuple[str, ...]
+) -> tuple[
+    dict[str, tarfile.TarInfo],
+    dict[str, tuple[str, str]],
+]:
+    """Return logical-member lookup and deterministic hardlink group plan.
+
+    Tar writers may choose either inode name as the payload owner for a hardlink pair.
+    That made independent rootfs builds differ even though extracted bytes were equal.
+    Canonical output chooses the lexicographically first path as the regular payload
+    owner and points every other path in the group at it.
+    """
+    by_logical: dict[str, tarfile.TarInfo] = {}
+    for member in members:
+        logical = _logical_path(_safe_parts(member.name), prefix)
+        if logical in by_logical:
+            raise RootfsError("rootfs archive contains duplicate logical member names")
+        by_logical[logical] = member
+
+    parent = {logical: logical for logical in by_logical}
+
+    def find(value: str) -> str:
+        root = value
+        while parent[root] != root:
+            root = parent[root]
+        while parent[value] != value:
+            next_value = parent[value]
+            parent[value] = root
+            value = next_value
+        return root
+
+    def union(left: str, right: str) -> None:
+        root_left = find(left)
+        root_right = find(right)
+        if root_left != root_right:
+            if root_left < root_right:
+                parent[root_right] = root_left
+            else:
+                parent[root_left] = root_right
+
+    for logical, member in by_logical.items():
+        if not member.islnk():
+            continue
+        target = _logical_link_path(member.linkname, prefix)
+        if target not in by_logical:
+            raise RootfsError(f"rootfs hardlink target is missing: {member.linkname}")
+        union(logical, target)
+
+    groups: dict[str, list[str]] = {}
+    for logical in by_logical:
+        groups.setdefault(find(logical), []).append(logical)
+
+    plan: dict[str, tuple[str, str]] = {}
+    for paths in groups.values():
+        if len(paths) < 2 or not any(by_logical[path].islnk() for path in paths):
+            continue
+        ordered = sorted(paths)
+        regular = sorted(path for path in ordered if by_logical[path].isfile())
+        if not regular:
+            raise RootfsError("rootfs hardlink group has no regular payload owner")
+        anchor = ordered[0]
+        payload_source = regular[0]
+        for path in ordered:
+            plan[path] = (anchor, payload_source)
+    return by_logical, plan
 
 
 def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> RootfsCanonicalizationEvidence:
     """Rewrite one built rootfs into the deterministic comparison/release form.
 
     Reviewed normalization policy:
-    * all tar member mtimes -> epoch 0;
+    * all tar member mtimes -> epoch 0 and explicit timestamp PAX keys removed;
+    * members -> deterministic logical-path order;
+    * hardlink groups -> deterministic lexicographic payload owner/link direction;
     * machine-id/dbus machine-id/fake-hwclock payloads -> empty;
+    * generated OpenSSH host keys -> omitted for safe first-boot regeneration;
     * password hashes and password-aging build dates in /etc/shadow -> locked/canonical;
-    * package-download/index caches, font/man/ldconfig caches and build logs -> omitted;
+    * package-download/index caches, command-not-found DB, font/man/ldconfig caches and build logs -> omitted;
     * runtime random seeds -> omitted so target devices never inherit build-host entropy.
 
     No package payload, configuration file or persistent application state is otherwise
@@ -218,8 +314,14 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
                     raise RootfsError("rootfs archive contains duplicate member names")
                 seen_names.add(member.name)
 
+            by_logical, hardlinks = _hardlink_plan(members, prefix)
+            ordered_members = sorted(
+                members,
+                key=lambda member: _logical_path(_safe_parts(member.name), prefix),
+            )
+
             with tarfile.open(destination_path, mode="w:xz", format=tarfile.PAX_FORMAT) as output:
-                for member in members:
+                for member in ordered_members:
                     parts = _safe_parts(member.name)
                     logical = _logical_path(parts, prefix)
                     if _drop_volatile_path(logical):
@@ -227,11 +329,33 @@ def canonicalize_rootfs_archive(source_path: Path, destination_path: Path) -> Ro
                         continue
 
                     normalized = _canonical_member(member)
-                    if member.mtime != _CANONICAL_MTIME or member.pax_headers.get("mtime") not in {None, "0"}:
+                    if member.mtime != _CANONICAL_MTIME or any(
+                        key in member.pax_headers for key in ("atime", "ctime", "mtime")
+                    ):
                         normalized_mtime_count += 1
 
                     payload = None
-                    if member.isfile():
+                    hardlink = hardlinks.get(logical)
+                    if hardlink is not None:
+                        anchor, payload_source = hardlink
+                        normalized.pax_headers.pop("linkpath", None)
+                        normalized.pax_headers.pop("size", None)
+                        if logical == anchor:
+                            source_member = by_logical[payload_source]
+                            extracted = source.extractfile(source_member)
+                            if extracted is None:
+                                raise RootfsError(
+                                    f"cannot read hardlink payload source: {source_member.name}"
+                                )
+                            normalized.type = tarfile.REGTYPE
+                            normalized.linkname = ""
+                            normalized.size = source_member.size
+                            payload = extracted
+                        else:
+                            normalized.type = tarfile.LNKTYPE
+                            normalized.linkname = _archive_path(anchor, prefix)
+                            normalized.size = 0
+                    elif member.isfile():
                         extracted = source.extractfile(member)
                         if extracted is None:
                             raise RootfsError(f"cannot read regular rootfs member: {member.name}")
