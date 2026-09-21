@@ -7,39 +7,57 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "windows-beta-test-candidate.yml"
 RUNBOOK = ROOT / "docs" / "AC2003_FIRST_TEST.md"
 VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
+SMOKE = ROOT / "scripts" / "smoke_windows_beta_test_candidate.ps1"
+PACKAGER = ROOT / "scripts" / "package_windows_beta_test_candidate.ps1"
+WINDOWS_EXTRACTOR_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
 
 
-def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -> None:
+def test_workflow_builds_exact_integrated_windows_candidate() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    exact_head = "${{ github.event.pull_request.head.sha || github.sha }}"
 
-    assert "push:" in workflow
-    assert "branches: [main]" in workflow
-    assert '"kaliphonestudio/physical_first_test_session.py"' in workflow
-    assert '"tests/test_physical_first_test_session.py"' in workflow
-    assert '"kaliphonestudio/physical_boot_identity_operator.py"' in workflow
-    assert '"kaliphonestudio/physical_boot_identity_binding.py"' in workflow
-    assert '"kaliphonestudio/physical_recovery_operator.py"' in workflow
-    assert '"kaliphonestudio/physical_recovery_readiness.py"' in workflow
-    assert '"tests/test_physical_boot_identity_operator.py"' in workflow
-    assert '"tests/test_physical_boot_identity_binding.py"' in workflow
-    assert '"tests/test_physical_recovery_operator.py"' in workflow
-    assert '"tests/test_physical_recovery_readiness.py"' in workflow
-    assert "runs-on: windows-latest" in workflow
-    assert 'python-version: "3.12"' in workflow
-    assert "./scripts/build_windows.ps1" in workflow
-    assert "tests/test_windows_beta_test_candidate_contract.py" in workflow
-    assert "tests/test_operator_beta_release_evidence_cli.py" in workflow
-    assert "tests/test_physical_fastboot_capture.py" in workflow
-    assert "tests/test_physical_first_test_session.py" in workflow
-    assert "tests/test_stock_baseline_ingress.py" in workflow
-    assert "tests/test_physical_candidate_operator.py" in workflow
-    assert "tests/test_physical_boot_identity_operator.py" in workflow
-    assert "tests/test_physical_boot_identity_binding.py" in workflow
-    assert "tests/test_physical_recovery_operator.py" in workflow
-    assert "tests/test_physical_recovery_readiness.py" in workflow
-    assert "tests/test_temporary_boot_execution.py" in workflow
+    for needle in (
+        "push:",
+        "branches: [main]",
+        f"ref: {exact_head}",
+        'python-version: "3.12"',
+        "actions/setup-go@v6",
+        'go-version: "1.27.0"',
+        "mingw-w64-x86_64-gcc",
+        "mingw-w64-x86_64-xz",
+        "CGO_ENABLED=1",
+        "./scripts/build_windows.ps1",
+        './scripts/build_windows_operator_extractor.ps1 -OutputDir "dist/operator-tools"',
+        './scripts/smoke_windows_beta_test_candidate.ps1 -CandidateRoot "dist"',
+        "./scripts/package_windows_beta_test_candidate.ps1",
+        f'-SourceCommit "{exact_head}"',
+        "tests/test_windows_operator_extractor_contract.py",
+        "tests/test_windows_beta_test_candidate_contract.py",
+        "actions/upload-artifact@v4",
+        "KaliPhoneStudio-AC2003-beta-test-candidate.zip",
+        "KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256",
+        "retention-days: 7",
+    ):
+        assert needle in workflow
 
-    for command in (
+    for forbidden in (
+        "softprops/action-gh-release",
+        "gh release create",
+        "actions/create-release",
+    ):
+        assert forbidden not in workflow
+
+
+def test_frozen_smoke_covers_bundled_extractor_and_fail_closed_operator_surface() -> None:
+    smoke = SMOKE.read_text(encoding="utf-8")
+
+    for needle in (
+        "operator-tools",
+        "payload-dumper-go.exe",
+        "tools\\extractor-locks.json",
+        "Get-FileHash -Algorithm SHA256",
+        "all_non_system_imports_resolved",
+        '$env:PATH = "$env:SystemRoot\\System32;$env:SystemRoot"',
         "begin-physical-test-session",
         "capture-fastboot-baseline",
         "extract-stock-boot-from-ota",
@@ -47,131 +65,104 @@ def test_beta_test_candidate_workflow_freezes_exact_windows_operator_surface() -
         "bind-physical-candidate-gate",
         "bind-physical-boot-identity",
         "build-physical-recovery-readiness",
+        "prepare-physical-candidate-offline",
         "prepare-temporary-boot-offer",
         "execute-temporary-boot-once",
         "build-beta-artifact-inventory",
         "build-beta-review-manifest",
+        "should-not-session",
+        "should-not-capture",
+        "should-not-stock",
+        "should-not-boot-identity.json",
+        "should-not-recovery-readiness.json",
+        "should-not-probe.json",
+        "should-not-execute.json",
+        "should-not-inventory.json",
+        "$LASTEXITCODE -ne 2",
+        "Physical interaction performed: false",
     ):
-        assert command in workflow
+        assert needle in smoke
 
-    assert "--confirm-token" in workflow
-    assert "--extractor-platform" in workflow
-    assert "--candidate-dtbo" in workflow
-    assert "--boot-identity-binding" in workflow
-    assert "--stock-boot" in workflow
-    assert "no device i/o" in workflow
-    assert "no device command" in workflow
-    assert "--execute-temporary-boot" in workflow
-    assert "$LASTEXITCODE -ne 2" in workflow
-    assert "$global:LASTEXITCODE = 0" in workflow
+    assert "--extractor $Extractor" in smoke
+    assert "--execute-temporary-boot" not in smoke
+    for forbidden in ("fastboot flash ", "fastboot erase ", "fastboot set_active "):
+        assert forbidden not in smoke.lower()
 
-    for refused_path in (
-        "dist/should-not-session",
-        "dist/should-not-capture",
-        "dist/should-not-stock",
-        "dist/should-not-boot-identity.json",
-        "dist/should-not-recovery-readiness.json",
-        "dist/should-not-probe.json",
-        "dist/should-not-execute.json",
-        "dist/should-not-inventory.json",
+
+def test_packager_includes_exact_operator_tools_in_integrity_set_and_zip() -> None:
+    packager = PACKAGER.read_text(encoding="utf-8")
+
+    for needle in (
+        "operator-tools",
+        "payload-dumper-go.exe",
+        "operator-extractor-manifest.json",
+        "operator-extractor-runtime.json",
+        "payload-dumper-go-LICENSE.txt",
+        "operator_extractor_included = $true",
+        'operator_extractor_platform = "windows-amd64"',
+        "operator_extractor_sha256 = $ExpectedExtractorSha",
+        "operator_extractor_runtime_dependency_count",
+        "BETA_TEST_CANDIDATE_SHA256.txt",
+        "BETA_TEST_CANDIDATE_INFO.json",
+        "START_HERE.txt",
+        "AC2003_FIRST_TEST.md",
+        "WINDOWS_OPERATOR_EXTRACTOR.md",
+        "verify-candidate.ps1",
+        "$Files += Get-ChildItem -Path $Target -Recurse -File",
+        "$GuiRoot, $CliRoot, $ToolsRoot, $OperatorPack",
+        "KaliPhoneStudio-AC2003-beta-test-candidate.zip",
+        "physical_gate_passed = $false",
+        "hardware_verified = $false",
+        "beta_release = $false",
+        "beta_gate_credit = $false",
     ):
-        assert refused_path in workflow
+        assert needle in packager
+
+    assert "no separate download/search required" in packager
+    for forbidden in ("gh release", "fastboot flash ", "phone_storage_written = $true"):
+        assert forbidden not in packager.lower()
 
 
-def test_beta_test_candidate_is_bound_to_exact_source_head_not_pr_merge_sha() -> None:
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    exact_source_expression = "${{ github.event.pull_request.head.sha || github.sha }}"
-
-    # pull_request normally sets github.sha to a synthetic merge commit. The
-    # candidate must use the PR head there, while push/workflow_dispatch naturally
-    # resolve to the exact checked-out commit through github.sha.
-    assert f"ref: {exact_source_expression}" in workflow
-    assert f'git_commit = "{exact_source_expression}"' in workflow
-    assert f"KaliPhoneStudio-AC2003-beta-test-candidate-{exact_source_expression}" in workflow
-    assert 'git_commit = "${{ github.sha }}"' not in workflow
-    assert "KaliPhoneStudio-AC2003-beta-test-candidate-${{ github.sha }}" not in workflow
-
-
-def test_beta_test_candidate_contains_exact_operator_pack_and_integrity_files() -> None:
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    for source, staged in (
-        ("docs/AC2003_FIRST_TEST.md", "dist/operator-pack/AC2003_FIRST_TEST.md"),
-        ("docs/BETA_RELEASE_OPERATOR_WORKSPACE.md", "dist/operator-pack/BETA_RELEASE_OPERATOR_WORKSPACE.md"),
-        ("BETA_RELEASE_GATE.md", "dist/operator-pack/BETA_RELEASE_GATE.md"),
-        ("BUILD_STATUS.json", "dist/operator-pack/BUILD_STATUS.json"),
-        ("devices/oneplus/avicii/profile.json", "dist/operator-pack/profile.json"),
-        ("tools/fastboot-tool-policy.json", "dist/operator-pack/fastboot-tool-policy.json"),
-        ("tools/extractor-locks.json", "dist/operator-pack/extractor-locks.json"),
-        ("scripts/verify_windows_beta_test_candidate.ps1", "dist/operator-pack/verify-candidate.ps1"),
-    ):
-        assert source in workflow
-        assert staged in workflow
-
-    assert "BETA_TEST_CANDIDATE_SHA256.txt" in workflow
-    assert "BETA_TEST_CANDIDATE_INFO.json" in workflow
-    assert 'Get-Item "dist/BETA_TEST_CANDIDATE_INFO.json"' in workflow
-    assert '& pwsh -NoProfile -File "dist/operator-pack/verify-candidate.ps1" -CandidateRoot "dist"' in workflow
-    assert "KaliPhoneStudio-AC2003-beta-test-candidate.zip" in workflow
-    assert "KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256" in workflow
-    assert "actions/upload-artifact@v4" in workflow
-    assert "retention-days: 7" in workflow
-
-
-def test_candidate_metadata_cannot_claim_physical_or_beta_success() -> None:
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert 'kind = "kaliphonestudio-unsigned-ac2003-beta-test-candidate"' in workflow
-    assert 'profile_id = "oneplus/avicii"' in workflow
-    assert "signed = $false" in workflow
-    assert "physical_gate_passed = $false" in workflow
-    assert "hardware_verified = $false" in workflow
-    assert "beta_release = $false" in workflow
-    assert "beta_gate_credit = $false" in workflow
-
-    forbidden_publishers = (
-        "softprops/action-gh-release",
-        "gh release create",
-        "actions/create-release",
-        "release_publication_allowed = $true",
-        "beta_release = $true",
-        "hardware_verified = $true",
-        "beta_gate_credit = $true",
-    )
-    for needle in forbidden_publishers:
-        assert needle not in workflow
-
-
-def test_offline_candidate_verifier_checks_hashes_and_non_release_flags() -> None:
+def test_offline_candidate_verifier_rechecks_operator_tool_lock_and_runtime_closure() -> None:
     verifier = VERIFIER.read_text(encoding="utf-8")
 
-    assert "BETA_TEST_CANDIDATE_INFO.json" in verifier
-    assert "BETA_TEST_CANDIDATE_SHA256.txt" in verifier
-    assert "Get-FileHash -Algorithm SHA256" in verifier
-    assert "Manifest path escapes candidate root" in verifier
-    assert "SHA-256 mismatch" in verifier
-    assert '"kaliphonestudio-unsigned-ac2003-beta-test-candidate"' in verifier
-    assert '"oneplus/avicii"' in verifier
-    assert "$Info.physical_gate_passed -ne $false" in verifier
-    assert "$Info.hardware_verified -ne $false" in verifier
-    assert "$Info.beta_release -ne $false" in verifier
-    assert "$Info.beta_gate_credit -ne $false" in verifier
+    for needle in (
+        "BETA_TEST_CANDIDATE_INFO.json",
+        "BETA_TEST_CANDIDATE_SHA256.txt",
+        "Get-FileHash -Algorithm SHA256",
+        "Manifest path escapes candidate root",
+        "SHA-256 mismatch",
+        '"kaliphonestudio-unsigned-ac2003-beta-test-candidate"',
+        '"oneplus/avicii"',
+        "operator_extractor_included",
+        "operator_extractor_platform",
+        "operator_extractor_sha256",
+        "operator-tools",
+        "payload-dumper-go.exe",
+        "operator-extractor-manifest.json",
+        "operator-extractor-runtime.json",
+        "payload-dumper-go-LICENSE.txt",
+        "all_non_system_imports_resolved",
+        "$Info.physical_gate_passed -ne $false",
+        "$Info.hardware_verified -ne $false",
+        "$Info.beta_release -ne $false",
+        "$Info.beta_gate_credit -ne $false",
+    ):
+        assert needle in verifier
 
-    forbidden = (
+    for forbidden in (
         "Invoke-WebRequest",
         "Invoke-RestMethod",
         "Start-BitsTransfer",
         "fastboot ",
         "adb ",
         "gh release",
-    )
-    for needle in forbidden:
-        assert needle not in verifier
+    ):
+        assert forbidden not in verifier
 
 
-def test_ac2003_first_test_runbook_is_recovery_first_and_exact_evidence_driven() -> None:
+def test_runbook_is_recovery_first_and_uses_packaged_candidate_contract() -> None:
     runbook = RUNBOOK.read_text(encoding="utf-8")
-
     assert "OnePlus Nord AC2003" in runbook
     assert "oneplus/avicii" in runbook
     assert "not a public Beta" in runbook
@@ -197,24 +188,25 @@ def test_ac2003_first_test_runbook_is_recovery_first_and_exact_evidence_driven()
 
     assert '--confirm-token "AC2003"' in runbook
     assert "--extractor-platform windows-amd64" in runbook
-    assert '--boot-identity-binding "$Session\\physical-boot-identity.json"' in runbook
-    assert '--recovery-readiness "$Session\\physical-recovery-readiness.json"' in runbook
     assert "--execute-temporary-boot" in runbook
     assert "A Fastboot return code is not proof that Kali booted" in runbook
     assert "exercised recovery/rollback" in runbook
 
 
-def test_runbook_does_not_recommend_persistent_fastboot_write_commands() -> None:
-    runbook = RUNBOOK.read_text(encoding="utf-8")
-
-    # The words may appear in explicit stop-condition prose, but the runbook must
-    # not present any of them as executable Fastboot command examples.
-    forbidden_command_fragments = (
+def test_no_persistent_fastboot_write_examples_are_present() -> None:
+    texts = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (RUNBOOK, VERIFIER, SMOKE, PACKAGER)
+    ).lower()
+    for fragment in (
         "fastboot flash ",
         "fastboot erase ",
         "fastboot set_active ",
         "fastboot flashing ",
-    )
-    lowered = runbook.lower()
-    for fragment in forbidden_command_fragments:
-        assert fragment not in lowered
+    ):
+        assert fragment not in texts
+
+
+def test_exact_windows_extractor_digest_remains_the_reviewed_authority() -> None:
+    locks = (ROOT / "tools" / "extractor-locks.json").read_text(encoding="utf-8")
+    assert WINDOWS_EXTRACTOR_SHA256 in locks
