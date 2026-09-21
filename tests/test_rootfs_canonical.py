@@ -31,7 +31,9 @@ def _add_hardlink(
     info = tarfile.TarInfo(name)
     info.type = tarfile.LNKTYPE
     info.linkname = target
-    info.mode = 0o755
+    # A hardlink shares inode metadata with its payload owner. Keep the synthetic
+    # fixture metadata equal so this test isolates only the real A/B orientation drift.
+    info.mode = 0o644
     info.uid = 0
     info.gid = 0
     info.uname = "root"
