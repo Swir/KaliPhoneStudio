@@ -9,6 +9,12 @@
     "toolchain": "go",
     "toolchain_version": "1.27.0",
     "command": ["go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", "payload-dumper-go", "."],
+    "platform_overrides": {
+      "windows-amd64": {
+        "linkage": "static",
+        "ldflags": "-buildid= -extldflags=-static"
+      }
+    },
     "native_dependencies": {
       "windows-amd64": {
         "distribution": "MSYS2 mingw64",
@@ -24,7 +30,7 @@
         }
       }
     },
-    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux hash was accepted after GitHub Actions extractor-repro run 35018283145 built twice byte-for-byte. The Windows native dependency revision changed after the first review; rerun job 106194233866 on 2026-09-21 built the same pinned source twice with the recorded MSYS2 package set and proved byte-for-byte equality before the Windows hash below was refreshed. Future package drift must fail closed instead of silently replacing this authority."
+    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. Windows uses static external linkage, matching upstream's release intent, because the prior dynamically linked byte-identical build could not start on a clean Windows PATH without MSYS2 runtime DLLs. The exact Windows native package set remains locked and future package drift must fail closed. The Windows artifact hash must only be refreshed after a fresh static A/B reproducibility run proves byte-for-byte equality."
   },
   "artifacts": {
     "linux-amd64": {
