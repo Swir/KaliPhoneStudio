@@ -10,17 +10,28 @@ Keep the extracted package together. It should contain:
 
 - `KaliPhoneStudio/` — frozen GUI;
 - `KaliPhoneStudioCLI/` — frozen CLI;
+- `operator-tools/payload-dumper-go.exe` plus its exact side-by-side runtime DLL closure;
+- `operator-tools/operator-extractor-manifest.json` and `operator-extractor-runtime.json`;
+- `operator-pack/START_HERE.txt`;
 - `operator-pack/AC2003_FIRST_TEST.md` — this file;
 - `operator-pack/BETA_RELEASE_OPERATOR_WORKSPACE.md`;
+- `operator-pack/WINDOWS_OPERATOR_EXTRACTOR.md`;
 - `operator-pack/BETA_RELEASE_GATE.md`;
 - `operator-pack/BUILD_STATUS.json`;
 - `operator-pack/profile.json` — exact packaged `oneplus/avicii` profile;
 - `operator-pack/fastboot-tool-policy.json`;
 - `operator-pack/extractor-locks.json`;
+- `operator-pack/verify-candidate.ps1`;
 - `BETA_TEST_CANDIDATE_SHA256.txt`;
 - `BETA_TEST_CANDIDATE_INFO.json`.
 
-Verify the ZIP SHA-256 before using the package. Then keep all evidence from one phone/firmware attempt under one fresh session directory; do not overwrite or recycle files from an older attempt.
+Verify the ZIP SHA-256 before using the package. Then verify the extracted package itself before connecting the phone:
+
+```powershell
+pwsh -NoProfile -File .\operator-pack\verify-candidate.ps1 -CandidateRoot .
+```
+
+Keep all evidence from one phone/firmware attempt under one fresh session directory; do not overwrite or recycle files from an older attempt.
 
 ## Safety stop conditions
 
@@ -37,13 +48,19 @@ Stop immediately if any of these are true:
 
 The first physical sequence below uses read-only capture and offline binding first. The only physical boot command later in the chain is the explicitly gated one-shot temporary `fastboot boot` path.
 
-## 0. Prepare the Windows host
+## 0. Prepare the Windows host once
 
-Open PowerShell in the extracted candidate directory and define the frozen CLI:
+Open PowerShell in the extracted candidate directory and define the exact packaged tools once for the whole session:
 
 ```powershell
 $Cli = (Resolve-Path ".\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe").Path
+$Extractor = (Resolve-Path ".\operator-tools\payload-dumper-go.exe").Path
+$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path
 ```
+
+`$Extractor` is already the exact reviewed `payload-dumper-go.exe` bundled in the candidate. Do **not** download or search for another extractor. Keep its runtime DLLs beside it exactly as packaged.
+
+Android Platform-Tools/Fastboot remains a separate operator dependency. Use one exact Fastboot executable accepted by `operator-pack/fastboot-tool-policy.json` for the whole evidence session; do not substitute another Fastboot binary after capture starts.
 
 Run the packaged host checks before connecting the phone:
 
@@ -52,8 +69,6 @@ Run the packaged host checks before connecting the phone:
 & $Cli --doctor --profile-id oneplus/avicii --json
 & $Cli --recovery-guide --profile-id oneplus/avicii --json
 ```
-
-Use an exact Fastboot executable accepted by `operator-pack/fastboot-tool-policy.json`. The current repository policy is exact-version, not floating-latest. Do not substitute an unreviewed Fastboot binary after evidence capture has started.
 
 ## 1. Record the exact phone firmware before Fastboot capture
 
@@ -81,7 +96,7 @@ Replace the angle-bracket values with the exact observations from this phone:
   --firmware-build "<EXACT_OXYGENOS_BUILD>" `
   --firmware-fingerprint "<EXACT_FIRMWARE_FINGERPRINT>" `
   --confirm-token "AC2003" `
-  --fastboot "<PATH_TO_REVIEWED_FASTBOOT_EXE>" `
+  --fastboot "$Fastboot" `
   --session-dir "$Session"
 ```
 
@@ -109,120 +124,73 @@ Use the OTA that matches the captured physical firmware exactly. Do not use a ne
 
 KaliPhoneStudio does not silently download firmware. Keep the exact local OTA as evidence input.
 
-## 4. Extract and validate stock `boot.img` offline
+## 4. One-command offline physical-candidate preparation
 
-Use a local `payload-dumper-go` executable whose SHA-256 matches the exact platform entry in `operator-pack/extractor-locks.json`. For Windows x64 use the `windows-amd64` lock key.
+After the read-only session exists and the exact matching OTA is available, use the packaged extractor and the reviewed candidate inputs in **one** host-only command:
 
 ```powershell
-& $Cli extract-stock-boot-from-ota `
+& $Cli prepare-physical-candidate-offline `
   --profile-id oneplus/avicii `
-  --ota "<PATH_TO_EXACT_OTA_ZIP>" `
-  --extractor "<PATH_TO_REVIEWED_PAYLOAD_DUMPER_GO_EXE>" `
+  --session-dir "$Session" `
+  --ota "<PATH_TO_EXACT_MATCHING_OXYGENOS_OTA>" `
+  --extractor "$Extractor" `
   --extractor-platform windows-amd64 `
-  --out-dir "$Session\stock"
+  --first-boot-manifest "<EXACT_FIRST_BOOT_MANIFEST_JSON>" `
+  --authority-bundle "<EXACT_AUTHORITY_BUNDLE_JSON>" `
+  --boot-authorization "<EXACT_TEMPORARY_BOOT_AUTHORIZATION_JSON>" `
+  --boot-plan "<EXACT_BOOT_PLAN_JSON>" `
+  --candidate-boot "<EXACT_CANDIDATE_BOOT_IMG>" `
+  --candidate-dtbo "<EXACT_CANDIDATE_DTBO_IMG>" `
+  --fastboot-executable "$Fastboot"
 ```
 
-This is host-only. It materializes the exact `payload.bin`, extracts only the required stock boot image, validates boot structure against the profile and emits create-only provenance. It does not query or modify the phone.
+For `oneplus/avicii`, provide the exact candidate DTBO required by the reviewed boot plan.
 
-Expected stock paths include:
+This single command performs the already-tested host-only chain in order:
+
+1. `extract-stock-boot-from-ota` — exact OTA → `payload.bin` → matching stock `boot.img` + provenance;
+2. `bind-physical-stock-baseline` — bind captured Fastboot baseline to exact stock provenance;
+3. `bind-physical-candidate-gate` — bind the reviewed candidate to that physical baseline;
+4. `bind-physical-boot-identity` — re-inspect and hash the exact stock/candidate boot-chain bytes;
+5. `prepare-temporary-boot-offer` — prepare the serial-bound, non-executing temporary-boot offer;
+6. `build-physical-recovery-readiness` — bind exact local stock `boot.img`, A/B slot context and recovery prerequisites;
+7. final stable re-hash — commit `physical-candidate-offline-preparation.json` only if every stage still matches.
+
+It does **not** contact the phone, run ADB/Fastboot, boot/reboot, switch slots, mount storage or authorize a persistent write.
+
+Expected outputs include:
 
 ```text
 <session>/stock/payload.bin
 <session>/stock/partitions/boot.img
 <session>/stock/stock-provenance.json
 <session>/stock/stock-extraction-report.json
+<session>/physical-stock-baseline.json
+<session>/physical-candidate-gate.json
+<session>/physical-boot-identity.json
+<session>/temporary-boot-offer.json
+<session>/physical-recovery-readiness.json
+<session>/physical-candidate-offline-preparation.json
 ```
 
-## 5. Bind the real baseline to the exact stock firmware
+Do not continue if any stage refuses identity, firmware, source lock, structure, hash, boot-plan or recovery state.
 
-After the baseline and stock provenance both exist:
+## 5. Review the exact temporary-boot and recovery state
 
-```powershell
-& $Cli bind-physical-stock-baseline `
-  --profile-id oneplus/avicii `
-  --baseline-evidence "$Session\fastboot\fastboot-baseline.json" `
-  --capture-evidence "$Session\fastboot\fastboot-capture-bundle.json" `
-  --stock-provenance "$Session\stock\stock-provenance.json" `
-  --out "$Session\physical-stock-baseline.json"
-```
+Before any physical boot, review:
 
-This remains offline and does not authorize temporary boot.
+- `$Session\physical-candidate-offline-preparation.json`;
+- `$Session\physical-candidate-gate.json`;
+- `$Session\physical-boot-identity.json`;
+- `$Session\temporary-boot-offer.json`;
+- `$Session\physical-recovery-readiness.json`;
+- `$Session\stock\partitions\boot.img` and its bound provenance.
 
-## 6. Bind the exact physical candidate
+`physical-recovery-readiness.json` must still report `ready_for_temporary_boot_safety_review=true` while slot switching, inactive-slot writes, persistent writes, rollback/recovery verification, hardware verification and Beta credit remain false.
 
-Do not invent these inputs. Use only the exact reviewed candidate files generated from the same repository candidate/authority chain:
+The temporary executor requires those exact inputs again and performs a fresh read-only device/slot probe immediately before the one allowed temporary boot.
 
-- first-boot manifest;
-- authority bundle;
-- temporary-boot authorization;
-- boot build plan;
-- candidate boot image;
-- external candidate DTBO when required by the profile.
-
-Bind the exact physical candidate only after those files match the real stock baseline:
-
-```powershell
-& $Cli bind-physical-candidate-gate `
-  --profile-id oneplus/avicii `
-  --physical-baseline "$Session\physical-stock-baseline.json" `
-  --first-boot-manifest "<EXACT_FIRST_BOOT_MANIFEST_JSON>" `
-  --authority-bundle "<EXACT_AUTHORITY_BUNDLE_JSON>" `
-  --boot-authorization "<EXACT_TEMPORARY_BOOT_AUTHORIZATION_JSON>" `
-  --boot-plan "<EXACT_BOOT_PLAN_JSON>" `
-  --out "$Session\physical-candidate-gate.json"
-```
-
-Now re-inspect and bind the exact local stock/candidate boot-chain bytes to that physical candidate. For the current `oneplus/avicii` profile, provide the exact external candidate DTBO required by the reviewed boot plan:
-
-```powershell
-& $Cli bind-physical-boot-identity `
-  --profile-id oneplus/avicii `
-  --physical-baseline "$Session\physical-stock-baseline.json" `
-  --physical-candidate-gate "$Session\physical-candidate-gate.json" `
-  --stock-provenance "$Session\stock\stock-provenance.json" `
-  --boot-plan "<EXACT_BOOT_PLAN_JSON>" `
-  --stock-boot "$Session\stock\partitions\boot.img" `
-  --candidate-boot "<EXACT_CANDIDATE_BOOT_IMG>" `
-  --candidate-dtbo "<EXACT_CANDIDATE_DTBO_IMG>" `
-  --out "$Session\physical-boot-identity.json"
-```
-
-This command is offline. It re-inspects boot components and optional AVB layout, hashes the exact local bytes again and refuses identity drift. It performs no Fastboot/ADB operation and grants no hardware/Beta credit.
-
-Then prepare, but do not execute, the serial-bound temporary-boot offer:
-
-```powershell
-& $Cli prepare-temporary-boot-offer `
-  --profile-id oneplus/avicii `
-  --physical-candidate-gate "$Session\physical-candidate-gate.json" `
-  --capture-bundle "$Session\fastboot\fastboot-capture-bundle.json" `
-  --fastboot-tool-evidence "$Session\fastboot\fastboot-tool.json" `
-  --fastboot-executable "<PATH_TO_THE_SAME_REVIEWED_FASTBOOT_EXE>" `
-  --boot-image "<EXACT_CANDIDATE_BOOT_IMG>" `
-  --out "$Session\temporary-boot-offer.json"
-```
-
-Review the generated argv and evidence before any physical boot.
-
-## 7. Build the recovery-readiness gate before temporary boot
-
-Create the exact recovery-readiness record from the same captured baseline, physical stock baseline and boot-identity binding. The command re-hashes the locally present matching stock `boot.img` and binds the captured A/B slot context; it does not access the phone:
-
-```powershell
-& $Cli build-physical-recovery-readiness `
-  --profile-id oneplus/avicii `
-  --baseline-evidence "$Session\fastboot\fastboot-baseline.json" `
-  --physical-baseline "$Session\physical-stock-baseline.json" `
-  --boot-identity-binding "$Session\physical-boot-identity.json" `
-  --stock-boot "$Session\stock\partitions\boot.img" `
-  --out "$Session\physical-recovery-readiness.json"
-```
-
-Do not continue unless this exact output has been reviewed and still reports `ready_for_temporary_boot_safety_review=true` while keeping slot switching, inactive-slot writes, persistent writes, rollback/recovery verification, hardware verification and Beta credit false.
-
-The temporary executor requires all of those exact inputs again and performs a fresh read-only device/slot probe immediately before the one allowed temporary boot.
-
-## 8. One-shot temporary boot — explicit manual action
+## 6. One-shot temporary boot — explicit manual action
 
 Only when the recovery-readiness evidence has been reviewed and the candidate is exact, run the executor with the explicit opt-in. The command intentionally has no persistent write verb:
 
@@ -237,7 +205,7 @@ Only when the recovery-readiness evidence has been reviewed and the candidate is
   --capture-bundle "$Session\fastboot\fastboot-capture-bundle.json" `
   --baseline-evidence "$Session\fastboot\fastboot-baseline.json" `
   --fastboot-tool-evidence "$Session\fastboot\fastboot-tool.json" `
-  --fastboot-executable "<PATH_TO_THE_SAME_REVIEWED_FASTBOOT_EXE>" `
+  --fastboot-executable "$Fastboot" `
   --boot-image "<EXACT_CANDIDATE_BOOT_IMG>" `
   --confirmation "AC2003" `
   --execute-temporary-boot `
@@ -247,7 +215,7 @@ Only when the recovery-readiness evidence has been reviewed and the candidate is
 
 A Fastboot return code is not proof that Kali booted. Preserve the phone-side console/rescue transcript and continue only through the reviewed physical evidence chain.
 
-## 9. After temporary boot
+## 7. After temporary boot
 
 Capture and review, in order:
 
@@ -267,7 +235,7 @@ Capture and review, in order:
 
 Use `KaliPhoneStudioCLI.exe evidence --help` and `operator-pack/BETA_RELEASE_OPERATOR_WORKSPACE.md` for the exact offline evidence commands. All evidence files from one campaign must remain tied to the same profile, serial, firmware, boot observation, rescue transcript/probe and reviewed candidate.
 
-## 10. Final Beta preparation remains offline until the physical gate passes
+## 8. Final Beta preparation remains offline until the physical gate passes
 
 After all required physical evidence is real and independently reviewed, the package exposes:
 
