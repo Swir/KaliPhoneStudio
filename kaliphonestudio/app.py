@@ -335,6 +335,13 @@ def _run_gui(devices_root: Path, initial_profile_id: str | None = None) -> int:
             export = QPushButton("Export diagnostics…")
             export.clicked.connect(self._export_bundle)
             actions.addWidget(export)
+            physical = QPushButton("Physical phone test…")
+            physical.clicked.connect(self._open_physical_wizard)
+            physical.setStyleSheet(
+                "QPushButton { background: #082034; color: #F4FAFF; border: 1px solid #62E5FF; "
+                "border-radius: 6px; padding: 7px 12px; font-weight: 700; }"
+            )
+            actions.addWidget(physical)
             actions.addStretch(1)
             layout.addLayout(actions)
 
@@ -404,6 +411,20 @@ def _run_gui(devices_root: Path, initial_profile_id: str | None = None) -> int:
                 self.details.setPlainText("Select a validated profile before opening recovery guidance.")
                 return
             self.details.setPlainText(format_recovery_guide(build_recovery_guide(self._profiles[profile_id])))
+
+        def _open_physical_wizard(self) -> None:
+            try:
+                from .physical_gui_wizard import create_physical_test_dialog
+
+                dialog = create_physical_test_dialog(
+                    self,
+                    self._root,
+                    self._selected_profile_id(),
+                )
+            except Exception as exc:
+                QMessageBox.critical(self, "Physical test wizard unavailable", str(exc))
+                return
+            dialog.exec()
 
         def _export_bundle(self) -> None:
             profile_id = self._selected_profile_id()
