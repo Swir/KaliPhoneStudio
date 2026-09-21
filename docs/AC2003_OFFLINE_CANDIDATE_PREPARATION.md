@@ -10,7 +10,7 @@ The command requires:
 
 - the fresh first-test session directory;
 - the exact OxygenOS OTA matching that session;
-- the source-locked `payload-dumper-go` executable and platform key;
+- the exact packaged `payload-dumper-go.exe` and platform key;
 - the exact reviewed first-boot manifest;
 - the reviewed authority bundle;
 - the exact temporary-boot authorization;
@@ -23,16 +23,18 @@ All supplied local artifacts are stable-file checked before the first preparatio
 
 ## Windows operator example
 
-From the extracted Windows Beta-test-candidate package:
+From the extracted Windows Beta-test-candidate package, use the extractor already shipped inside `operator-tools`; do not download or search for another copy:
 
 ```powershell
 $Cli = (Resolve-Path ".\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe").Path
+$Extractor = (Resolve-Path ".\operator-tools\payload-dumper-go.exe").Path
+$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path
 
 & $Cli prepare-physical-candidate-offline `
   --profile-id oneplus/avicii `
   --session-dir "$Session" `
   --ota "<PATH_TO_EXACT_MATCHING_OXYGENOS_OTA>" `
-  --extractor "<PATH_TO_REVIEWED_PAYLOAD_DUMPER_GO_EXE>" `
+  --extractor "$Extractor" `
   --extractor-platform windows-amd64 `
   --first-boot-manifest "<EXACT_FIRST_BOOT_MANIFEST_JSON>" `
   --authority-bundle "<EXACT_AUTHORITY_BUNDLE_JSON>" `
@@ -40,10 +42,12 @@ $Cli = (Resolve-Path ".\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe").Path
   --boot-plan "<EXACT_BOOT_PLAN_JSON>" `
   --candidate-boot "<EXACT_CANDIDATE_BOOT_IMG>" `
   --candidate-dtbo "<EXACT_CANDIDATE_DTBO_IMG>" `
-  --fastboot-executable "<SAME_REVIEWED_FASTBOOT_EXE>"
+  --fastboot-executable "$Fastboot"
 ```
 
 The current `oneplus/avicii` candidate requires the exact external candidate DTBO from the reviewed boot plan, so provide `--candidate-dtbo` for AC2003.
+
+The Windows candidate verifier already binds `operator-tools/payload-dumper-go.exe` to the packaged extractor lock and exact runtime-closure manifests. This command re-hashes the extractor again immediately before use, so replacing it after package creation cannot bypass the source/hash lock.
 
 ## Stages performed
 
