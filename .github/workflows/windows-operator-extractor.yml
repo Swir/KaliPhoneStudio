@@ -41,7 +41,7 @@ jobs:
 
   build-exact-windows-extractor:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
         with:
@@ -52,6 +52,27 @@ jobs:
         with:
           go-version: "1.27.0"
           cache: false
+
+      - name: Install reviewed Windows CGO and liblzma prerequisites
+        shell: pwsh
+        run: |
+          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-xz'
+          if ($LASTEXITCODE -ne 0) { throw "MSYS2 extractor prerequisites failed: $LASTEXITCODE" }
+          'C:\msys64\mingw64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          'CC=C:\msys64\mingw64\bin\gcc.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CXX=C:\msys64\mingw64\bin\g++.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_ENABLED=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_CFLAGS=-IC:/msys64/mingw64/include' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_LDFLAGS=-LC:/msys64/mingw64/lib' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify reviewed native toolchain visibility
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\msys64\mingw64\include\lzma.h')) { throw 'lzma.h is not installed' }
+          & $env:CC --version
+          if ($LASTEXITCODE -ne 0) { throw 'MinGW GCC is not executable' }
+          & go version
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Go toolchain is not executable' }
 
       - name: Build exact source-locked payload extractor
         shell: pwsh
@@ -73,6 +94,7 @@ jobs:
           if ($Actual -ne $Expected) { throw "Final extractor SHA-256 drift: $Actual" }
           if ($Manifest.source_commit -ne $Lock.source.commit) { throw "Manifest source commit drift" }
           if ($Manifest.go_toolchain_version -ne $Lock.build.toolchain_version) { throw "Manifest Go lock drift" }
+          if ($Manifest.cgo_enabled -ne $true) { throw "Manifest CGO contract drift" }
           if ($Manifest.executable_sha256 -ne $Expected) { throw "Manifest executable hash drift" }
           if ($Manifest.source_lock_verified -ne $true) { throw "Source lock was not verified" }
           if ($Manifest.executable_hash_verified -ne $true) { throw "Executable hash was not verified" }
@@ -89,7 +111,7 @@ jobs:
             if ($Manifest.$Field -ne $false) { throw "Unsafe manifest field: $Field" }
           }
 
-          $Actual | Set-Content -Encoding ascii "dist/operator-tools/payload-dumper-go.exe.sha256"
+          "$Actual  payload-dumper-go.exe" | Set-Content -Encoding ascii "dist/operator-tools/payload-dumper-go.exe.sha256"
 
       - name: Upload exact non-release operator tool
         uses: actions/upload-artifact@v4
