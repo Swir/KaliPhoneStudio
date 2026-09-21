@@ -1,0 +1,265 @@
+#!/bin/sh
+set -eu
+export PATH=/bin:/sbin
+
+KPS_POLICY="interactive-rootfs-stage-v1"
+
+usage() {
+    cat >&2 <<'EOF'
+usage: /sbin/kps-rootfs-stage-once \
+  --execution-gate FILE \
+  --execution-gate-sha256 SHA256 \
+  --archive FILE \
+  --rootfs-sha256 SHA256 \
+  --target-mount /mnt/kps-NAME \
+  --staging-subpath RELATIVE/PATH \
+  --required-free-bytes BYTES
+
+This helper is local-console only and never runs automatically. It refuses to
+mount, format, decrypt, flash, erase, change slots, reboot, or overwrite an
+existing staging path. The selected persistent target must already be mounted
+read-write under /mnt/kps-* after the operator has completed the reviewed
+physical evidence chain. A final exact interactive confirmation is mandatory.
+EOF
+    exit 64
+}
+
+fail() {
+    echo "KPS_ROOTFS_STAGE_ERROR=$1" >&2
+    exit 65
+}
+
+require_sha256() {
+    value="$1"
+    label="$2"
+    [ "${#value}" -eq 64 ] || fail "$label-invalid-sha256-length"
+    case "$value" in
+        *[!0-9a-f]*) fail "$label-invalid-sha256" ;;
+    esac
+}
+
+gate_file=""
+gate_sha=""
+archive=""
+rootfs_sha=""
+target_mount=""
+staging_subpath=""
+required_free_bytes=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --execution-gate)
+            [ "$#" -ge 2 ] || usage
+            gate_file="$2"
+            shift 2
+            ;;
+        --execution-gate-sha256)
+            [ "$#" -ge 2 ] || usage
+            gate_sha="$2"
+            shift 2
+            ;;
+        --archive)
+            [ "$#" -ge 2 ] || usage
+            archive="$2"
+            shift 2
+            ;;
+        --rootfs-sha256)
+            [ "$#" -ge 2 ] || usage
+            rootfs_sha="$2"
+            shift 2
+            ;;
+        --target-mount)
+            [ "$#" -ge 2 ] || usage
+            target_mount="$2"
+            shift 2
+            ;;
+        --staging-subpath)
+            [ "$#" -ge 2 ] || usage
+            staging_subpath="$2"
+            shift 2
+            ;;
+        --required-free-bytes)
+            [ "$#" -ge 2 ] || usage
+            required_free_bytes="$2"
+            shift 2
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+[ -n "$gate_file" ] || usage
+[ -n "$gate_sha" ] || usage
+[ -n "$archive" ] || usage
+[ -n "$rootfs_sha" ] || usage
+[ -n "$target_mount" ] || usage
+[ -n "$staging_subpath" ] || usage
+[ -n "$required_free_bytes" ] || usage
+
+require_sha256 "$gate_sha" "execution-gate"
+require_sha256 "$rootfs_sha" "rootfs"
+
+case "$required_free_bytes" in
+    *[!0-9]*|"") fail "required-free-bytes-invalid" ;;
+esac
+[ "$required_free_bytes" -gt 0 ] 2>/dev/null || fail "required-free-bytes-invalid"
+
+case "$target_mount" in
+    /mnt/kps-*) ;;
+    *) fail "target-mount-outside-kps-namespace" ;;
+esac
+case "$target_mount" in
+    *[!A-Za-z0-9._/-]*|*"/../"*|*"/./"*|*//*)
+        fail "target-mount-unsafe"
+        ;;
+esac
+case "$staging_subpath" in
+    /*|""|*[!A-Za-z0-9._/-]*|*"/../"*|*"/./"*|*//*)
+        fail "staging-subpath-unsafe"
+        ;;
+esac
+
+[ -f "$gate_file" ] || fail "execution-gate-not-regular-file"
+[ ! -L "$gate_file" ] || fail "execution-gate-symlink-refused"
+[ -f "$archive" ] || fail "rootfs-archive-not-regular-file"
+[ ! -L "$archive" ] || fail "rootfs-archive-symlink-refused"
+[ -d "$target_mount" ] || fail "target-mount-directory-missing"
+[ ! -L "$target_mount" ] || fail "target-mount-symlink-refused"
+mountpoint -q "$target_mount" || fail "target-is-not-a-mountpoint"
+
+actual_gate_sha="$(sha256sum "$gate_file" | cut -d ' ' -f1)"
+[ "$actual_gate_sha" = "$gate_sha" ] || fail "execution-gate-sha256-mismatch"
+
+actual_rootfs_sha="$(sha256sum "$archive" | cut -d ' ' -f1)"
+[ "$actual_rootfs_sha" = "$rootfs_sha" ] || fail "rootfs-sha256-mismatch"
+
+# The host emits canonical compact JSON. These checks intentionally verify only
+# the minimum execution-boundary contract; they do not reinterpret hardware
+# evidence or grant Beta credit.
+grep -F '"execution_gate_passed":true' "$gate_file" >/dev/null ||
+    fail "execution-gate-not-passed"
+grep -F '"explicit_operator_confirmation_required":true' "$gate_file" >/dev/null ||
+    fail "operator-confirmation-contract-missing"
+grep -F '"write_scope_confirmation_required":true' "$gate_file" >/dev/null ||
+    fail "write-scope-contract-missing"
+grep -F '"interactive_writer_required":true' "$gate_file" >/dev/null ||
+    fail "interactive-writer-contract-missing"
+grep -F '"physical_gate_still_incomplete":true' "$gate_file" >/dev/null ||
+    fail "physical-gate-contract-missing"
+grep -F '"persistent_write_authorized":false' "$gate_file" >/dev/null ||
+    fail "unexpected-persistent-write-authorization"
+grep -F '"raw_device_path_bound":false' "$gate_file" >/dev/null ||
+    fail "unexpected-prebound-raw-device"
+grep -F '"mount_target_bound":false' "$gate_file" >/dev/null ||
+    fail "unexpected-prebound-mount-target"
+grep -F "\"rootfs_artifact_sha256\":\"$rootfs_sha\"" "$gate_file" >/dev/null ||
+    fail "execution-gate-rootfs-mismatch"
+grep -F "\"staging_subpath\":\"$staging_subpath\"" "$gate_file" >/dev/null ||
+    fail "execution-gate-staging-subpath-mismatch"
+grep -F "\"required_free_bytes\":$required_free_bytes" "$gate_file" >/dev/null ||
+    fail "execution-gate-capacity-contract-mismatch"
+
+mount_source=""
+mount_fstype=""
+mount_options=""
+while read -r source mount_point fs_type options rest; do
+    if [ "$mount_point" = "$target_mount" ]; then
+        mount_source="$source"
+        mount_fstype="$fs_type"
+        mount_options="$options"
+        break
+    fi
+done < /proc/mounts
+
+[ -n "$mount_source" ] || fail "target-mount-not-found-in-proc-mounts"
+case "$mount_source" in
+    /dev/*) ;;
+    *) fail "target-mount-source-is-not-block-device-path" ;;
+esac
+[ -b "$mount_source" ] || fail "target-mount-source-is-not-block-device"
+
+case ",$mount_options," in
+    *,rw,*) ;;
+    *) fail "target-mount-is-not-read-write" ;;
+esac
+case "$mount_fstype" in
+    proc|sysfs|devtmpfs|devpts|tmpfs|overlay|squashfs)
+        fail "target-filesystem-refused"
+        ;;
+esac
+grep -F "\"observed_filesystem_type\":\"$mount_fstype\"" "$gate_file" >/dev/null ||
+    fail "live-filesystem-differs-from-execution-gate"
+
+available_kib="$(df -Pk "$target_mount" | tail -n 1 | tr -s ' ' | cut -d ' ' -f4)"
+case "$available_kib" in
+    *[!0-9]*|"") fail "cannot-read-target-free-space" ;;
+esac
+available_bytes=$((available_kib * 1024))
+[ "$available_bytes" -ge "$required_free_bytes" ] ||
+    fail "insufficient-live-free-space"
+
+members="/run/kps-rootfs-stage-members.$$"
+rm -f "$members"
+trap 'rm -f "$members"' EXIT HUP INT TERM
+tar -tf "$archive" > "$members" || fail "rootfs-archive-list-failed"
+while IFS= read -r member; do
+    [ -n "$member" ] || continue
+    case "$member" in
+        /*) fail "rootfs-archive-absolute-member-refused" ;;
+    esac
+    normalized="${member#./}"
+    case "/$normalized/" in
+        *"/../"*|*"/./"*) fail "rootfs-archive-traversal-member-refused" ;;
+    esac
+done < "$members"
+
+final_path="$target_mount/$staging_subpath"
+parent_path="${final_path%/*}"
+gate_prefix="$(printf '%s' "$gate_sha" | cut -c1-12)"
+rootfs_prefix="$(printf '%s' "$rootfs_sha" | cut -c1-12)"
+temporary_path="$target_mount/.kps-rootfs-stage-$gate_prefix"
+
+[ ! -e "$final_path" ] && [ ! -L "$final_path" ] ||
+    fail "final-staging-path-already-exists"
+[ ! -e "$temporary_path" ] && [ ! -L "$temporary_path" ] ||
+    fail "temporary-staging-path-already-exists"
+
+echo "KPS_ROOTFS_STAGE_BEGIN=$KPS_POLICY"
+echo "KPS_ROOTFS_STAGE_GATE_SHA256=$gate_sha"
+echo "KPS_ROOTFS_STAGE_ROOTFS_SHA256=$rootfs_sha"
+echo "KPS_ROOTFS_STAGE_SOURCE=$mount_source"
+echo "KPS_ROOTFS_STAGE_FILESYSTEM=$mount_fstype"
+echo "KPS_ROOTFS_STAGE_MOUNT=$target_mount"
+echo "KPS_ROOTFS_STAGE_FINAL=$final_path"
+echo "KPS_ROOTFS_STAGE_AVAILABLE_BYTES=$available_bytes"
+echo "KPS_ROOTFS_STAGE_REQUIRED_BYTES=$required_free_bytes"
+echo "KPS_ROOTFS_STAGE_BETA_CREDIT=false"
+
+confirmation="STAGE $gate_prefix $rootfs_prefix $mount_source $final_path"
+echo "Persistent storage write is still NOT authorized by the evidence file."
+echo "This local prompt is the separate operator write-scope authorization boundary."
+echo "Type exactly to proceed:"
+echo "$confirmation"
+printf '> '
+IFS= read -r answer
+[ "$answer" = "$confirmation" ] || fail "operator-confirmation-mismatch"
+
+mkdir -p "$parent_path"
+mkdir "$temporary_path"
+echo "KPS_ROOTFS_STAGE_WRITE_BEGIN=$temporary_path"
+if ! tar -xpf "$archive" -C "$temporary_path"; then
+    echo "KPS_ROOTFS_STAGE_ERROR=extract-failed-temp-preserved:$temporary_path" >&2
+    exit 66
+fi
+sync
+mv "$temporary_path" "$final_path"
+sync
+
+echo "KPS_ROOTFS_STAGE_RESULT=staged"
+echo "KPS_ROOTFS_STAGE_PERSISTENT_WRITE_PERFORMED=true"
+echo "KPS_ROOTFS_STAGE_PHONE_STORAGE_WRITTEN=true"
+echo "KPS_ROOTFS_STAGE_HARDWARE_VERIFIED=false"
+echo "KPS_ROOTFS_STAGE_BETA_AUTHORIZED=false"
+echo "KPS_ROOTFS_STAGE_BETA_CREDIT=false"
+echo "KPS_ROOTFS_STAGE_END=$KPS_POLICY"

@@ -25,6 +25,7 @@
     "cttyhack",
     "cut",
     "dd",
+    "df",
     "dmesg",
     "echo",
     "find",
@@ -36,6 +37,7 @@
     "mkdir",
     "mknod",
     "mount",
+    "mountpoint",
     "mv",
     "poweroff",
     "ps",
@@ -50,6 +52,7 @@
     "switch_root",
     "sync",
     "tail",
+    "tar",
     "tr",
     "umount",
     "uname"
@@ -72,7 +75,7 @@
   "network_default": "disabled",
   "ssh_default": "disabled",
   "materials": {
-    "config_sha256": "cb20d012b38a019eea76be83ea25a17f6866ed2279ad69919b69921f2420bb1e",
+    "config_sha256": "9563c5bd771caeb0facd7243b91dbbac071851135caab78f0aabae226c7cb03d",
     "init_sha256": "38d841d08c63d0aa6b4aa0b74f14f88594d2c80935c9fa708f3b7e06dafee9f3"
   },
   "build": {
