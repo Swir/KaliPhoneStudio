@@ -11,6 +11,7 @@ from kaliphonestudio.physical_candidate_operator import (
     execute_temporary_boot_once_main,
     prepare_temporary_boot_offer_main,
 )
+from kaliphonestudio.physical_candidate_preparation import main as physical_candidate_preparation_main
 from kaliphonestudio.physical_fastboot_capture import main as physical_capture_main
 from kaliphonestudio.physical_first_test_session import main as physical_first_test_session_main
 from kaliphonestudio.physical_recovery_operator import main as physical_recovery_readiness_main
@@ -23,6 +24,7 @@ from kaliphonestudio.stock_ota_pipeline import main as stock_ota_pipeline_main
 
 PHYSICAL_FASTBOOT_CAPTURE_COMMAND = "capture-fastboot-baseline"
 BEGIN_PHYSICAL_TEST_SESSION_COMMAND = "begin-physical-test-session"
+PREPARE_PHYSICAL_CANDIDATE_OFFLINE_COMMAND = "prepare-physical-candidate-offline"
 EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND = "extract-stock-boot-from-ota"
 PREPARE_STOCK_PROVENANCE_COMMAND = "prepare-stock-provenance"
 BIND_PHYSICAL_STOCK_BASELINE_COMMAND = "bind-physical-stock-baseline"
@@ -41,6 +43,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return physical_capture_main(args[1:])
     if args and args[0] == BEGIN_PHYSICAL_TEST_SESSION_COMMAND:
         return physical_first_test_session_main(args[1:])
+    if args and args[0] == PREPARE_PHYSICAL_CANDIDATE_OFFLINE_COMMAND:
+        return physical_candidate_preparation_main(args[1:])
     if args and args[0] == EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND:
         return stock_ota_pipeline_main(args[1:])
     if args and args[0] == PREPARE_STOCK_PROVENANCE_COMMAND:
