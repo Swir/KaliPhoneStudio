@@ -61,6 +61,7 @@ $StageMap = [ordered]@{
     "tools/fastboot-tool-policy.json" = "fastboot-tool-policy.json"
     "tools/extractor-locks.json" = "extractor-locks.json"
     "scripts/verify_windows_beta_test_candidate.ps1" = "verify-candidate.ps1"
+    "scripts/preflight_ac2003_first_test.ps1" = "host-preflight.ps1"
 }
 foreach ($Entry in $StageMap.GetEnumerator()) {
     $Source = Join-Path $RepoRoot $Entry.Key
@@ -72,22 +73,28 @@ foreach ($Entry in $StageMap.GetEnumerator()) {
 KaliPhoneStudio AC2003 host test candidate
 ===========================================
 
-1. Verify the package before connecting the phone:
-   pwsh -NoProfile -File .\operator-pack\verify-candidate.ps1 -CandidateRoot .
+1. Point to the reviewed Fastboot executable governed by the packaged exact policy:
+   `$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path
 
-2. Frozen CLI:
+2. Run the one-command HOST-ONLY preflight before connecting the phone:
+   pwsh -NoProfile -File .\operator-pack\host-preflight.ps1 -CandidateRoot . -FastbootExecutable "`$Fastboot"
+
+   This re-verifies the full candidate integrity set, checks the exact Fastboot version,
+   records its SHA-256 on screen, and runs ONLY `fastboot --version` (no device command).
+
+3. Frozen CLI:
    .\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe
 
-3. Exact bundled OTA extractor (no separate download/search required):
+4. Exact bundled OTA extractor (no separate download/search required):
    .\operator-tools\payload-dumper-go.exe
 
-4. Start the physical campaign with:
+5. Start the physical campaign with:
    .\operator-pack\AC2003_FIRST_TEST.md
 
-5. For the one-command host-only OTA/candidate preparation details:
+6. For the one-command host-only OTA/candidate preparation details:
    .\operator-pack\AC2003_OFFLINE_CANDIDATE_PREPARATION.md
 
-6. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
+7. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
    .\operator-pack\BETA_RELEASE_OPERATOR_WORKSPACE.md
    .\operator-pack\BETA_RELEASE_ARTIFACT_INVENTORY.md
    .\operator-pack\BETA_RELEASE_REVIEW_MANIFEST.md
@@ -117,6 +124,8 @@ foreach ($Path in @($InfoPath, $ManifestPath, $ZipPath, $ZipShaPath)) {
     operator_extractor_platform = "windows-amd64"
     operator_extractor_sha256 = $ExpectedExtractorSha
     operator_extractor_runtime_dependency_count = @($RuntimeManifest.runtime_dependencies).Count
+    host_preflight_included = $true
+    host_preflight_device_interaction = $false
     signed = $false
     physical_gate_passed = $false
     hardware_verified = $false
@@ -141,6 +150,23 @@ $Lines | Set-Content -Encoding ASCII $ManifestPath
 & pwsh -NoProfile -File (Join-Path $OperatorPack "verify-candidate.ps1") -CandidateRoot $Root
 if ($LASTEXITCODE -ne 0) { throw "Candidate integrity verifier failed: $LASTEXITCODE" }
 
+$FastbootPolicy = Get-Content -Raw -Encoding UTF8 (Join-Path $OperatorPack "fastboot-tool-policy.json") | ConvertFrom-Json
+$PreflightScratch = Join-Path ([IO.Path]::GetTempPath()) ("kps-ac2003-preflight-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $PreflightScratch | Out-Null
+try {
+    $FakeFastboot = Join-Path $PreflightScratch "fastboot.cmd"
+    @(
+        "@echo off",
+        "echo fastboot version $([string]$FastbootPolicy.platform_tools_version)-kps-packaging-smoke",
+        "exit /b 0"
+    ) | Set-Content -Encoding ASCII $FakeFastboot
+    & pwsh -NoProfile -File (Join-Path $OperatorPack "host-preflight.ps1") -CandidateRoot $Root -FastbootExecutable $FakeFastboot
+    if ($LASTEXITCODE -ne 0) { throw "AC2003 host preflight packaging smoke failed: $LASTEXITCODE" }
+}
+finally {
+    Remove-Item -LiteralPath $PreflightScratch -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Compress-Archive -Path $GuiRoot, $CliRoot, $ToolsRoot, $OperatorPack, $ManifestPath, $InfoPath -DestinationPath $ZipPath -CompressionLevel Optimal
 $ZipHash = (Get-FileHash -Algorithm SHA256 -Path $ZipPath).Hash.ToLowerInvariant()
 "$ZipHash  KaliPhoneStudio-AC2003-beta-test-candidate.zip" | Set-Content -Encoding ASCII $ZipShaPath
@@ -148,5 +174,6 @@ $ZipHash = (Get-FileHash -Algorithm SHA256 -Path $ZipPath).Hash.ToLowerInvariant
 Write-Host "Integrated AC2003 Windows host test candidate: PASS"
 Write-Host "Source commit: $SourceCommit"
 Write-Host "Bundled extractor SHA-256: $ExpectedExtractorSha"
+Write-Host "Host-only AC2003 preflight: PASS"
 Write-Host "Physical gate passed: false"
 Write-Host "Beta release: false"
