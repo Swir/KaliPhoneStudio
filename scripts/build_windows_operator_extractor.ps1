@@ -30,6 +30,14 @@ $NativeLock = $Lock.build.native_dependencies.'windows-amd64'
 if (-not $NativeLock -or -not $NativeLock.packages) {
     throw "Windows native dependency lock is missing"
 }
+$WindowsBuild = $Lock.build.platform_overrides.'windows-amd64'
+if (-not $WindowsBuild -or $WindowsBuild.linkage -ne "static") {
+    throw "Windows extractor must use the reviewed static-linkage override"
+}
+$WindowsLdFlags = [string]$WindowsBuild.ldflags
+if ($WindowsLdFlags -ne "-buildid= -extldflags=-static") {
+    throw "Unexpected Windows extractor ldflags: $WindowsLdFlags"
+}
 
 $ExpectedCommit = [string]$Lock.source.commit
 $ExpectedGo = [string]$Lock.build.toolchain_version
@@ -122,9 +130,9 @@ try {
     }
 
     $Exe = Join-Path $Destination "payload-dumper-go.exe"
-    & go build -trimpath -buildvcs=false '-ldflags=-buildid=' -o $Exe .
+    & go build -trimpath -buildvcs=false "-ldflags=$WindowsLdFlags" -o $Exe .
     if ($LASTEXITCODE -ne 0) {
-        throw "Exact payload-dumper-go build failed"
+        throw "Exact payload-dumper-go static build failed"
     }
     if (-not (Test-Path $Exe -PathType Leaf)) {
         throw "Expected extractor executable was not produced"
@@ -158,7 +166,9 @@ try {
         native_distribution = [string]$NativeLock.distribution
         native_package_versions = $VerifiedNativePackages
         cgo_enabled = $true
-        build_flags = @("-trimpath", "-buildvcs=false", "-ldflags=-buildid=")
+        linkage = "static"
+        ldflags = $WindowsLdFlags
+        build_flags = @("-trimpath", "-buildvcs=false", "-ldflags=$WindowsLdFlags")
         executable = "payload-dumper-go.exe"
         executable_sha256 = $ActualSha256
         expected_sha256 = $ExpectedSha256
@@ -186,6 +196,6 @@ finally {
     }
 }
 
-Write-Host "Windows operator extractor built from exact source/native dependency lock."
+Write-Host "Windows operator extractor built from exact source/native dependency/static-linkage lock."
 Write-Host "payload-dumper-go.exe SHA-256: $ExpectedSha256"
 Write-Host "No phone/device command was executed."
