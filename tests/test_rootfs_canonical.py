@@ -20,6 +20,28 @@ def _add_file(archive: tarfile.TarFile, name: str, data: bytes, mtime: int) -> N
     archive.addfile(info, io.BytesIO(data))
 
 
+def _add_hardlink(
+    archive: tarfile.TarFile,
+    name: str,
+    target: str,
+    mtime: int,
+    *,
+    pax_mtime: bool = False,
+) -> None:
+    info = tarfile.TarInfo(name)
+    info.type = tarfile.LNKTYPE
+    info.linkname = target
+    info.mode = 0o755
+    info.uid = 0
+    info.gid = 0
+    info.uname = "root"
+    info.gname = "root"
+    info.mtime = mtime
+    if pax_mtime:
+        info.pax_headers = {"mtime": str(mtime)}
+    archive.addfile(info)
+
+
 def _fixture(
     path: Path,
     *,
@@ -124,6 +146,72 @@ def test_canonicalization_removes_observed_builder_identity_and_mtime_drift(tmp_
         assert f"{prefix}/var/cache/fontconfig/random.cache-8" not in names
         assert f"{prefix}/var/lib/systemd/random-seed" not in names
         assert all(member.mtime == 0 for member in archive.getmembers())
+
+
+def test_canonicalization_normalizes_real_phosh_ab_drift_classes(tmp_path):
+    first = tmp_path / "phosh-a.tar.xz"
+    second = tmp_path / "phosh-b.tar.xz"
+    out_a = tmp_path / "canonical-a.tar.xz"
+    out_b = tmp_path / "canonical-b.tar.xz"
+    prefix = "kali-arm64"
+    status = b"Package: base-files\nStatus: install ok installed\nVersion: 1\nArchitecture: arm64\n\n"
+    shared_binary = b"PK\x03\x04same-unzip-payload"
+
+    with tarfile.open(first, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        _add_file(archive, f"{prefix}/var/lib/dpkg/status", status, 100)
+        _add_file(archive, f"{prefix}/usr/bin/unzip", shared_binary, 101)
+        _add_hardlink(archive, f"{prefix}/usr/bin/zipinfo", f"{prefix}/usr/bin/unzip", 102)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key", b"host-key-a", 103)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key.pub", b"host-key-a-pub", 104)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db", b"db-a", 105)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db.metadata", b"meta-a", 106)
+        runit = tarfile.TarInfo(f"{prefix}/etc/runit")
+        runit.type = tarfile.DIRTYPE
+        runit.mode = 0o755
+        runit.mtime = 107
+        archive.addfile(runit)
+
+    with tarfile.open(second, "w:xz", format=tarfile.PAX_FORMAT) as archive:
+        runit = tarfile.TarInfo(f"{prefix}/etc/runit")
+        runit.type = tarfile.DIRTYPE
+        runit.mode = 0o755
+        runit.mtime = 999
+        runit.pax_headers = {"mtime": "999.5"}
+        archive.addfile(runit)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db.metadata", b"meta-b", 998)
+        _add_file(archive, f"{prefix}/var/lib/command-not-found/commands.db", b"db-b-longer", 997)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key.pub", b"host-key-b-pub", 996)
+        _add_file(archive, f"{prefix}/etc/ssh/ssh_host_ed25519_key", b"host-key-b", 995)
+        _add_file(archive, f"{prefix}/usr/bin/zipinfo", shared_binary, 994)
+        _add_hardlink(archive, f"{prefix}/usr/bin/unzip", f"{prefix}/usr/bin/zipinfo", 993, pax_mtime=True)
+        _add_file(archive, f"{prefix}/var/lib/dpkg/status", status, 992)
+
+    evidence_a = canonicalize_rootfs_archive(first, out_a)
+    evidence_b = canonicalize_rootfs_archive(second, out_b)
+
+    assert out_a.read_bytes() == out_b.read_bytes()
+    assert evidence_a.output_sha256 == evidence_b.output_sha256
+    assert evidence_a.member_count_output == evidence_b.member_count_output
+    assert evidence_a.dropped_cache_entries == 4
+    assert evidence_b.dropped_cache_entries == 4
+
+    with tarfile.open(out_a, "r:xz") as archive:
+        members = archive.getmembers()
+        names = archive.getnames()
+        assert names == sorted(names)
+        assert f"{prefix}/etc/ssh/ssh_host_ed25519_key" not in names
+        assert f"{prefix}/etc/ssh/ssh_host_ed25519_key.pub" not in names
+        assert f"{prefix}/var/lib/command-not-found/commands.db" not in names
+        assert f"{prefix}/var/lib/command-not-found/commands.db.metadata" not in names
+        runit = archive.getmember(f"{prefix}/etc/runit")
+        assert "mtime" not in runit.pax_headers
+        unzip = archive.getmember(f"{prefix}/usr/bin/unzip")
+        zipinfo = archive.getmember(f"{prefix}/usr/bin/zipinfo")
+        assert unzip.isfile()
+        assert _member_bytes(out_a, f"{prefix}/usr/bin/unzip") == shared_binary
+        assert zipinfo.islnk()
+        assert zipinfo.linkname == f"{prefix}/usr/bin/unzip"
+        assert all(member.mtime == 0 for member in members)
 
 
 def test_canonicalization_preserves_configuration_and_package_payload(tmp_path):
