@@ -39,6 +39,12 @@ if ($LASTEXITCODE -ne 0) {
 if ($GoVersionOutput -notmatch "\bgo$([regex]::Escape($ExpectedGo))\b") {
     throw "Go toolchain drift: expected $ExpectedGo, got: $GoVersionOutput"
 }
+if ($env:CGO_ENABLED -ne "1") {
+    throw "Reviewed Windows extractor build requires CGO_ENABLED=1"
+}
+if (-not $env:CC) {
+    throw "Reviewed Windows extractor build requires an explicit MinGW CC"
+}
 
 $Destination = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
@@ -53,9 +59,11 @@ New-Item -ItemType Directory -Path $Destination | Out-Null
 $ScratchParent = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $Scratch = Join-Path $ScratchParent ("kps-payload-dumper-go-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $Scratch | Out-Null
+$Pushed = $false
 
 try {
     Push-Location $Scratch
+    $Pushed = $true
     & git init --quiet
     if ($LASTEXITCODE -ne 0) { throw "git init failed" }
     & git remote add origin $SourceUrl
@@ -70,15 +78,21 @@ try {
         throw "Extractor source commit drift: expected $ExpectedCommit, got $ActualCommit"
     }
 
+    $GoMod = Get-Content -Raw -Encoding UTF8 (Join-Path $Scratch "go.mod")
+    $GoRequirement = [regex]::Match($GoMod, '(?m)^go\s+([^\s]+)$')
+    if (-not $GoRequirement.Success) {
+        throw "Pinned extractor go.mod has no Go version"
+    }
+    if ($GoRequirement.Groups[1].Value -ne $ExpectedGo) {
+        throw "Extractor go.mod/toolchain drift: expected $ExpectedGo, got $($GoRequirement.Groups[1].Value)"
+    }
+
     $LicenseSource = Join-Path $Scratch "LICENSE"
     if (-not (Test-Path $LicenseSource -PathType Leaf)) {
         throw "Pinned extractor source does not contain LICENSE"
     }
 
     $Exe = Join-Path $Destination "payload-dumper-go.exe"
-    $env:GOOS = "windows"
-    $env:GOARCH = "amd64"
-    $env:CGO_ENABLED = "0"
     & go build -trimpath -buildvcs=false '-ldflags=-buildid=' -o $Exe .
     if ($LASTEXITCODE -ne 0) {
         throw "Exact payload-dumper-go build failed"
@@ -112,6 +126,7 @@ try {
         source_url = $SourceUrl
         source_commit = $ExpectedCommit
         go_toolchain_version = $ExpectedGo
+        cgo_enabled = $true
         build_flags = @("-trimpath", "-buildvcs=false", "-ldflags=-buildid=")
         executable = "payload-dumper-go.exe"
         executable_sha256 = $ActualSha256
@@ -131,7 +146,9 @@ try {
     } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $Destination "operator-extractor-manifest.json")
 }
 finally {
-    Pop-Location
+    if ($Pushed) {
+        Pop-Location
+    }
     if (Test-Path $Scratch) {
         Remove-Item -LiteralPath $Scratch -Recurse -Force
     }
