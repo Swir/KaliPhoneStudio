@@ -11,8 +11,9 @@
     "command": ["go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", "payload-dumper-go", "."],
     "platform_overrides": {
       "windows-amd64": {
-        "linkage": "static",
-        "ldflags": "-buildid= -extldflags=-static"
+        "linkage": "mixed-side-by-side",
+        "ldflags": "-buildid= -extldflags=-static",
+        "runtime_dependency_policy": "recursive-non-system-pe-import-closure"
       }
     },
     "native_dependencies": {
@@ -30,14 +31,14 @@
         }
       }
     },
-    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. Windows uses static external linkage, matching upstream's release intent, because the prior dynamically linked byte-identical build could not start on a clean Windows PATH without MSYS2 runtime DLLs. The exact Windows native package set remains locked and future package drift must fail closed. The Windows artifact hash must only be refreshed after a fresh static A/B reproducibility run proves byte-for-byte equality."
+    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. On Windows, A/B run 35554686984 proved the pinned MinGW build byte-for-byte reproducible at SHA-256 72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8, but clean-PATH execution showed that -extldflags=-static did not eliminate every MinGW runtime DLL import. The Windows operator artifact therefore uses a fail-closed side-by-side runtime closure: recursively inspect PE imports, keep Windows system imports external, copy every non-system MinGW dependency from the exact locked package set, hash the copied closure, and require a clean-PATH runtime smoke. This avoids pretending the executable is fully static while still delivering a self-contained operator directory with no manual DLL search."
   },
   "artifacts": {
     "linux-amd64": {
       "sha256": "a9e5806356af76b11643f3129b5516a638e9dc0c53cefd40b665a916683c83d0"
     },
     "windows-amd64": {
-      "sha256": "3a772fda1ac854f11ce9da26d33097f927266004357fc95bceff85de70158bde"
+      "sha256": "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
     }
   }
 }
