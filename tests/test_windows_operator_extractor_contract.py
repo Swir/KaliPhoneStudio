@@ -12,14 +12,18 @@ RUNTIME_STAGER = ROOT / "scripts" / "stage_windows_extractor_runtime.ps1"
 LOCKS = ROOT / "tools" / "extractor-locks.json"
 DOC = ROOT / "docs" / "WINDOWS_OPERATOR_EXTRACTOR.md"
 
-# A/B run 35554686984 produced byte-identical Windows executables at this digest.
+# Exact-head A/B run 35556814556 proved the previously reviewed Windows digest.
+# If the current MinGW package revision changes the bytes, reproducibility CI must
+# establish a separately reviewed replacement instead of silently accepting drift.
 WINDOWS_SHA256 = "72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8"
 EXPECTED_NATIVE_PACKAGES = {
     "mingw-w64-x86_64-binutils": "2.47-3",
+    "mingw-w64-x86_64-cc-libs": "16.2.0-4",
     "mingw-w64-x86_64-crt": "14.0.0.r409.g6de5d3b4d-1",
-    "mingw-w64-x86_64-gcc": "16.2.0-3",
-    "mingw-w64-x86_64-gcc-libs": "16.2.0-3",
+    "mingw-w64-x86_64-gcc": "16.2.0-4",
     "mingw-w64-x86_64-headers": "14.0.0.r409.g6de5d3b4d-1",
+    "mingw-w64-x86_64-libgcc": "16.2.0-4",
+    "mingw-w64-x86_64-libstdc++": "16.2.0-4",
     "mingw-w64-x86_64-libwinpthread": "14.0.0.r409.g6de5d3b4d-1",
     "mingw-w64-x86_64-winpthreads": "14.0.0.r409.g6de5d3b4d-1",
     "mingw-w64-x86_64-xz": "5.8.4-1",
@@ -51,7 +55,7 @@ def test_extractor_lock_is_exact_and_has_windows_runtime_authority() -> None:
     assert len(digest) == 64
     int(digest, 16)
     notes = data["build"]["notes"]
-    assert "35554686984" in notes
+    assert "35556814556" in notes
     assert "side-by-side runtime closure" in notes
     assert "no manual DLL search" in notes
 
