@@ -34,6 +34,9 @@ def test_workflow_builds_exact_integrated_windows_candidate() -> None:
         f'-SourceCommit "{exact_head}"',
         "tests/test_windows_operator_extractor_contract.py",
         "tests/test_windows_beta_test_candidate_contract.py",
+        "docs/AC2003_OFFLINE_CANDIDATE_PREPARATION.md",
+        "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md",
+        "docs/BETA_RELEASE_REVIEW_MANIFEST.md",
         "actions/upload-artifact@v4",
         "KaliPhoneStudio-AC2003-beta-test-candidate.zip",
         "KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256",
@@ -107,6 +110,10 @@ def test_packager_includes_exact_operator_tools_in_integrity_set_and_zip() -> No
         "BETA_TEST_CANDIDATE_INFO.json",
         "START_HERE.txt",
         "AC2003_FIRST_TEST.md",
+        "AC2003_OFFLINE_CANDIDATE_PREPARATION.md",
+        "BETA_RELEASE_OPERATOR_WORKSPACE.md",
+        "BETA_RELEASE_ARTIFACT_INVENTORY.md",
+        "BETA_RELEASE_REVIEW_MANIFEST.md",
         "WINDOWS_OPERATOR_EXTRACTOR.md",
         "verify-candidate.ps1",
         "$Files += Get-ChildItem -Path $Target -Recurse -File",
@@ -116,6 +123,7 @@ def test_packager_includes_exact_operator_tools_in_integrity_set_and_zip() -> No
         "hardware_verified = $false",
         "beta_release = $false",
         "beta_gate_credit = $false",
+        "Release-prep files do not authorize publication",
     ):
         assert needle in packager
 
