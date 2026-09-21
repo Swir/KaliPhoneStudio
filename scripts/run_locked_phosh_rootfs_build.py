@@ -133,8 +133,17 @@ def main() -> int:
     package_manifest, package_count = package_manifest_from_rootfs(staged)
     package_digest = sha256(package_manifest).hexdigest()
 
-    canonical = canonicalize_rootfs_archive(staged, args.out)
-    _remove_intermediate(staged, "staged Phosh rootfs artifact")
+    # The staged gzip is a generated intermediate and its package manifest is
+    # already captured above. Canonicalization streams it once into a seekable tar
+    # and retires the gzip before writing the final xz, avoiding compressed random
+    # seeks while preserving runner disk headroom.
+    canonical = canonicalize_rootfs_archive(
+        staged,
+        args.out,
+        discard_input_after_spool=True,
+    )
+    if staged.exists() or staged.is_symlink():
+        raise PhoshBuildError("canonicalizer did not retire staged Phosh rootfs artifact")
     package_evidence = evaluate_phosh_package_manifest(source_lock, package_manifest, rootfs_artifact_sha256=canonical.output_sha256)
     if not package_evidence.host_userspace_package_contract_satisfied:
         args.out.unlink(missing_ok=True)
