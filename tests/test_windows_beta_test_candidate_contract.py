@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "windows-beta-test-candidate.yml"
 RUNBOOK = ROOT / "docs" / "AC2003_FIRST_TEST.md"
+OFFLINE_PREP = ROOT / "docs" / "AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
 VERIFIER = ROOT / "scripts" / "verify_windows_beta_test_candidate.ps1"
 SMOKE = ROOT / "scripts" / "smoke_windows_beta_test_candidate.ps1"
 PACKAGER = ROOT / "scripts" / "package_windows_beta_test_candidate.ps1"
@@ -179,6 +180,7 @@ def test_runbook_is_recovery_first_and_uses_packaged_candidate_contract() -> Non
         "bind-physical-candidate-gate",
         "bind-physical-boot-identity",
         "build-physical-recovery-readiness",
+        "prepare-physical-candidate-offline",
         "prepare-temporary-boot-offer",
         "execute-temporary-boot-once",
         "build-beta-artifact-inventory",
@@ -186,17 +188,44 @@ def test_runbook_is_recovery_first_and_uses_packaged_candidate_contract() -> Non
     ):
         assert command in runbook
 
-    assert '--confirm-token "AC2003"' in runbook
-    assert "--extractor-platform windows-amd64" in runbook
-    assert "--execute-temporary-boot" in runbook
-    assert "A Fastboot return code is not proof that Kali booted" in runbook
-    assert "exercised recovery/rollback" in runbook
+    for needle in (
+        'pwsh -NoProfile -File .\\operator-pack\\verify-candidate.ps1 -CandidateRoot .',
+        '$Extractor = (Resolve-Path ".\\operator-tools\\payload-dumper-go.exe").Path',
+        '$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path',
+        '--extractor "$Extractor"',
+        '--fastboot-executable "$Fastboot"',
+        '--confirm-token "AC2003"',
+        "--extractor-platform windows-amd64",
+        "--execute-temporary-boot",
+        "A Fastboot return code is not proof that Kali booted",
+        "exercised recovery/rollback",
+    ):
+        assert needle in runbook
+
+    assert "<PATH_TO_REVIEWED_PAYLOAD_DUMPER_GO_EXE>" not in runbook
+
+
+def test_offline_candidate_runbook_requires_packaged_extractor_not_manual_search() -> None:
+    text = OFFLINE_PREP.read_text(encoding="utf-8")
+
+    for needle in (
+        '$Extractor = (Resolve-Path ".\\operator-tools\\payload-dumper-go.exe").Path',
+        '$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path',
+        "prepare-physical-candidate-offline",
+        '--extractor "$Extractor"',
+        '--fastboot-executable "$Fastboot"',
+        "do not download or search for another copy",
+        "re-hashes the extractor again immediately before use",
+    ):
+        assert needle in text
+
+    assert "<PATH_TO_REVIEWED_PAYLOAD_DUMPER_GO_EXE>" not in text
 
 
 def test_no_persistent_fastboot_write_examples_are_present() -> None:
     texts = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in (RUNBOOK, VERIFIER, SMOKE, PACKAGER)
+        for path in (RUNBOOK, OFFLINE_PREP, VERIFIER, SMOKE, PACKAGER)
     ).lower()
     for fragment in (
         "fastboot flash ",
