@@ -20,6 +20,9 @@ from .rescue_payload_repro import (
 
 _RESCUE_PROBE_POLICY = "profile+repro-payload+staging+init-v1"
 _RESCUE_PROBE_PATH = Path("etc") / "kaliphonestudio" / "rescue-probe-id"
+_ROOTFS_STAGE_HELPER_SOURCE = Path("rescue") / "kps-rootfs-stage-once"
+_ROOTFS_STAGE_HELPER_DESTINATION = Path("sbin") / "kps-rootfs-stage-once"
+_MAX_ROOTFS_STAGE_HELPER_BYTES = 64 * 1024
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -86,6 +89,50 @@ def _install_probe_file(staging_root: Path, payload: bytes) -> str:
     destination.chmod(0o444)
     if destination.read_bytes() != payload:
         raise RescuePayloadError("staged rescue probe bytes changed after write")
+    return sha256(payload).hexdigest()
+
+
+def _install_rootfs_stage_helper(*, repository_root: Path, staging_root: Path) -> str:
+    """Install the explicit local-console rootfs writer into the rescue ramdisk.
+
+    The helper is never invoked automatically. Its exact bytes are included in
+    the deterministic initramfs manifest/ramdisk hash, while the helper itself
+    still requires a passed execution-gate file, live mount revalidation and a
+    fresh exact operator confirmation before any persistent staging write.
+    """
+
+    try:
+        root = repository_root.resolve(strict=True)
+    except OSError as exc:
+        raise RescuePayloadError(f"cannot resolve repository root for rootfs stage helper: {exc}") from exc
+    source = root / _ROOTFS_STAGE_HELPER_SOURCE
+    if source.is_symlink() or not source.is_file():
+        raise RescuePayloadError("rootfs stage helper must be a regular non-symlink repository file")
+    try:
+        resolved = source.resolve(strict=True)
+        resolved.relative_to(root)
+        payload = source.read_bytes()
+    except (OSError, ValueError) as exc:
+        raise RescuePayloadError(f"cannot load rootfs stage helper safely: {exc}") from exc
+    if not payload.startswith(b"#!/bin/sh\n") or not (1 <= len(payload) <= _MAX_ROOTFS_STAGE_HELPER_BYTES):
+        raise RescuePayloadError("rootfs stage helper has invalid script bytes or size")
+    for marker in (
+        b'KPS_POLICY="interactive-rootfs-stage-v1"',
+        b'"execution_gate_passed":true',
+        b'"explicit_operator_confirmation_required":true',
+        b"KPS_ROOTFS_STAGE_BETA_CREDIT=false",
+    ):
+        if marker not in payload:
+            raise RescuePayloadError("rootfs stage helper is missing a required fail-closed contract marker")
+
+    destination = staging_root / _ROOTFS_STAGE_HELPER_DESTINATION
+    if destination.exists() or destination.is_symlink():
+        raise RescuePayloadError("refusing to overwrite staged rootfs stage helper")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(payload)
+    destination.chmod(0o700)
+    if destination.read_bytes() != payload:
+        raise RescuePayloadError("staged rootfs stage helper bytes changed after write")
     return sha256(payload).hexdigest()
 
 
@@ -170,6 +217,7 @@ def build_verified_rescue_candidate(
             init_sha256=staged.init_sha256,
         )
         probe_file_sha256 = _install_probe_file(staging_root, probe_payload)
+        _install_rootfs_stage_helper(repository_root=repository_root, staging_root=staging_root)
         initramfs = build_reproducible_initramfs(
             staging_root,
             destination,
