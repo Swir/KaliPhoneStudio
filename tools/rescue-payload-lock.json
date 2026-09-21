@@ -75,7 +75,7 @@
   "network_default": "disabled",
   "ssh_default": "disabled",
   "materials": {
-    "config_sha256": "9563c5bd771caeb0facd7243b91dbbac071851135caab78f0aabae226c7cb03d",
+    "config_sha256": "d66930028e74b77edb3608c17da23b2dc2943a14e3e01503d4d74172bc8a8bfe",
     "init_sha256": "38d841d08c63d0aa6b4aa0b74f14f88594d2c80935c9fa708f3b7e06dafee9f3"
   },
   "build": {
