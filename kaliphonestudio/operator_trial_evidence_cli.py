@@ -2,10 +2,10 @@
 
 These commands are intentionally non-executing. They consume already reviewed
 host evidence, create/bind manual authorization records, build an exact plan for
-a future interactive executor, and can re-hash the exact local rootfs artifact
-before that later boundary. They never talk to a phone, resolve a raw storage
-path, mount/copy/write storage, execute a rootfs trial, or grant
-storage/recovery/hardware/Beta credit.
+a future interactive executor, re-hash the exact local rootfs artifact, and can
+bind a second distinct fresh-device capture into the final non-writing execution
+gate. They never talk to a phone, resolve a raw storage path, mount/copy/write
+storage, execute a rootfs trial, or grant storage/recovery/hardware/Beta credit.
 """
 from __future__ import annotations
 
@@ -21,6 +21,11 @@ from .rootfs_handoff_trial_authorization import (
     bind_rootfs_handoff_trial_authorization_review,
     prepare_rootfs_handoff_trial_authorization_review_record,
     write_rootfs_handoff_trial_authorization_evidence,
+)
+from .rootfs_handoff_trial_execution_gate import (
+    RootfsHandoffTrialExecutionGateError,
+    build_rootfs_handoff_trial_execution_gate,
+    write_rootfs_handoff_trial_execution_gate_evidence,
 )
 from .rootfs_handoff_trial_plan import (
     RootfsHandoffTrialPlanError,
@@ -38,6 +43,7 @@ TRIAL_EVIDENCE_COMMANDS = (
     "bind-rootfs-handoff-trial-authorization-review",
     "build-rootfs-handoff-trial-plan",
     "build-rootfs-handoff-trial-preflight",
+    "build-rootfs-handoff-trial-execution-gate",
 )
 
 
@@ -45,7 +51,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="KaliPhoneStudio evidence",
         description=(
-            "Offline manual rootfs-trial authorization, planning and local-artifact preflight workspace. "
+            "Offline manual rootfs-trial authorization, planning, local-artifact preflight and execution-gate workspace. "
             "No phone I/O, raw path binding, mounting, trial execution, persistent write authorization, "
             "hardware promotion or Beta credit is possible here."
         ),
@@ -107,6 +113,22 @@ def _build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--trial-plan", type=Path, required=True)
     preflight.add_argument("--rootfs-artifact", type=Path, required=True)
     preflight.add_argument("--out", type=Path, required=True)
+
+    execution_gate = sub.add_parser(
+        "build-rootfs-handoff-trial-execution-gate",
+        help="Bind a second distinct fresh storage revalidation immediately before a later interactive writer.",
+        description=(
+            "Build the final non-writing execution evidence gate from the exact trial plan/preflight, the fresh "
+            "revalidation used for manual authorization and a second distinct execution-time fresh revalidation. "
+            "Passing this gate still resolves no raw path, performs no phone I/O, authorizes no write and requires "
+            "explicit operator confirmation plus a separate interactive writer."
+        ),
+    )
+    execution_gate.add_argument("--trial-plan", type=Path, required=True)
+    execution_gate.add_argument("--trial-preflight", type=Path, required=True)
+    execution_gate.add_argument("--authorized-fresh-revalidation", type=Path, required=True)
+    execution_gate.add_argument("--execution-fresh-revalidation", type=Path, required=True)
+    execution_gate.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -275,6 +297,34 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
             physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
         )
 
+    if args.evidence_command == "build-rootfs-handoff-trial-execution-gate":
+        evidence = build_rootfs_handoff_trial_execution_gate(
+            args.trial_plan,
+            args.trial_preflight,
+            args.authorized_fresh_revalidation,
+            args.execution_fresh_revalidation,
+        )
+        digest = write_rootfs_handoff_trial_execution_gate_evidence(evidence, args.out)
+        return _safe_result(
+            args.evidence_command,
+            args.out,
+            digest,
+            profile_id=evidence.profile_id,
+            device_serial=evidence.device_serial,
+            execution_gate_passed=evidence.execution_gate_passed,
+            distinct_execution_capture_bound=evidence.distinct_execution_capture_bound,
+            execution_storage_discovery_sha256=evidence.execution_storage_discovery_sha256,
+            execution_storage_report_sha256=evidence.execution_storage_report_sha256,
+            observed_free_bytes=evidence.observed_free_bytes,
+            required_free_bytes=evidence.required_free_bytes,
+            local_rootfs_exact_bytes_verified=evidence.local_rootfs_exact_bytes_verified,
+            explicit_operator_confirmation_required=evidence.explicit_operator_confirmation_required,
+            write_scope_confirmation_required=evidence.write_scope_confirmation_required,
+            raw_device_path_resolution_required=evidence.raw_device_path_resolution_required,
+            interactive_writer_required=evidence.interactive_writer_required,
+            physical_gate_still_incomplete=evidence.physical_gate_still_incomplete,
+        )
+
     raise RootfsHandoffTrialAuthorizationError(f"unsupported trial evidence command: {args.evidence_command}")
 
 
@@ -287,6 +337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         RootfsHandoffTrialAuthorizationError,
         RootfsHandoffTrialPlanError,
         RootfsHandoffTrialPreflightError,
+        RootfsHandoffTrialExecutionGateError,
         OSError,
         ValueError,
     ) as exc:

@@ -5,22 +5,32 @@ from typing import Sequence
 
 from kaliphonestudio.app import main as app_main
 from kaliphonestudio.operator_evidence_workspace import main as operator_evidence_main
+from kaliphonestudio.physical_boot_identity_operator import main as physical_boot_identity_main
 from kaliphonestudio.physical_candidate_operator import (
     bind_physical_candidate_main,
     execute_temporary_boot_once_main,
     prepare_temporary_boot_offer_main,
 )
+from kaliphonestudio.physical_candidate_preparation import main as physical_candidate_preparation_main
 from kaliphonestudio.physical_fastboot_capture import main as physical_capture_main
+from kaliphonestudio.physical_first_test_session import main as physical_first_test_session_main
+from kaliphonestudio.physical_recovery_operator import main as physical_recovery_readiness_main
 from kaliphonestudio.profile_registry_audit import main as profile_registry_audit_main
 from kaliphonestudio.stock_baseline_ingress import (
     bind_physical_stock_main,
     prepare_stock_provenance_main,
 )
+from kaliphonestudio.stock_ota_pipeline import main as stock_ota_pipeline_main
 
 PHYSICAL_FASTBOOT_CAPTURE_COMMAND = "capture-fastboot-baseline"
+BEGIN_PHYSICAL_TEST_SESSION_COMMAND = "begin-physical-test-session"
+PREPARE_PHYSICAL_CANDIDATE_OFFLINE_COMMAND = "prepare-physical-candidate-offline"
+EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND = "extract-stock-boot-from-ota"
 PREPARE_STOCK_PROVENANCE_COMMAND = "prepare-stock-provenance"
 BIND_PHYSICAL_STOCK_BASELINE_COMMAND = "bind-physical-stock-baseline"
 BIND_PHYSICAL_CANDIDATE_COMMAND = "bind-physical-candidate-gate"
+BIND_PHYSICAL_BOOT_IDENTITY_COMMAND = "bind-physical-boot-identity"
+BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND = "build-physical-recovery-readiness"
 PREPARE_TEMPORARY_BOOT_OFFER_COMMAND = "prepare-temporary-boot-offer"
 EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND = "execute-temporary-boot-once"
 EVIDENCE_WORKSPACE_COMMAND = "evidence"
@@ -31,12 +41,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == PHYSICAL_FASTBOOT_CAPTURE_COMMAND:
         return physical_capture_main(args[1:])
+    if args and args[0] == BEGIN_PHYSICAL_TEST_SESSION_COMMAND:
+        return physical_first_test_session_main(args[1:])
+    if args and args[0] == PREPARE_PHYSICAL_CANDIDATE_OFFLINE_COMMAND:
+        return physical_candidate_preparation_main(args[1:])
+    if args and args[0] == EXTRACT_STOCK_BOOT_FROM_OTA_COMMAND:
+        return stock_ota_pipeline_main(args[1:])
     if args and args[0] == PREPARE_STOCK_PROVENANCE_COMMAND:
         return prepare_stock_provenance_main(args[1:])
     if args and args[0] == BIND_PHYSICAL_STOCK_BASELINE_COMMAND:
         return bind_physical_stock_main(args[1:])
     if args and args[0] == BIND_PHYSICAL_CANDIDATE_COMMAND:
         return bind_physical_candidate_main(args[1:])
+    if args and args[0] == BIND_PHYSICAL_BOOT_IDENTITY_COMMAND:
+        return physical_boot_identity_main(args[1:])
+    if args and args[0] == BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND:
+        return physical_recovery_readiness_main(args[1:])
     if args and args[0] == PREPARE_TEMPORARY_BOOT_OFFER_COMMAND:
         return prepare_temporary_boot_offer_main(args[1:])
     if args and args[0] == EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND:

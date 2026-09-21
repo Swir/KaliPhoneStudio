@@ -1,0 +1,119 @@
+name: ac2003-offline-candidate-preparation
+
+on:
+  pull_request:
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_candidate_preparation.py"
+      - "tests/test_physical_candidate_preparation.py"
+      - "docs/AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
+      - ".github/workflows/ac2003-offline-candidate-preparation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "main.py"
+      - "kaliphonestudio/physical_candidate_preparation.py"
+      - "tests/test_physical_candidate_preparation.py"
+      - "docs/AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
+      - ".github/workflows/ac2003-offline-candidate-preparation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt && python -m pip install pytest
+      - name: Compile orchestration boundary
+        run: python -m py_compile main.py kaliphonestudio/physical_candidate_preparation.py tests/test_physical_candidate_preparation.py
+      - name: Run offline candidate orchestration tests
+        run: python -m pytest -q tests/test_physical_candidate_preparation.py tests/test_physical_first_test_session.py tests/test_physical_candidate_operator.py tests/test_physical_boot_identity_operator.py tests/test_physical_recovery_operator.py
+      - name: Assert non-executing orchestration boundary
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("kaliphonestudio/physical_candidate_preparation.py")
+          text = path.read_text(encoding="utf-8")
+          forbidden = (
+              "import subprocess",
+              "from subprocess",
+              "fastboot boot",
+              "fastboot flash",
+              "fastboot erase",
+              "set_active",
+              "persistent_write_authorized=True",
+              "phone_storage_written=True",
+              "hardware_verified=True",
+              "beta_release_authorized=True",
+              "beta_gate_credit=True",
+          )
+          found = [needle for needle in forbidden if needle in text]
+          if found:
+              raise SystemExit(f"offline candidate orchestration boundary violated: {found}")
+          print("offline candidate orchestration boundary: PASS")
+
+  frozen-windows-surface:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install frozen-build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+      - name: Build frozen Windows host
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Verify frozen command is present and fail closed before any device action
+        shell: pwsh
+        run: |
+          $Cli = (Resolve-Path "dist/KaliPhoneStudioCLI/KaliPhoneStudioCLI.exe").Path
+          & $Cli prepare-physical-candidate-offline --help | Set-Content -Encoding utf8 "dist/help-prepare-physical-candidate-offline.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Frozen offline candidate help failed: $LASTEXITCODE" }
+
+          & $Cli prepare-physical-candidate-offline `
+            --profile-id oneplus/avicii `
+            --session-dir "dist/missing-session" `
+            --ota "dist/missing-ota.zip" `
+            --extractor "dist/missing-payload-dumper-go.exe" `
+            --extractor-platform windows-amd64 `
+            --first-boot-manifest "dist/missing-first-boot.json" `
+            --authority-bundle "dist/missing-authority.json" `
+            --boot-authorization "dist/missing-authorization.json" `
+            --boot-plan "dist/missing-plan.json" `
+            --candidate-boot "dist/missing-candidate-boot.img" `
+            --candidate-dtbo "dist/missing-candidate-dtbo.img" `
+            --fastboot-executable "dist/missing-fastboot.exe" 2> "dist/refusal-offline-candidate.txt"
+          if ($LASTEXITCODE -ne 2) { throw "Frozen offline candidate command did not fail closed: $LASTEXITCODE" }
+          if (Test-Path "dist/missing-session") { throw "Refused offline preparation created a session" }
+
+          $Help = [string]::Join(" ", (Get-Content "dist/help-prepare-physical-candidate-offline.txt").ToLower().Split([char[]]" `r`n`t", [System.StringSplitOptions]::RemoveEmptyEntries))
+          if (-not $Help.Contains("--candidate-dtbo")) { throw "Frozen offline command lost candidate DTBO input" }
+          if (-not $Help.Contains("no fastboot/adb command")) { throw "Frozen offline command lost no-device-I/O safety wording" }
+
+          # The negative smoke command intentionally returned 2 after a verified refusal.
+          # Reset the native exit code only after all assertions passed so the CI step
+          # reports the expected safety success without weakening the fail-closed check.
+          $global:LASTEXITCODE = 0
+          exit 0

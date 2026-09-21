@@ -49,6 +49,15 @@ class OperatorTrialEvidenceWorkspaceTests(TestCase):
             self.assertEqual(workspace_main([command, "--help"]), 21)
         routed.assert_called_once_with([command, "--help"])
 
+    def test_workspace_routes_trial_execution_gate_to_trial_dispatcher(self) -> None:
+        command = "build-rootfs-handoff-trial-execution-gate"
+        with patch(
+            "kaliphonestudio.operator_evidence_workspace.trial_evidence_main",
+            return_value=22,
+        ) as routed:
+            self.assertEqual(workspace_main([command, "--help"]), 22)
+        routed.assert_called_once_with([command, "--help"])
+
     def test_existing_strategy_route_remains_unchanged(self) -> None:
         command = "build-rootfs-handoff-fresh-revalidation"
         with patch(
@@ -58,7 +67,7 @@ class OperatorTrialEvidenceWorkspaceTests(TestCase):
             self.assertEqual(workspace_main([command, "--help"]), 19)
         routed.assert_called_once_with([command, "--help"])
 
-    def test_trial_parser_requires_exact_inputs_for_prepare_bind_plan_and_preflight(self) -> None:
+    def test_trial_parser_requires_exact_inputs_for_prepare_bind_plan_preflight_and_execution_gate(self) -> None:
         parser = _build_parser()
         prepare = parser.parse_args(
             [
@@ -101,3 +110,14 @@ class OperatorTrialEvidenceWorkspaceTests(TestCase):
             ]
         )
         self.assertEqual(preflight.evidence_command, TRIAL_EVIDENCE_COMMANDS[3])
+        execution_gate = parser.parse_args(
+            [
+                "build-rootfs-handoff-trial-execution-gate",
+                "--trial-plan", "trial-plan.json",
+                "--trial-preflight", "trial-preflight.json",
+                "--authorized-fresh-revalidation", "authorized-fresh.json",
+                "--execution-fresh-revalidation", "execution-fresh.json",
+                "--out", "execution-gate.json",
+            ]
+        )
+        self.assertEqual(execution_gate.evidence_command, TRIAL_EVIDENCE_COMMANDS[4])
