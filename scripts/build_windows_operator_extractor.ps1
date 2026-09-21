@@ -9,8 +9,12 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 
 $LockPath = Join-Path $RepoRoot "tools/extractor-locks.json"
+$RuntimeStager = Join-Path $RepoRoot "scripts/stage_windows_extractor_runtime.ps1"
 if (-not (Test-Path $LockPath -PathType Leaf)) {
     throw "Extractor lock file is missing: $LockPath"
+}
+if (-not (Test-Path $RuntimeStager -PathType Leaf)) {
+    throw "Extractor runtime stager is missing: $RuntimeStager"
 }
 
 $Lock = Get-Content -Raw -Encoding UTF8 $LockPath | ConvertFrom-Json
@@ -31,8 +35,11 @@ if (-not $NativeLock -or -not $NativeLock.packages) {
     throw "Windows native dependency lock is missing"
 }
 $WindowsBuild = $Lock.build.platform_overrides.'windows-amd64'
-if (-not $WindowsBuild -or $WindowsBuild.linkage -ne "static") {
-    throw "Windows extractor must use the reviewed static-linkage override"
+if (-not $WindowsBuild -or $WindowsBuild.linkage -ne "mixed-side-by-side") {
+    throw "Windows extractor must use the reviewed side-by-side runtime closure"
+}
+if ($WindowsBuild.runtime_dependency_policy -ne "recursive-non-system-pe-import-closure") {
+    throw "Unexpected Windows runtime dependency policy: $($WindowsBuild.runtime_dependency_policy)"
 }
 $WindowsLdFlags = [string]$WindowsBuild.ldflags
 if ($WindowsLdFlags -ne "-buildid= -extldflags=-static") {
@@ -85,7 +92,6 @@ $Destination = if ([IO.Path]::IsPathRooted($OutputDir)) {
 if (Test-Path $Destination) {
     throw "Refusing to overwrite existing operator-tools directory: $Destination"
 }
-New-Item -ItemType Directory -Path $Destination | Out-Null
 
 $ScratchParent = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $Scratch = Join-Path $ScratchParent ("kps-payload-dumper-go-" + [guid]::NewGuid().ToString("N"))
@@ -129,19 +135,40 @@ try {
         throw "Pinned extractor source does not contain LICENSE"
     }
 
-    $Exe = Join-Path $Destination "payload-dumper-go.exe"
-    & go build -trimpath -buildvcs=false "-ldflags=$WindowsLdFlags" -o $Exe .
+    $BuiltExe = Join-Path $Scratch "payload-dumper-go.exe"
+    & go build -trimpath -buildvcs=false "-ldflags=$WindowsLdFlags" -o $BuiltExe .
     if ($LASTEXITCODE -ne 0) {
-        throw "Exact payload-dumper-go static build failed"
+        throw "Exact payload-dumper-go Windows build failed"
     }
-    if (-not (Test-Path $Exe -PathType Leaf)) {
+    if (-not (Test-Path $BuiltExe -PathType Leaf)) {
         throw "Expected extractor executable was not produced"
     }
 
-    $ActualSha256 = (Get-FileHash -Algorithm SHA256 -Path $Exe).Hash.ToLowerInvariant()
+    $ActualSha256 = (Get-FileHash -Algorithm SHA256 -Path $BuiltExe).Hash.ToLowerInvariant()
     if ($ActualSha256 -ne $ExpectedSha256) {
         throw "Extractor SHA-256 mismatch: expected $ExpectedSha256, got $ActualSha256"
     }
+
+    # The pinned Windows build is byte-reproducible but still imports a small
+    # MinGW runtime set. Resolve that closure recursively from the exact locked
+    # MSYS2 package set and prove it starts with MSYS2 removed from PATH.
+    & $RuntimeStager -Executable $BuiltExe -OutputDir $Destination
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows extractor runtime staging failed: $LASTEXITCODE"
+    }
+
+    $RuntimeManifestPath = Join-Path $Destination "operator-extractor-runtime.json"
+    if (-not (Test-Path $RuntimeManifestPath -PathType Leaf)) {
+        throw "Runtime closure manifest was not produced"
+    }
+    $RuntimeManifest = Get-Content -Raw -Encoding UTF8 $RuntimeManifestPath | ConvertFrom-Json
+    if ($RuntimeManifest.executable_sha256 -ne $ExpectedSha256) {
+        throw "Runtime closure executable hash drift"
+    }
+    if ($RuntimeManifest.all_non_system_imports_resolved -ne $true) {
+        throw "Runtime closure is incomplete"
+    }
+    $RuntimeManifestSha256 = (Get-FileHash -Algorithm SHA256 -Path $RuntimeManifestPath).Hash.ToLowerInvariant()
 
     $LicenseDestination = Join-Path $Destination "payload-dumper-go-LICENSE.txt"
     Copy-Item -LiteralPath $LicenseSource -Destination $LicenseDestination
@@ -156,7 +183,7 @@ try {
     }
 
     [ordered]@{
-        schema_version = 1
+        schema_version = 2
         kind = "kaliphonestudio-windows-operator-extractor"
         platform = "windows-amd64"
         extractor = "payload-dumper-go"
@@ -166,12 +193,18 @@ try {
         native_distribution = [string]$NativeLock.distribution
         native_package_versions = $VerifiedNativePackages
         cgo_enabled = $true
-        linkage = "static"
+        linkage = [string]$WindowsBuild.linkage
         ldflags = $WindowsLdFlags
+        runtime_dependency_policy = [string]$WindowsBuild.runtime_dependency_policy
         build_flags = @("-trimpath", "-buildvcs=false", "-ldflags=$WindowsLdFlags")
         executable = "payload-dumper-go.exe"
         executable_sha256 = $ActualSha256
         expected_sha256 = $ExpectedSha256
+        runtime_manifest = "operator-extractor-runtime.json"
+        runtime_manifest_sha256 = $RuntimeManifestSha256
+        runtime_dependency_count = [int]$RuntimeManifest.runtime_dependency_count
+        runtime_dependencies_resolved = $true
+        clean_path_smoke_passed = $true
         license_file = "payload-dumper-go-LICENSE.txt"
         license_sha256 = $LicenseSha256
         notice_sha256 = $NoticeSha256
@@ -185,7 +218,7 @@ try {
         hardware_verified = $false
         beta_release_authorized = $false
         beta_gate_credit = $false
-    } | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $Destination "operator-extractor-manifest.json")
+    } | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Destination "operator-extractor-manifest.json")
 }
 finally {
     if ($Pushed) {
@@ -196,6 +229,6 @@ finally {
     }
 }
 
-Write-Host "Windows operator extractor built from exact source/native dependency/static-linkage lock."
+Write-Host "Windows operator extractor bundle built from exact source/native dependency/runtime-closure lock."
 Write-Host "payload-dumper-go.exe SHA-256: $ExpectedSha256"
 Write-Host "No phone/device command was executed."
