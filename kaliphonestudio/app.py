@@ -296,14 +296,15 @@ def _run_gui(devices_root: Path, initial_profile_id: str | None = None) -> int:
             layout.addWidget(title)
 
             subtitle = QLabel(
-                "Profile browser • offline host doctor • redacted diagnostics export • recovery guidance"
+                "Profile browser • offline host tools • physical bring-up wizard • recovery guidance"
             )
             subtitle.setStyleSheet("color: #8DA8B8;")
             layout.addWidget(subtitle)
 
             safety = QLabel(
-                "SAFE OFFLINE MODE — this window never executes adb/fastboot and cannot flash a phone. "
-                "A listed profile, green host diagnostics or exported bundle is not proof of hardware support."
+                "DEFAULT SAFE MODE — profile/doctor/recovery actions are offline. The Physical Test wizard "
+                "exposes only reviewed read-only Fastboot capture and explicitly gated temporary boot. "
+                "Persistent flash/erase/slot changes remain unavailable before the physical Beta gate."
             )
             safety.setWordWrap(True)
             safety.setStyleSheet(
