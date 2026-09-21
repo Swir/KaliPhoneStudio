@@ -32,6 +32,9 @@ if ($Info.host_preflight_device_interaction -ne $false) { throw "Candidate host 
 if ($Info.readonly_baseline_launcher_included -ne $true) { throw "Candidate does not declare the AC2003 read-only baseline launcher" }
 if ($Info.readonly_baseline_device_interaction -ne $true) { throw "Read-only baseline launcher must declare physical read-only interaction" }
 if ($Info.readonly_baseline_persistent_write_authorized -ne $false) { throw "Read-only baseline launcher unexpectedly authorizes persistent writes" }
+if ($Info.phosh_handoff_included -ne $true) { throw "Candidate does not declare the reviewed Phosh handoff" }
+if ($Info.phosh_reviewed_authority_included -ne $true) { throw "Candidate does not declare the reviewed Phosh authority records" }
+if ($Info.phosh_rootfs_bytes_included -ne $false) { throw "Candidate unexpectedly claims embedded Phosh rootfs bytes" }
 if ($Info.signed -ne $false) { throw "Candidate unexpectedly claims signing" }
 if ($Info.physical_gate_passed -ne $false) { throw "Candidate unexpectedly claims physical gate success" }
 if ($Info.hardware_verified -ne $false) { throw "Candidate unexpectedly claims hardware verification" }
@@ -65,11 +68,14 @@ $PackagedLockPath = Join-Path $OperatorPack "extractor-locks.json"
 $FastbootPolicyPath = Join-Path $OperatorPack "fastboot-tool-policy.json"
 $HostPreflightPath = Join-Path $OperatorPack "host-preflight.ps1"
 $ReadonlyBaselinePath = Join-Path $OperatorPack "readonly-baseline.ps1"
+$PhoshRunbookPath = Join-Path $OperatorPack "AC2003_PHOSH_HANDOFF.md"
+$PhoshAuthorityPath = Join-Path $OperatorPack "phosh-rootfs-authority.json"
+$PhoshReviewPath = Join-Path $OperatorPack "phosh-rootfs-review-packet.json"
 $ExtractorPath = Join-Path $ToolsRoot "payload-dumper-go.exe"
 $ExtractorManifestPath = Join-Path $ToolsRoot "operator-extractor-manifest.json"
 $RuntimeManifestPath = Join-Path $ToolsRoot "operator-extractor-runtime.json"
 $LicensePath = Join-Path $ToolsRoot "payload-dumper-go-LICENSE.txt"
-foreach ($Path in @($PackagedLockPath, $FastbootPolicyPath, $HostPreflightPath, $ReadonlyBaselinePath, $ExtractorPath, $ExtractorManifestPath, $RuntimeManifestPath, $LicensePath, (Join-Path $OperatorPack "START_HERE.txt"))) {
+foreach ($Path in @($PackagedLockPath, $FastbootPolicyPath, $HostPreflightPath, $ReadonlyBaselinePath, $PhoshRunbookPath, $PhoshAuthorityPath, $PhoshReviewPath, $ExtractorPath, $ExtractorManifestPath, $RuntimeManifestPath, $LicensePath, (Join-Path $OperatorPack "START_HERE.txt"))) {
     if (-not (Test-Path $Path -PathType Leaf)) { throw "Bundled operator-tool file missing: $Path" }
 }
 $Lock = Get-Content -Raw -Encoding UTF8 $PackagedLockPath | ConvertFrom-Json
@@ -78,6 +84,16 @@ if ([string]$FastbootPolicy.tool -ne "fastboot") { throw "Packaged Fastboot poli
 if ([string]$FastbootPolicy.version_policy -ne "exact") { throw "Packaged Fastboot policy is not exact" }
 if ([string]::IsNullOrWhiteSpace([string]$FastbootPolicy.platform_tools_version)) { throw "Packaged Fastboot policy version missing" }
 if ($FastbootPolicy.hardware_verified -ne $false -or $FastbootPolicy.beta_gate_credit -ne $false) { throw "Packaged Fastboot policy contains unsafe hardware/Beta claims" }
+
+$PhoshAuthority = Get-Content -Raw -Encoding UTF8 $PhoshAuthorityPath | ConvertFrom-Json
+if ($PhoshAuthority.schema_version -ne 1 -or $PhoshAuthority.reviewed -ne $true -or $PhoshAuthority.strict_byte_identical -ne $true -or $PhoshAuthority.ready_for_first_boot_binding -ne $true) { throw "Packaged Phosh authority is not the reviewed reproducible authority" }
+if ([string]$PhoshAuthority.rootfs_artifact_sha256 -ne "c6f8088a5253983703768bced4e936c9c228f89d804df25ff9b172c8467c764e") { throw "Packaged Phosh rootfs authority digest drift" }
+if ([int64]$PhoshAuthority.rootfs_artifact_size -ne 881665284) { throw "Packaged Phosh rootfs authority size drift" }
+if ([string]$PhoshAuthority.package_manifest_sha256 -ne "d2fef9b14f8100ad87a9a3429aeacb998f3c7a63dd00b161e4f8dfc518fa1ed7") { throw "Packaged Phosh package-manifest digest drift" }
+if ($PhoshAuthority.hardware_verified -ne $false -or $PhoshAuthority.beta_gate_credit -ne $false) { throw "Packaged Phosh authority contains unsafe hardware/Beta claims" }
+$PhoshReview = Get-Content -Raw -Encoding UTF8 $PhoshReviewPath | ConvertFrom-Json
+if ([string]$PhoshAuthority.review_packet_sha256 -notmatch '^[0-9a-f]{64}$') { throw "Packaged Phosh authority review packet digest malformed" }
+
 $ExtractorManifest = Get-Content -Raw -Encoding UTF8 $ExtractorManifestPath | ConvertFrom-Json
 $RuntimeManifest = Get-Content -Raw -Encoding UTF8 $RuntimeManifestPath | ConvertFrom-Json
 $ExpectedExtractorSha = ([string]$Lock.artifacts.'windows-amd64'.sha256).ToLowerInvariant()
@@ -107,6 +123,9 @@ Write-Host "Host-only AC2003 preflight included: true"
 Write-Host "Host preflight device interaction: false"
 Write-Host "One-command AC2003 read-only baseline launcher included: true"
 Write-Host "Read-only baseline persistent write authorized: false"
+Write-Host "Reviewed Phosh handoff included: true"
+Write-Host "Reviewed Phosh rootfs authority SHA-256: $($PhoshAuthority.rootfs_artifact_sha256)"
+Write-Host "Phosh rootfs bytes embedded in Windows package: false"
 Write-Host "Physical gate passed: false"
 Write-Host "Hardware verified: false"
 Write-Host "Beta release: false"
