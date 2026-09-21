@@ -95,6 +95,14 @@ jobs:
           if ($Manifest.source_commit -ne $Lock.source.commit) { throw "Manifest source commit drift" }
           if ($Manifest.go_toolchain_version -ne $Lock.build.toolchain_version) { throw "Manifest Go lock drift" }
           if ($Manifest.cgo_enabled -ne $true) { throw "Manifest CGO contract drift" }
+          if ($Manifest.native_distribution -ne $Lock.build.native_dependencies.'windows-amd64'.distribution) { throw "Manifest native distribution drift" }
+          if ($Manifest.native_dependencies_verified -ne $true) { throw "Native dependency lock was not verified" }
+          foreach ($Package in $Lock.build.native_dependencies.'windows-amd64'.packages.PSObject.Properties) {
+            $ActualVersion = [string]$Manifest.native_package_versions.($Package.Name)
+            if ($ActualVersion -ne [string]$Package.Value) {
+              throw "Manifest native package drift for $($Package.Name): $ActualVersion"
+            }
+          }
           if ($Manifest.executable_sha256 -ne $Expected) { throw "Manifest executable hash drift" }
           if ($Manifest.source_lock_verified -ne $true) { throw "Source lock was not verified" }
           if ($Manifest.executable_hash_verified -ne $true) { throw "Executable hash was not verified" }
@@ -112,6 +120,27 @@ jobs:
           }
 
           "$Actual  payload-dumper-go.exe" | Set-Content -Encoding ascii "dist/operator-tools/payload-dumper-go.exe.sha256"
+
+      - name: Smoke-test extractor without MSYS2 on PATH
+        shell: pwsh
+        run: |
+          $Exe = (Resolve-Path "dist/operator-tools/payload-dumper-go.exe").Path
+          $SavedPath = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            & $Exe -h *> "dist/operator-tools/payload-dumper-go-help.txt"
+            $ExitCode = $LASTEXITCODE
+          }
+          finally {
+            $env:PATH = $SavedPath
+          }
+          if ($ExitCode -ne 0) {
+            throw "Extractor is not standalone on a clean Windows PATH: exit $ExitCode"
+          }
+          $Help = Get-Content -Raw -Encoding UTF8 "dist/operator-tools/payload-dumper-go-help.txt"
+          if ($Help -notmatch "payload-dumper-go") {
+            throw "Extractor clean-PATH help smoke returned unexpected output"
+          }
 
       - name: Upload exact non-release operator tool
         uses: actions/upload-artifact@v4
