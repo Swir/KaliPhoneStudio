@@ -78,13 +78,19 @@ try {
         throw "Extractor source commit drift: expected $ExpectedCommit, got $ActualCommit"
     }
 
-    $GoMod = Get-Content -Raw -Encoding UTF8 (Join-Path $Scratch "go.mod")
-    $GoRequirement = [regex]::Match($GoMod, '(?m)^go\s+([^\s]+)$'.Replace('\\', '\'))
-    if (-not $GoRequirement.Success) {
+    $GoRequirementLine = Get-Content -Encoding UTF8 (Join-Path $Scratch "go.mod") |
+        Where-Object { $_ -match '^go\s+[^\s]+$' } |
+        Select-Object -First 1
+    if (-not $GoRequirementLine) {
         throw "Pinned extractor go.mod has no Go version"
     }
-    if ($GoRequirement.Groups[1].Value -ne $ExpectedGo) {
-        throw "Extractor go.mod/toolchain drift: expected $ExpectedGo, got $($GoRequirement.Groups[1].Value)"
+    $GoRequirementParts = $GoRequirementLine -split '\s+', 2
+    if ($GoRequirementParts.Count -ne 2) {
+        throw "Pinned extractor go.mod Go version is malformed"
+    }
+    $ActualGoRequirement = $GoRequirementParts[1]
+    if ($ActualGoRequirement -ne $ExpectedGo) {
+        throw "Extractor go.mod/toolchain drift: expected $ExpectedGo, got $ActualGoRequirement"
     }
 
     $LicenseSource = Join-Path $Scratch "LICENSE"
