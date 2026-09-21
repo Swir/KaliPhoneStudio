@@ -21,17 +21,19 @@
         "distribution": "MSYS2 mingw64",
         "packages": {
           "mingw-w64-x86_64-binutils": "2.47-3",
+          "mingw-w64-x86_64-cc-libs": "16.2.0-4",
           "mingw-w64-x86_64-crt": "14.0.0.r409.g6de5d3b4d-1",
-          "mingw-w64-x86_64-gcc": "16.2.0-3",
-          "mingw-w64-x86_64-gcc-libs": "16.2.0-3",
+          "mingw-w64-x86_64-gcc": "16.2.0-4",
           "mingw-w64-x86_64-headers": "14.0.0.r409.g6de5d3b4d-1",
+          "mingw-w64-x86_64-libgcc": "16.2.0-4",
+          "mingw-w64-x86_64-libstdc++": "16.2.0-4",
           "mingw-w64-x86_64-libwinpthread": "14.0.0.r409.g6de5d3b4d-1",
           "mingw-w64-x86_64-winpthreads": "14.0.0.r409.g6de5d3b4d-1",
-          "mingw-w64-x86_64-xz": "5.8.3-1"
+          "mingw-w64-x86_64-xz": "5.8.4-1"
         }
       }
     },
-    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. Windows exact-head run 35556814556 proved the pinned MinGW build byte-for-byte reproducible at SHA-256 72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8 and validated the side-by-side runtime closure. The MSYS2 mingw64 xz repository subsequently rolled back from 5.8.4-1 to 5.8.3-1; the native lock now follows the currently installable mingw64 package and exact-head CI must re-prove that the reviewed executable digest and runtime closure remain unchanged before this package can merge. The Windows operator artifact recursively inspects PE imports, keeps Windows system imports external, copies every non-system MinGW dependency from the locked package set, hashes the copied closure, and requires a clean-PATH runtime smoke. This avoids pretending the executable is fully static while still delivering a self-contained operator directory with no manual DLL search."
+    "notes": "Build from the exact pinned source commit with the exact pinned Go toolchain. Linux remains on the established generic build authority. Windows exact-head run 35556814556 proved the earlier pinned MinGW build byte-for-byte reproducible at SHA-256 72495e8300283ab5c8943827b1c6dd09c308dc11f0fc5c77074a99d0517fbff8 and validated the side-by-side runtime closure. On 2026-09-21 exact-head runner evidence showed the mingw64 repository had advanced GCC from 16.2.0-3 to 16.2.0-4 and split the former gcc-libs authority into cc-libs/libgcc/libstdc++; xz remained 5.8.4-1. The native lock now records that actually installed toolchain/runtime set. Exact-head A/B CI must re-prove byte-identical output, the reviewed executable digest and the clean-PATH runtime closure before this package can merge; the old digest is deliberately retained until that proof succeeds or a separately reviewed new digest is established. The Windows operator artifact recursively inspects PE imports, keeps Windows system imports external, copies every non-system MinGW dependency from the locked package set, hashes the copied closure, and requires a clean-PATH runtime smoke. This avoids pretending the executable is fully static while still delivering a self-contained operator directory with no manual DLL search."
   },
   "artifacts": {
     "linux-amd64": {
