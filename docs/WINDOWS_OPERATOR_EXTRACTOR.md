@@ -13,12 +13,14 @@ The build reads [`tools/extractor-locks.json`](../tools/extractor-locks.json) as
 - Go toolchain: `1.27.0`;
 - target: `windows-amd64`;
 - native environment: **MSYS2 mingw64** with the exact package revisions recorded in the lock;
-- build flags: `-trimpath -buildvcs=false -ldflags=-buildid=`;
-- required executable SHA-256: `3a772fda1ac854f11ce9da26d33097f927266004357fc95bceff85de70158bde`.
+- Windows linkage: **static**, with `-buildid= -extldflags=-static`;
+- required executable SHA-256: `3a772fda1ac854f11ce9da26d33097f927266004357fc95bceff85de70158bde` until the fresh static A/B authority run replaces that pre-static digest.
 
-The Windows native dependency set is part of the authority because an upstream MSYS2 runtime revision changed the resulting executable even though the source commit, Go version and build flags had not changed. A fresh rerun of the repository's existing extractor A/B reproducibility job on **2026-09-21** built the pinned source twice with the currently recorded native package set, proved the two Windows outputs byte-for-byte identical and produced the SHA-256 above. The operator builder now checks every recorded MSYS2 package version with `pacman -Q` and fails closed if a future runner silently changes that native environment.
+The Windows native dependency set is part of the authority because an upstream MSYS2 runtime revision changed the resulting executable even though the source commit, Go version and common build flags had not changed. A fresh dynamic A/B reproducibility rerun on **2026-09-21** proved byte-for-byte equality for the recorded package set, but the resulting executable still depended on MSYS2 runtime DLLs and failed on a clean Windows `PATH` with loader status `0xC0000135`.
 
-The builder then fetches the exact source commit, verifies `HEAD`, confirms the pinned `go.mod` requirement, builds with the exact Go/native environment, hashes the resulting executable and refuses the artifact unless the digest matches the reviewed lock.
+For an operator artifact that can actually run on the user's normal Windows machine, the project now follows upstream's own Windows release intent and requires **static external linkage**. The authoritative reproducibility workflow builds the pinned source twice with the exact native package set and separately smoke-tests the result with MSYS2 removed from `PATH`. The Windows SHA-256 is accepted only after that static A/B run is byte-for-byte reproducible and the clean-`PATH` smoke succeeds.
+
+The operator builder verifies every recorded MSYS2 package version with `pacman -Q`, fetches the exact source commit, verifies `HEAD`, confirms the pinned `go.mod` requirement, performs the exact static build and refuses the artifact unless its digest matches the reviewed lock.
 
 ## License
 
@@ -33,9 +35,10 @@ payload-dumper-go.exe
 payload-dumper-go.exe.sha256
 payload-dumper-go-LICENSE.txt
 operator-extractor-manifest.json
+payload-dumper-go-help.txt
 ```
 
-The manifest records the exact source commit, Go version, native dependency versions, build flags, executable/license hashes and explicit non-authorizing safety state.
+The manifest records the exact source commit, Go version, native dependency versions, static-linkage flags, executable/license hashes and explicit non-authorizing safety state. The help capture is produced only after the executable starts successfully with an isolated Windows system `PATH`; it is runtime evidence that the delivered executable does not secretly require the GitHub runner's MSYS2 DLL directory.
 
 ## Use during the first AC2003 campaign
 
@@ -68,7 +71,7 @@ This artifact intentionally **does not bundle Android Platform-Tools / Fastboot*
 The phone-side sequence therefore remains:
 
 1. use one reviewed Fastboot executable accepted by `fastboot-tool-policy.json` for the entire evidence session;
-2. use the exact source/native-dependency/hash-verified `payload-dumper-go.exe` from this artifact for OTA extraction;
+2. use the exact source/native-dependency/static-linkage/hash-verified `payload-dumper-go.exe` from this artifact for OTA extraction;
 3. preserve all evidence under one fresh session directory;
 4. stop on any identity, firmware, slot, provenance or hash drift;
 5. perform the separately gated one-shot temporary boot only after recovery-readiness review.
