@@ -50,7 +50,10 @@ foreach ($Field in @("physical_interaction_performed", "external_device_command_
 New-Item -ItemType Directory -Path $OperatorPack | Out-Null
 $StageMap = [ordered]@{
     "docs/AC2003_FIRST_TEST.md" = "AC2003_FIRST_TEST.md"
+    "docs/AC2003_OFFLINE_CANDIDATE_PREPARATION.md" = "AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
     "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md" = "BETA_RELEASE_OPERATOR_WORKSPACE.md"
+    "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md" = "BETA_RELEASE_ARTIFACT_INVENTORY.md"
+    "docs/BETA_RELEASE_REVIEW_MANIFEST.md" = "BETA_RELEASE_REVIEW_MANIFEST.md"
     "docs/WINDOWS_OPERATOR_EXTRACTOR.md" = "WINDOWS_OPERATOR_EXTRACTOR.md"
     "BETA_RELEASE_GATE.md" = "BETA_RELEASE_GATE.md"
     "BUILD_STATUS.json" = "BUILD_STATUS.json"
@@ -78,10 +81,19 @@ KaliPhoneStudio AC2003 host test candidate
 3. Exact bundled OTA extractor (no separate download/search required):
    .\operator-tools\payload-dumper-go.exe
 
-4. Start with operator-pack\AC2003_FIRST_TEST.md.
+4. Start the physical campaign with:
+   .\operator-pack\AC2003_FIRST_TEST.md
+
+5. For the one-command host-only OTA/candidate preparation details:
+   .\operator-pack\AC2003_OFFLINE_CANDIDATE_PREPARATION.md
+
+6. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
+   .\operator-pack\BETA_RELEASE_OPERATOR_WORKSPACE.md
+   .\operator-pack\BETA_RELEASE_ARTIFACT_INVENTORY.md
+   .\operator-pack\BETA_RELEASE_REVIEW_MANIFEST.md
 
 This is an unsigned host-side test candidate, NOT a public Beta and NOT hardware verification.
-No persistent phone write is authorized by this package.
+No persistent phone write is authorized by this package. Release-prep files do not authorize publication.
 "@ | Set-Content -Encoding UTF8 (Join-Path $OperatorPack "START_HERE.txt")
 
 $InfoPath = Join-Path $Root "BETA_TEST_CANDIDATE_INFO.json"
