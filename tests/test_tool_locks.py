@@ -7,7 +7,7 @@ from kaliphonestudio.tool_locks import ToolLockError, load_tool_lock
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "tools" / "extractor-locks.json"
-WINDOWS_REVIEWED_SHA256 = "9a4848ff93b28a9c2f9dbf52b11e09184242ff192032187d70079df5dfb9a616"
+WINDOWS_REVIEWED_SHA256 = "e84d038e803b07503aa843aca5a82b0441877afc6cd5025247dd31d6046d02c3"
 
 
 def test_repository_extractor_lock_is_pinned_and_authorized():
