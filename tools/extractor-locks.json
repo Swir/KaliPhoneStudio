@@ -22,13 +22,13 @@
         "packages": {
           "mingw-w64-x86_64-binutils": "2.47-3",
           "mingw-w64-x86_64-cc-libs": "16.2.0-4",
-          "mingw-w64-x86_64-crt": "14.0.0.r409.g6de5d3b4d-1",
+          "mingw-w64-x86_64-crt": "14.0.0.r420.g61d40c4c0-1",
           "mingw-w64-x86_64-gcc": "16.2.0-4",
-          "mingw-w64-x86_64-headers": "14.0.0.r409.g6de5d3b4d-1",
+          "mingw-w64-x86_64-headers": "14.0.0.r420.g61d40c4c0-1",
           "mingw-w64-x86_64-libgcc": "16.2.0-4",
           "mingw-w64-x86_64-libstdc++": "16.2.0-4",
-          "mingw-w64-x86_64-libwinpthread": "14.0.0.r409.g6de5d3b4d-1",
-          "mingw-w64-x86_64-winpthreads": "14.0.0.r409.g6de5d3b4d-1",
+          "mingw-w64-x86_64-libwinpthread": "14.0.0.r420.g61d40c4c0-1",
+          "mingw-w64-x86_64-winpthreads": "14.0.0.r420.g61d40c4c0-1",
           "mingw-w64-x86_64-xz": "5.8.4-1"
         }
       }
