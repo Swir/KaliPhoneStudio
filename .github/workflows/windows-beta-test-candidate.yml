@@ -29,6 +29,8 @@ on:
       - "scripts/package_windows_beta_test_candidate.ps1"
       - "scripts/preflight_ac2003_first_test.ps1"
       - "scripts/start_ac2003_readonly_baseline.ps1"
+      - "scripts/start_ac2003_first_test_wizard.ps1"
+      - "scripts/overlay_ac2003_first_test_wizard.ps1"
       - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
@@ -60,6 +62,8 @@ on:
       - "scripts/package_windows_beta_test_candidate.ps1"
       - "scripts/preflight_ac2003_first_test.ps1"
       - "scripts/start_ac2003_readonly_baseline.ps1"
+      - "scripts/start_ac2003_first_test_wizard.ps1"
+      - "scripts/overlay_ac2003_first_test_wizard.ps1"
       - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
@@ -123,6 +127,7 @@ jobs:
           tests/test_windows_packaging_contract.py
           tests/test_windows_operator_extractor_contract.py
           tests/test_ac2003_host_preflight_contract.py
+          tests/test_ac2003_first_test_wizard_contract.py
           tests/test_physical_gui_bridge.py
           tests/test_extractor.py
           tests/test_tool_locks.py
