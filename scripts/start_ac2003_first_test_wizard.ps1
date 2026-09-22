@@ -27,6 +27,32 @@ function Invoke-ReadOnlyTool([string]$ToolPath, [string[]]$Arguments, [string]$L
     return $Output
 }
 
+function Wait-ForSingleFastbootDevice([string]$FastbootPath, [int]$TimeoutSeconds = 60) {
+    $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $Devices = Invoke-ReadOnlyTool $FastbootPath @("devices") "fastboot devices"
+        $Lines = @(
+            $Devices -split "[\r\n]+" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -match '^\S+\s+fastboot(?:\s|$)' }
+        )
+        if ($Lines.Count -gt 1) {
+            throw "First-test wizard requires exactly one Fastboot device; got $($Lines.Count)"
+        }
+        if ($Lines.Count -eq 1) {
+            $Serial = (($Lines[0] -split '\s+')[0]).Trim()
+            if ([string]::IsNullOrWhiteSpace($Serial)) {
+                throw "Fastboot device discovery returned an empty serial"
+            }
+            return $Serial
+        }
+        if ([DateTime]::UtcNow -ge $Deadline) {
+            throw "Timed out waiting $TimeoutSeconds seconds for exactly one Fastboot device"
+        }
+        Start-Sleep -Seconds 2
+    } while ($true)
+}
+
 $Root = (Resolve-Path $CandidateRoot).Path
 $BaselineLauncher = Join-Path $Root "operator-pack\readonly-baseline.ps1"
 $Preflight = Join-Path $Root "operator-pack\host-preflight.ps1"
@@ -126,11 +152,56 @@ Write-Host "  OxygenOS/build: $([string]$Identity.firmware_build)"
 Write-Host "  Fingerprint: $([string]$Identity.firmware_fingerprint)"
 Write-Host ""
 
+$TransitionMethod = "already-fastboot"
+$AdbBootloaderRebootPerformed = $false
+
 if (-not $FastbootAlreadyReady) {
-    Write-Host "MANUAL MODE CHANGE REQUIRED"
-    Write-Host "Put the same AC2003 into Fastboot/bootloader using the phone controls."
-    Write-Host "Do not use an ADB reboot command for this evidence campaign."
-    [void](Read-Host "When the phone is visibly in Fastboot/bootloader, press ENTER")
+    Write-Host "FASTBOOT MODE TRANSITION"
+    Write-Host "Choose how to move the SAME AC2003 into Fastboot/bootloader:"
+    Write-Host "  [M] Manual phone controls (default)"
+    Write-Host "  [A] Explicitly confirmed: adb reboot bootloader"
+    $TransitionChoice = (Read-Host "Choose M or A").Trim().ToUpperInvariant()
+    if ([string]::IsNullOrWhiteSpace($TransitionChoice)) { $TransitionChoice = "M" }
+
+    if ($TransitionChoice -eq "A") {
+        $Confirm = Read-Host "Type exactly REBOOT-BOOTLOADER AC2003 to authorize this one reboot"
+        if ($Confirm -ne "REBOOT-BOOTLOADER AC2003") {
+            throw "ADB bootloader reboot was not explicitly confirmed"
+        }
+
+        $AdbShaBeforeReboot = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInvariant()
+        $FastbootShaBeforeReboot = (Get-FileHash -Algorithm SHA256 -Path $FastbootPath).Hash.ToLowerInvariant()
+        if ($AdbShaBeforeReboot -ne $AdbShaAtStart -or $FastbootShaBeforeReboot -ne $FastbootShaAtStart) {
+            throw "Android Platform-Tools executable changed before requested ADB bootloader reboot"
+        }
+
+        $AdbSerialForReboot = [string]$Identity.adb_serial
+        if ([string]::IsNullOrWhiteSpace($AdbSerialForReboot)) {
+            throw "Captured Android identity has no ADB serial for bootloader reboot binding"
+        }
+        $AdbState = Invoke-ReadOnlyTool $AdbPath @("-s", $AdbSerialForReboot, "get-state") "adb get-state before bootloader reboot"
+        if ($AdbState.Trim() -ne "device") {
+            throw "ADB target is not in authorized device state before bootloader reboot: $AdbState"
+        }
+
+        Write-Host "Explicit operator authorization accepted."
+        Write-Host "Executing exactly: adb -s <captured-serial> reboot bootloader"
+        & $AdbPath "-s" $AdbSerialForReboot "reboot" "bootloader"
+        $RebootExit = $LASTEXITCODE
+        if ($null -eq $RebootExit -or $RebootExit -ne 0) {
+            throw "Explicit ADB reboot bootloader failed: exit=$RebootExit"
+        }
+        $AdbBootloaderRebootPerformed = $true
+        $TransitionMethod = "explicit-adb-reboot-bootloader"
+    }
+    elseif ($TransitionChoice -eq "M") {
+        $TransitionMethod = "manual-phone-controls"
+        Write-Host "Put the same AC2003 into Fastboot/bootloader using the phone controls."
+        [void](Read-Host "When the phone is visibly in Fastboot/bootloader, press ENTER")
+    }
+    else {
+        throw "Unsupported Fastboot transition choice: $TransitionChoice"
+    }
 }
 
 # Fail closed if either executable changed while the operator moved the same phone
@@ -147,18 +218,28 @@ if ($LASTEXITCODE -ne 0) {
     throw "Host/Fastboot preflight failed before device discovery: $LASTEXITCODE"
 }
 
-$Devices = Invoke-ReadOnlyTool $FastbootPath @("devices") "fastboot devices"
-$FastbootDeviceLines = @(
-    $Devices -split "`r?`n" |
-        Where-Object { $_ -match '^\S+\s+fastboot(?:\s|$)' }
-)
-if ($FastbootDeviceLines.Count -ne 1) {
-    throw "First-test wizard requires exactly one Fastboot device; got $($FastbootDeviceLines.Count)"
+$FastbootSerial = Wait-ForSingleFastbootDevice $FastbootPath 60
+
+$TransitionPath = Join-Path $EvidenceRootPath "ac2003-mode-transition-$SessionLabel.json"
+if (Test-Path $TransitionPath) {
+    throw "Refusing to overwrite existing mode-transition evidence: $TransitionPath"
 }
-$FastbootSerial = (($FastbootDeviceLines[0] -split '\s+')[0]).Trim()
-if ([string]::IsNullOrWhiteSpace($FastbootSerial)) {
-    throw "Fastboot device discovery returned an empty serial"
-}
+[ordered]@{
+    schema_version = 1
+    kind = "kaliphonestudio-ac2003-mode-transition"
+    profile_id = "oneplus/avicii"
+    adb_serial = [string]$Identity.adb_serial
+    fastboot_serial = $FastbootSerial
+    transition_method = $TransitionMethod
+    adb_reboot_bootloader_performed = [bool]$AdbBootloaderRebootPerformed
+    adb_executable_sha256 = $AdbShaAtStart
+    fastboot_executable_sha256 = $FastbootShaAtStart
+    persistent_write_authorized = $false
+    phone_storage_written = $false
+    hardware_verified = $false
+    beta_gate_credit = $false
+} | ConvertTo-Json | Set-Content -Encoding UTF8 -NoNewline $TransitionPath
+$TransitionSha = (Get-FileHash -Algorithm SHA256 -Path $TransitionPath).Hash.ToLowerInvariant()
 
 & pwsh -NoProfile -File $BaselineLauncher `
     -CandidateRoot $Root `
@@ -181,6 +262,16 @@ $ExpectedOutputs = @(
 )
 foreach ($Path in $ExpectedOutputs) {
     Require-Leaf $Path "Expected first-test evidence"
+}
+
+$BoundTransitionPath = Join-Path $SessionPath "mode-transition.json"
+if (Test-Path $BoundTransitionPath) {
+    throw "Refusing to overwrite bound mode-transition evidence"
+}
+Copy-Item -LiteralPath $TransitionPath -Destination $BoundTransitionPath
+$BoundTransitionSha = (Get-FileHash -Algorithm SHA256 -Path $BoundTransitionPath).Hash.ToLowerInvariant()
+if ($BoundTransitionSha -ne $TransitionSha) {
+    throw "Mode-transition evidence drifted while binding physical session"
 }
 
 $Session = Get-Content -Raw -Encoding UTF8 (Join-Path $SessionPath "physical-first-test-session.json") | ConvertFrom-Json
@@ -219,6 +310,9 @@ Write-Host "KaliPhoneStudio AC2003 FIRST TEST READ-ONLY BASELINE: PASS"
 Write-Host "Identity evidence: $IdentityPath"
 Write-Host "Physical session: $SessionPath"
 Write-Host "Fastboot serial: $FastbootSerial"
+Write-Host "Mode transition: $TransitionMethod"
+Write-Host "ADB reboot bootloader performed: $AdbBootloaderRebootPerformed"
+Write-Host "Mode-transition evidence SHA-256: $TransitionSha"
 Write-Host "Shared Platform-Tools directory: $AdbDirectory"
 Write-Host "ADB SHA-256: $AdbShaAtStart"
 Write-Host "Fastboot SHA-256: $FastbootShaAtStart"

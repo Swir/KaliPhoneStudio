@@ -62,11 +62,12 @@ To download/verify/extract the host prerequisites without touching the phone, ru
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\operator-pack\bootstrap-first-test.ps1 -CandidateRoot . -DownloadOnly
 
 The bootstrap itself performs no phone I/O. The wizard captures the exact stock OxygenOS
-build/fingerprint read-only, pauses for a MANUAL phone-button transition into
-Fastboot/bootloader, discovers exactly one Fastboot serial, then binds the same identity
-into the guarded version/devices/getvar-only baseline. It never issues adb reboot,
-fastboot reboot/boot/flash/erase/set_active/flashing commands, never mounts phone storage
-and never grants hardware/Beta credit.
+build/fingerprint read-only, then lets the operator either use manual phone controls or
+explicitly authorize one exact "adb reboot bootloader" transition using the already-bound
+ADB serial and reviewed executable. It then discovers exactly one Fastboot serial and
+binds the same identity into the guarded version/devices/getvar-only baseline. It never
+issues fastboot reboot/boot/flash/erase/set_active/flashing commands, never mounts phone
+storage and never grants hardware/Beta credit.
 
 The exact OxygenOS OTA is intentionally NOT guessed or downloaded before the real phone
 identity is captured. After PASS, continue with .\operator-pack\AC2003_FIRST_TEST.md at
@@ -88,7 +89,10 @@ $Info | Add-Member -NotePropertyName automatic_host_bootstrap_included -NoteProp
 $Info | Add-Member -NotePropertyName automatic_host_bootstrap_pinned_sha256 -NotePropertyValue $true -Force
 $Info | Add-Member -NotePropertyName automatic_host_bootstrap_phone_interaction -NotePropertyValue $false -Force
 $Info | Add-Member -NotePropertyName automatic_ota_download_before_identity -NotePropertyValue $false -Force
-$Info | Add-Member -NotePropertyName first_test_wizard_manual_fastboot_transition_required -NotePropertyValue $true -Force
+$Info | Add-Member -NotePropertyName first_test_wizard_manual_fastboot_transition_required -NotePropertyValue $false -Force
+$Info | Add-Member -NotePropertyName first_test_wizard_manual_fastboot_transition_available -NotePropertyValue $true -Force
+$Info | Add-Member -NotePropertyName first_test_wizard_explicit_adb_bootloader_reboot_available -NotePropertyValue $true -Force
+$Info | Add-Member -NotePropertyName first_test_wizard_explicit_adb_bootloader_reboot_confirmation -NotePropertyValue "REBOOT-BOOTLOADER AC2003" -Force
 $Info | Add-Member -NotePropertyName first_test_wizard_automatic_reboot -NotePropertyValue $false -Force
 $Info | Add-Member -NotePropertyName first_test_wizard_temporary_boot_performed -NotePropertyValue $false -Force
 $Info | Add-Member -NotePropertyName first_test_wizard_persistent_write_authorized -NotePropertyValue $false -Force
@@ -122,7 +126,10 @@ if ($UpdatedInfo.automatic_host_bootstrap_included -ne $true) { throw "Automatic
 if ($UpdatedInfo.automatic_host_bootstrap_pinned_sha256 -ne $true) { throw "Automatic host bootstrap lost pinned SHA-256 marker" }
 if ($UpdatedInfo.automatic_host_bootstrap_phone_interaction -ne $false) { throw "Automatic host bootstrap unexpectedly claims phone interaction" }
 if ($UpdatedInfo.automatic_ota_download_before_identity -ne $false) { throw "Candidate unexpectedly permits OTA download before physical identity" }
-if ($UpdatedInfo.first_test_wizard_manual_fastboot_transition_required -ne $true) { throw "Wizard lost manual Fastboot transition gate" }
+if ($UpdatedInfo.first_test_wizard_manual_fastboot_transition_required -ne $false) { throw "Wizard metadata incorrectly requires manual-only Fastboot transition" }
+if ($UpdatedInfo.first_test_wizard_manual_fastboot_transition_available -ne $true) { throw "Wizard lost manual Fastboot transition option" }
+if ($UpdatedInfo.first_test_wizard_explicit_adb_bootloader_reboot_available -ne $true) { throw "Wizard lost explicitly confirmed ADB bootloader reboot option" }
+if ([string]$UpdatedInfo.first_test_wizard_explicit_adb_bootloader_reboot_confirmation -ne "REBOOT-BOOTLOADER AC2003") { throw "Wizard ADB reboot confirmation token drift" }
 foreach ($Field in @("first_test_wizard_automatic_reboot", "first_test_wizard_temporary_boot_performed", "first_test_wizard_persistent_write_authorized", "first_test_wizard_beta_gate_credit")) {
     if ($UpdatedInfo.$Field -ne $false) { throw "Unsafe first-test wizard metadata field: $Field" }
 }
@@ -151,7 +158,7 @@ if (-not $WizardText.Contains('invoke-readonlytool $fastbootpath @("devices")'))
 }
 # Reject executable argv-shaped state-changing verbs while allowing safety prose that
 # names those verbs to tell the operator what the wizard deliberately does not do.
-foreach ($ForbiddenArgv in @('@("reboot")', '@("boot")', '@("flash")', '@("erase")', '@("set_active")', '@("flashing")')) {
+foreach ($ForbiddenArgv in @('@("boot")', '@("flash")', '@("erase")', '@("set_active")', '@("flashing")')) {
     if ($WizardText.Contains($ForbiddenArgv)) {
         throw "Packaged first-test wizard contains forbidden state-changing argv: $ForbiddenArgv"
     }
@@ -165,7 +172,8 @@ Write-Host "KaliPhoneStudio AC2003 one-command read-only first-test candidate ov
 Write-Host "Wizard packaged: operator-pack/first-test-wizard.ps1"
 Write-Host "Automatic host bootstrap: operator-pack/START_FIRST_TEST.cmd"
 Write-Host "Pinned PowerShell + Platform-Tools download/checksum verification: true"
-Write-Host "Manual Fastboot transition required: true"
+Write-Host "Manual Fastboot transition available: true"
+Write-Host "Explicit confirmed ADB reboot bootloader available: true"
 Write-Host "Automatic reboot: false"
 Write-Host "Temporary boot performed: false"
 Write-Host "Persistent phone write authorized: false"
