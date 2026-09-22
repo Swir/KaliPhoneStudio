@@ -27,6 +27,113 @@ function Invoke-ReadOnlyTool([string]$ToolPath, [string[]]$Arguments, [string]$L
     return $Output
 }
 
+function Save-WindowsFastbootUsbDiagnostic(
+    [string]$FastbootPath,
+    [string]$EvidenceRootPath,
+    [string]$SessionLabel
+) {
+    $DiagnosticPath = Join-Path $EvidenceRootPath "fastboot-windows-usb-diagnostic-$SessionLabel.json"
+    if (Test-Path $DiagnosticPath) {
+        throw "Refusing to overwrite existing Windows Fastboot diagnostic: $DiagnosticPath"
+    }
+
+    $FastbootOutput = (& $FastbootPath "devices" 2>&1 | Out-String).Trim()
+    $FastbootExit = $LASTEXITCODE
+    $PnpError = $null
+    $DriverError = $null
+    $Candidates = @()
+    $Drivers = @()
+
+    try {
+        $Candidates = @(
+            Get-CimInstance Win32_PnPEntity -ErrorAction Stop |
+                Where-Object {
+                    ([string]$_.PNPDeviceID).StartsWith("USB\", [StringComparison]::OrdinalIgnoreCase) -or
+                    ([string]$_.Name -match '(?i)android|oneplus|fastboot|bootloader|adb')
+                } |
+                Select-Object Name, Manufacturer, Status, PNPDeviceID, Service, ConfigManagerErrorCode, ClassGuid
+        )
+    }
+    catch {
+        $PnpError = $_.Exception.Message
+    }
+
+    try {
+        $Drivers = @(
+            Get-CimInstance Win32_PnPSignedDriver -ErrorAction Stop |
+                Where-Object {
+                    ([string]$_.DeviceID).StartsWith("USB\", [StringComparison]::OrdinalIgnoreCase) -or
+                    ([string]$_.DeviceName -match '(?i)android|oneplus|fastboot|bootloader|adb')
+                } |
+                Select-Object DeviceName, DeviceID, DriverProviderName, DriverVersion, InfName
+        )
+    }
+    catch {
+        $DriverError = $_.Exception.Message
+    }
+
+    $ProblemCandidates = @(
+        $Candidates | Where-Object {
+            $_.ConfigManagerErrorCode -ne $null -and [int]$_.ConfigManagerErrorCode -ne 0
+        }
+    )
+    $LikelyFastbootCandidates = @(
+        $Candidates | Where-Object {
+            ([string]$_.Name -match '(?i)android|oneplus|fastboot|bootloader') -or
+            ([string]$_.Manufacturer -match '(?i)oneplus|google|android')
+        }
+    )
+
+    $Diagnosis = "fastboot-interface-not-exposed"
+    if (@($ProblemCandidates | Where-Object { [int]$_.ConfigManagerErrorCode -eq 28 }).Count -gt 0) {
+        $Diagnosis = "windows-driver-not-installed"
+    }
+    elseif (@($ProblemCandidates).Count -gt 0) {
+        $Diagnosis = "windows-pnp-device-problem"
+    }
+    elseif (@($LikelyFastbootCandidates).Count -gt 0) {
+        $Diagnosis = "usb-device-present-but-fastboot-not-bound"
+    }
+    elseif (@($Candidates).Count -eq 0) {
+        $Diagnosis = "no-usb-pnp-device-seen"
+    }
+
+    [ordered]@{
+        schema_version = 1
+        kind = "kaliphonestudio-windows-fastboot-usb-diagnostic"
+        profile_id = "oneplus/avicii"
+        diagnosis = $Diagnosis
+        fastboot_devices_exit_code = $FastbootExit
+        fastboot_devices_output = $FastbootOutput
+        pnp_query_error = $PnpError
+        signed_driver_query_error = $DriverError
+        pnp_candidates = $Candidates
+        signed_drivers = $Drivers
+        host_only_diagnostic = $true
+        phone_write_performed = $false
+        flash_erase_slot_change_performed = $false
+        hardware_verified = $false
+        beta_gate_credit = $false
+    } | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 -NoNewline $DiagnosticPath
+
+    Write-Host ""
+    Write-Host "WINDOWS FASTBOOT USB DIAGNOSTIC"
+    Write-Host "  Diagnosis: $Diagnosis"
+    Write-Host "  Report: $DiagnosticPath"
+    if (@($LikelyFastbootCandidates).Count -gt 0) {
+        Write-Host "  Matching Windows PnP candidates:"
+        foreach ($Device in $LikelyFastbootCandidates) {
+            Write-Host "    $([string]$Device.Name) | status=$([string]$Device.Status) | error=$([string]$Device.ConfigManagerErrorCode) | service=$([string]$Device.Service)"
+        }
+    }
+    else {
+        Write-Host "  No Android/OnePlus/Fastboot-named Windows PnP candidate was found."
+    }
+    Write-Host "  No driver was installed or changed by KaliPhoneStudio."
+    Write-Host ""
+    return $DiagnosticPath
+}
+
 function Wait-ForSingleFastbootDevice([string]$FastbootPath, [int]$TimeoutSeconds = 60) {
     $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
@@ -47,7 +154,8 @@ function Wait-ForSingleFastbootDevice([string]$FastbootPath, [int]$TimeoutSecond
             return $Serial
         }
         if ([DateTime]::UtcNow -ge $Deadline) {
-            throw "Timed out waiting $TimeoutSeconds seconds for exactly one Fastboot device"
+            $DiagnosticPath = Save-WindowsFastbootUsbDiagnostic $FastbootPath $script:EvidenceRootPathForFastbootDiagnostic $script:SessionLabelForFastbootDiagnostic
+            throw "Timed out waiting $TimeoutSeconds seconds for exactly one Fastboot device. Windows Fastboot diagnostic: $DiagnosticPath"
         }
         Start-Sleep -Seconds 2
     } while ($true)
@@ -108,6 +216,8 @@ if ($SessionLabel -notmatch '^[A-Za-z0-9._-]+$') {
 
 $IdentityPath = Join-Path $EvidenceRootPath "ac2003-stock-android-identity-$SessionLabel.json"
 $SessionPath = Join-Path $EvidenceRootPath "ac2003-first-test-$SessionLabel"
+$script:EvidenceRootPathForFastbootDiagnostic = $EvidenceRootPath
+$script:SessionLabelForFastbootDiagnostic = $SessionLabel
 foreach ($Path in @($IdentityPath, $SessionPath)) {
     if (Test-Path $Path) {
         throw "Refusing to reuse existing first-test evidence path: $Path"

@@ -100,6 +100,12 @@ def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> Non
     assert 'reboot-bootloader ac2003' in text
     assert 'explicit-adb-reboot-bootloader' in text
     assert 'adb_reboot_bootloader_performed' in text
+    assert 'Save-WindowsFastbootUsbDiagnostic' in WIZARD.read_text(encoding="utf-8")
+    assert 'Get-CimInstance Win32_PnPEntity' in WIZARD.read_text(encoding="utf-8")
+    assert 'Get-CimInstance Win32_PnPSignedDriver' in WIZARD.read_text(encoding="utf-8")
+    assert 'windows-driver-not-installed' in WIZARD.read_text(encoding="utf-8")
+    assert 'usb-device-present-but-fastboot-not-bound' in WIZARD.read_text(encoding="utf-8")
+    assert 'No driver was installed or changed by KaliPhoneStudio.' in WIZARD.read_text(encoding="utf-8")
     for forbidden_promotion in (
         "persistent_write_authorized = $true",
         "phone_storage_written = $true",

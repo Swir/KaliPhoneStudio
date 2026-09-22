@@ -134,6 +134,8 @@ pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 `
 
 The launcher re-runs host preflight, takes the firmware build/fingerprint from the exact ADB evidence instead of requiring retyping, executes only the frozen `begin-physical-test-session` Fastboot version/devices/getvar capture, copies the exact ADB identity record into the new session and creates a SHA-256 binding link. The frozen wrapper passes the packaged profile token internally as `--confirm-token "AC2003"`. Aside from the explicitly confirmed optional ADB reboot-to-bootloader transition, it does **not** reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
 
+If the phone visibly reaches its bootloader but `fastboot devices` remains empty for 60 seconds, the wizard now writes a create-only `fastboot-windows-usb-diagnostic-<session>.json` report. The report records the read-only Fastboot discovery result plus matching Windows PnP/signed-driver metadata and classifies common host-side conditions such as missing driver (ConfigManager error 28), another PnP problem, a USB device present without a usable Fastboot binding, or no USB enumeration. The diagnostic does not install, replace or modify any Windows driver and performs no additional phone write.
+
 `begin-physical-test-session` remains the recovery-first wrapper around the lower-level `capture-fastboot-baseline` primitive. Do not invoke both against the same session; the wrapper owns the fresh session directory and exact baseline capture so evidence cannot be duplicated or mixed.
 
 A successful command creates the exact baseline set under `$Session\fastboot` plus the create-only session and stock-Android identity binding:
