@@ -121,7 +121,7 @@ Do not reuse either evidence path after a failed or changed-firmware attempt.
 
 ## 2. Bind that exact identity into one-command read-only Fastboot capture
 
-Manually put the phone in Fastboot/bootloader mode using the normal device controls. Confirm the exact serial shown by the reviewed Fastboot executable, then run the packaged launcher against the **same** `$Identity` captured in section 1:
+Move the same phone into Fastboot/bootloader mode. The one-command wizard now offers two guarded paths: **M** keeps the manual phone-control transition, while **A** requires typing the exact confirmation `REBOOT-BOOTLOADER AC2003` before it executes one `adb -s <captured-serial> reboot bootloader`. The ADB executable/serial remain bound to the captured stock identity, the command performs no flash/erase/slot change, and the transition is recorded as separate evidence. For the advanced manual path, confirm the exact serial shown by the reviewed Fastboot executable, then run the packaged launcher against the **same** `$Identity` captured in section 1:
 
 ```powershell
 pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 `
@@ -132,7 +132,9 @@ pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 `
   -SessionDir "$Session"
 ```
 
-The launcher re-runs host preflight, takes the firmware build/fingerprint from the exact ADB evidence instead of requiring retyping, executes only the frozen `begin-physical-test-session` Fastboot version/devices/getvar capture, copies the exact ADB identity record into the new session and creates a SHA-256 binding link. The frozen wrapper passes the packaged profile token internally as `--confirm-token "AC2003"`. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
+The launcher re-runs host preflight, takes the firmware build/fingerprint from the exact ADB evidence instead of requiring retyping, executes only the frozen `begin-physical-test-session` Fastboot version/devices/getvar capture, copies the exact ADB identity record into the new session and creates a SHA-256 binding link. The frozen wrapper passes the packaged profile token internally as `--confirm-token "AC2003"`. Aside from the explicitly confirmed optional ADB reboot-to-bootloader transition, it does **not** reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
+
+If the phone visibly reaches its bootloader but `fastboot devices` remains empty for 60 seconds, the wizard now writes a create-only `fastboot-windows-usb-diagnostic-<session>.json` report. The report records the read-only Fastboot discovery result plus matching Windows PnP/signed-driver metadata and classifies common host-side conditions such as missing driver (ConfigManager error 28), another PnP problem, a USB device present without a usable Fastboot binding, or no USB enumeration. The diagnostic does not install, replace or modify any Windows driver and performs no additional phone write.
 
 `begin-physical-test-session` remains the recovery-first wrapper around the lower-level `capture-fastboot-baseline` primitive. Do not invoke both against the same session; the wrapper owns the fresh session directory and exact baseline capture so evidence cannot be duplicated or mixed.
 

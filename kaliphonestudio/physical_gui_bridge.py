@@ -15,7 +15,7 @@ import sys
 from typing import Any, Callable, Sequence
 
 from .fastboot_capture import FastbootCaptureError, list_fastboot_devices
-from .fastboot_tool import FastbootToolError, inspect_fastboot_tool
+from .fastboot_tool import FastbootToolError, inspect_fastboot_tool, load_fastboot_tool_policy
 
 
 class PhysicalGuiBridgeError(RuntimeError):
@@ -75,8 +75,39 @@ def runtime_extractor(candidate_root: Path | None = None) -> Path | None:
     return candidate if candidate.is_file() and not candidate.is_symlink() else None
 
 
-def suggested_fastboot() -> str:
-    return shutil.which("fastboot") or ""
+def runtime_reviewed_fastboot(candidate_root: Path | None = None) -> Path | None:
+    """Return the candidate-local reviewed Fastboot when bootstrap has prepared it."""
+    root = Path(candidate_root) if candidate_root is not None else runtime_candidate_root()
+    try:
+        policy_path = runtime_fastboot_policy(root)
+        policy, _policy_sha256 = load_fastboot_tool_policy(policy_path)
+    except (PhysicalGuiBridgeError, FastbootToolError):
+        return None
+    version = str(policy["platform_tools_version"])
+    tool_root = root / "operator-runtime" / f"platform-tools-{version}" / "platform-tools"
+    for filename in ("fastboot.exe", "fastboot"):
+        candidate = tool_root / filename
+        if candidate.is_file() and not candidate.is_symlink():
+            return candidate.resolve()
+    return None
+
+
+def runtime_bootstrap_script(candidate_root: Path | None = None) -> Path | None:
+    """Return the packaged download-only host bootstrap script, if available."""
+    root = Path(candidate_root) if candidate_root is not None else runtime_candidate_root()
+    candidate = root / "operator-pack" / "bootstrap-first-test.ps1"
+    return candidate.resolve() if candidate.is_file() and not candidate.is_symlink() else None
+
+
+def suggested_fastboot(
+    candidate_root: Path | None = None,
+    *,
+    allow_path_fallback: bool = True,
+) -> str:
+    reviewed = runtime_reviewed_fastboot(candidate_root)
+    if reviewed is not None:
+        return str(reviewed)
+    return (shutil.which("fastboot") or "") if allow_path_fallback else ""
 
 
 def detect_single_fastboot_device(

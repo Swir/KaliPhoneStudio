@@ -150,6 +150,23 @@ jobs:
           tests/test_physical_recovery_readiness.py
           tests/test_temporary_boot_execution.py
 
+      - name: Parse AC2003 PowerShell launchers before packaging
+        shell: pwsh
+        run: |
+          foreach ($Script in @(
+            "scripts/start_ac2003_readonly_baseline.ps1",
+            "scripts/start_ac2003_first_test_wizard.ps1",
+            "scripts/bootstrap_ac2003_first_test.ps1",
+            "scripts/overlay_ac2003_first_test_wizard.ps1"
+          )) {
+            $Errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $Script), [ref]$null, [ref]$Errors)
+            if ($Errors.Count -ne 0) {
+              $Errors | Format-List | Out-String | Write-Error
+              throw "PowerShell parse failed: $Script"
+            }
+          }
+
       - name: Smoke pinned automatic AC2003 host bootstrap without phone I/O
         shell: pwsh
         run: |
@@ -190,13 +207,21 @@ jobs:
             @'
           param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
           if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "--version") {
-              Write-Output "Android Debug Bridge version 1.0.41"
-              Write-Output "Version __KPS_PLATFORM_TOOLS_VERSION__-kps-smoke"
+              # Reproduce the native Windows adb.exe multiline CRLF output seen on the
+              # real AC2003 host, including Google's numeric build suffix.
+              Write-Output ("Android Debug Bridge version 1.0.41`r`nVersion __KPS_PLATFORM_TOOLS_VERSION__-15733141`r`nInstalled as C:\\kps\\platform-tools\\adb.exe`r`nRunning on Windows 10.0.26200")
               exit 0
           }
           if ($Remaining.Count -ge 1 -and $Remaining[0] -eq "devices") {
+              $Marker = Join-Path (Split-Path -Parent $PSCommandPath) "adb-unauthorized-seen.marker"
               Write-Output "List of devices attached"
-              Write-Output "KPSADB0001 device product:avicii model:AC2003 device:avicii transport_id:1"
+              if (-not (Test-Path -LiteralPath $Marker)) {
+                  New-Item -ItemType File -Path $Marker -Force | Out-Null
+                  Write-Output "KPSADB0001 unauthorized transport_id:1"
+              }
+              else {
+                  Write-Output "KPSADB0001 device product:avicii model:AC2003 device:avicii transport_id:1"
+              }
               exit 0
           }
           if ($Remaining.Count -eq 5 -and $Remaining[0] -eq "-s" -and $Remaining[1] -eq "KPSADB0001" -and $Remaining[2] -eq "shell" -and $Remaining[3] -eq "getprop") {
@@ -230,6 +255,7 @@ jobs:
             if ($Record.profile_id -ne "oneplus/avicii") { throw "Stock Android identity smoke profile drift" }
             if ($Record.product_strong_match -ne $true -or $Record.model_strong_match -ne $true) { throw "Stock Android identity smoke strong-match failure" }
             if ($Record.firmware_build -ne "AC2003_11_F.99_KPS") { throw "Stock Android identity smoke firmware build drift" }
+            if ($Record.adb_version_line -ne "Version $($Policy.platform_tools_version)-15733141") { throw "Stock Android identity smoke ADB Version-line parser drift" }
             if ($Record.read_only_stock_android_capture -ne $true -or $Record.adb_reboot_performed -ne $false) { throw "Stock Android identity smoke read-only policy failure" }
             if ($Record.persistent_write_authorized -ne $false -or $Record.phone_storage_written -ne $false -or $Record.beta_gate_credit -ne $false) { throw "Stock Android identity smoke unsafe promotion" }
           }

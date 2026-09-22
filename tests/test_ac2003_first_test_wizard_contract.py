@@ -38,6 +38,18 @@ def test_first_test_wizard_reuses_reviewed_readonly_boundaries() -> None:
         assert needle in text
 
 
+def test_physical_script_chain_reuses_current_pshome_pwsh() -> None:
+    critical = (
+        ROOT / "scripts" / "start_ac2003_first_test_wizard.ps1",
+        ROOT / "scripts" / "start_ac2003_readonly_baseline.ps1",
+        ROOT / "scripts" / "preflight_ac2003_first_test.ps1",
+    )
+    for script in critical:
+        text = script.read_text(encoding="utf-8")
+        assert '$CurrentPwsh = Join-Path $PSHOME "pwsh.exe"' in text
+        assert "Current PSHOME PowerShell host self-check failed" in text
+        assert "& pwsh -NoProfile -File" not in text
+
 def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -> None:
     text = WIZARD.read_text(encoding="utf-8")
 
@@ -59,7 +71,7 @@ def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -
     ):
         assert needle in text
 
-    first_preflight = text.index('& pwsh -NoProfile -File $Preflight')
+    first_preflight = text.index('& $CurrentPwsh -NoProfile -File $Preflight')
     first_phone_capture = text.index('-CaptureAndroidIdentityOnly')
     assert first_preflight < first_phone_capture
 
@@ -87,7 +99,6 @@ def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> Non
     # Explanatory prose deliberately says that adb reboot / fastboot boot are forbidden.
     # Test actual argv-shaped calls instead of rejecting those safety sentences.
     for forbidden_argv in (
-        '@("reboot")',
         '@("boot")',
         '@("flash")',
         '@("erase")',
@@ -97,6 +108,16 @@ def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> Non
         assert forbidden_argv not in text
 
     assert 'invoke-readonlytool $fastbootpath @("devices")' in text
+    assert '"reboot" "bootloader"' in text
+    assert 'reboot-bootloader ac2003' in text
+    assert 'explicit-adb-reboot-bootloader' in text
+    assert 'adb_reboot_bootloader_performed' in text
+    assert 'Save-WindowsFastbootUsbDiagnostic' in WIZARD.read_text(encoding="utf-8")
+    assert 'Get-CimInstance Win32_PnPEntity' in WIZARD.read_text(encoding="utf-8")
+    assert 'Get-CimInstance Win32_PnPSignedDriver' in WIZARD.read_text(encoding="utf-8")
+    assert 'windows-driver-not-installed' in WIZARD.read_text(encoding="utf-8")
+    assert 'usb-device-present-but-fastboot-not-bound' in WIZARD.read_text(encoding="utf-8")
+    assert 'No driver was installed or changed by KaliPhoneStudio.' in WIZARD.read_text(encoding="utf-8")
     for forbidden_promotion in (
         "persistent_write_authorized = $true",
         "phone_storage_written = $true",
@@ -106,13 +127,17 @@ def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> Non
         assert forbidden_promotion not in text
 
 
-def test_wizard_requires_manual_mode_transition_by_default() -> None:
+def test_wizard_offers_manual_or_explicitly_confirmed_adb_bootloader_transition() -> None:
     text = WIZARD.read_text(encoding="utf-8")
 
     assert 'if (-not $FastbootAlreadyReady)' in text
-    assert 'MANUAL MODE CHANGE REQUIRED' in text
-    assert 'using the phone controls' in text
-    assert 'Do not use an ADB reboot command' in text
+    assert 'FASTBOOT MODE TRANSITION' in text
+    assert '[M] Manual phone controls (default)' in text
+    assert '[A] Explicitly confirmed: adb reboot bootloader' in text
+    assert 'Read-Host "Choose M or A"' in text
+    assert 'REBOOT-BOOTLOADER AC2003' in text
+    assert 'adb get-state before bootloader reboot' in text
+    assert '& $AdbPath "-s" $AdbSerialForReboot "reboot" "bootloader"' in text
     assert 'Read-Host "When the phone is visibly in Fastboot/bootloader, press ENTER"' in text
 
 
@@ -124,6 +149,9 @@ def test_candidate_overlay_packages_wizard_and_rebuilds_integrity_set() -> None:
         'first-test-wizard.ps1',
         'first_test_wizard_included',
         'first_test_wizard_manual_fastboot_transition_required',
+        'first_test_wizard_manual_fastboot_transition_available',
+        'first_test_wizard_explicit_adb_bootloader_reboot_available',
+        'first_test_wizard_explicit_adb_bootloader_reboot_confirmation',
         'first_test_wizard_automatic_reboot',
         'first_test_wizard_temporary_boot_performed',
         'first_test_wizard_persistent_write_authorized',
@@ -137,7 +165,10 @@ def test_candidate_overlay_packages_wizard_and_rebuilds_integrity_set() -> None:
         assert needle in text
 
     assert 'first_test_wizard_included -NotePropertyValue $true' in text
-    assert 'first_test_wizard_manual_fastboot_transition_required -NotePropertyValue $true' in text
+    assert 'first_test_wizard_manual_fastboot_transition_required -NotePropertyValue $false' in text
+    assert 'first_test_wizard_manual_fastboot_transition_available -NotePropertyValue $true' in text
+    assert 'first_test_wizard_explicit_adb_bootloader_reboot_available -NotePropertyValue $true' in text
+    assert 'first_test_wizard_explicit_adb_bootloader_reboot_confirmation -NotePropertyValue "REBOOT-BOOTLOADER AC2003"' in text
     for safe_false in (
         'first_test_wizard_automatic_reboot',
         'first_test_wizard_temporary_boot_performed',

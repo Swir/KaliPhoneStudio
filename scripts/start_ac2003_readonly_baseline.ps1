@@ -13,6 +13,15 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$CurrentPwsh = Join-Path $PSHOME "pwsh.exe"
+if (-not (Test-Path -LiteralPath $CurrentPwsh -PathType Leaf)) {
+    throw "Current PowerShell host executable missing from PSHOME: $CurrentPwsh"
+}
+$CurrentPwshVersion = (& $CurrentPwsh -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()' 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($CurrentPwshVersion)) {
+    throw "Current PSHOME PowerShell host self-check failed"
+}
+
 function Require-NonEmpty([string]$Value, [string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         throw "AC2003 read-only baseline launcher requires $Name"
@@ -26,6 +35,34 @@ function Invoke-AdbRead([string]$AdbPath, [string[]]$Arguments, [string]$Label) 
         throw "Read-only ADB capture failed for ${Label}: exit=$Exit output=$Output"
     }
     return $Output
+}
+function Get-ReviewedAdbVersionLine([string]$VersionOutput, [string]$ExpectedVersion) {
+    if ([string]::IsNullOrWhiteSpace($VersionOutput)) {
+        throw "ADB --version output is empty"
+    }
+    $VersionLines = @(
+        $VersionOutput -split '[\r\n]+' |
+            ForEach-Object { $_.Trim() } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_.StartsWith("Version ", [StringComparison]::Ordinal)
+            }
+    )
+    if ($VersionLines.Count -ne 1) {
+        throw "ADB --version must contain exactly one Version line"
+    }
+    $VersionLine = [string]$VersionLines[0]
+    $Prefix = "Version "
+    $VersionToken = $VersionLine.Substring($Prefix.Length)
+    $TokenPattern = '^' + [Regex]::Escape($ExpectedVersion) + '(?:[-+][A-Za-z0-9._-]+)?\z'
+    if ($VersionToken -notmatch $TokenPattern) {
+        throw "ADB version drift: policy requires $ExpectedVersion; Version line: $VersionLine"
+    }
+    $ObservedBase = ($VersionToken -split '[-+]', 2)[0]
+    if ($ObservedBase -ne $ExpectedVersion) {
+        throw "ADB version drift: policy requires $ExpectedVersion; observed base version $ObservedBase"
+    }
+    return $VersionLine
 }
 
 $Root = (Resolve-Path $CandidateRoot).Path
@@ -69,21 +106,60 @@ if ($CaptureAndroidIdentityOnly) {
     if (-not (Test-Path $AdbPath -PathType Leaf)) { throw "ADB executable not found: $AdbPath" }
     $AdbShaBefore = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInvariant()
     $AdbVersionBefore = Invoke-AdbRead $AdbPath @("--version") "adb --version"
-    $VersionPattern = "(?im)^Version\s+" + [Regex]::Escape($ExpectedPlatformToolsVersion) + "(?:[-+][^\s]+)?$"
-    if ($AdbVersionBefore -notmatch $VersionPattern) {
-        throw "ADB version drift: policy requires $ExpectedPlatformToolsVersion; reported: $AdbVersionBefore"
-    }
+    $AdbVersionLine = Get-ReviewedAdbVersionLine $AdbVersionBefore $ExpectedPlatformToolsVersion
 
-    $Devices = Invoke-AdbRead $AdbPath @("devices", "-l") "adb devices -l"
-    $DeviceLines = @(
-        $Devices -split "`r?`n" |
-            Where-Object { $_ -match '^\S+\s+device(?:\s|$)' }
-    )
-    if ($DeviceLines.Count -ne 1) {
-        throw "Stock Android identity capture requires exactly one authorized ADB device; got $($DeviceLines.Count)"
-    }
-    $AdbSerial = (($DeviceLines[0] -split '\s+')[0]).Trim()
+    $AdbSerial = $null
+    $AuthorizationDeadline = [DateTime]::UtcNow.AddSeconds(120)
+    $LastAdbStateSummary = "none"
+    do {
+        $Devices = Invoke-AdbRead $AdbPath @("devices", "-l") "adb devices -l"
+        $Rows = @(
+            $Devices -split "[\r\n]+" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object {
+                    -not [string]::IsNullOrWhiteSpace($_) -and
+                    -not $_.StartsWith("List of devices attached", [StringComparison]::OrdinalIgnoreCase)
+                }
+        )
+
+        $Authorized = @($Rows | Where-Object { $_ -match '^\S+\s+device(?:\s|$)' })
+        $Unauthorized = @($Rows | Where-Object { $_ -match '^\S+\s+unauthorized(?:\s|$)' })
+        $Offline = @($Rows | Where-Object { $_ -match '^\S+\s+offline(?:\s|$)' })
+        $RecognizedRows = @($Authorized + $Unauthorized + $Offline)
+
+        if ($RecognizedRows.Count -gt 1) {
+            throw "Stock Android identity capture requires exactly one physical ADB target; detected multiple entries: $($Rows -join ' | ')"
+        }
+        if ($Authorized.Count -eq 1) {
+            $AdbSerial = (($Authorized[0] -split '\s+')[0]).Trim()
+            break
+        }
+
+        if ($Unauthorized.Count -eq 1) {
+            $LastAdbStateSummary = "unauthorized"
+            Write-Host "ADB DEVICE FOUND BUT NOT AUTHORIZED."
+            Write-Host "Unlock the AC2003 and tap 'Allow USB debugging' / 'Zezwalaj na debugowanie USB'."
+            Write-Host "Keep this window open — KaliPhoneStudio will retry automatically."
+        }
+        elseif ($Offline.Count -eq 1) {
+            $LastAdbStateSummary = "offline"
+            Write-Host "ADB device is offline. Keep the phone unlocked and reconnect the USB data cable if needed."
+            Write-Host "KaliPhoneStudio will retry automatically."
+        }
+        else {
+            $LastAdbStateSummary = "not-detected"
+            Write-Host "Waiting for one authorized ADB device..."
+            Write-Host "Phone must be booted into OxygenOS, unlocked, USB debugging enabled, and connected with a data-capable USB cable."
+        }
+
+        if ([DateTime]::UtcNow -ge $AuthorizationDeadline) {
+            throw "Timed out waiting 120 seconds for one authorized ADB device; last state=$LastAdbStateSummary. Enable USB debugging, unlock the phone and accept the RSA authorization prompt, then retry."
+        }
+        Start-Sleep -Seconds 2
+    } while ($true)
+
     Require-NonEmpty $AdbSerial "authorized ADB serial"
+    Write-Host "ADB authorization: PASS ($AdbSerial)"
 
     $PropertyKeys = @(
         "ro.product.device",
@@ -153,6 +229,7 @@ if ($CaptureAndroidIdentityOnly) {
         platform_tools_version = $ExpectedPlatformToolsVersion
         adb_executable_sha256 = $AdbShaBefore
         adb_version_output = $AdbVersionBefore
+        adb_version_line = $AdbVersionLine
         read_only_stock_android_capture = $true
         device_interaction_performed = $true
         adb_reboot_performed = $false
@@ -229,7 +306,7 @@ if (Test-Path $SessionPath) {
 }
 
 $FastbootPath = (Resolve-Path $FastbootExecutable).Path
-& pwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
+& $CurrentPwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
 if ($LASTEXITCODE -ne 0) {
     throw "AC2003 host preflight failed before physical read-only capture: $LASTEXITCODE"
 }

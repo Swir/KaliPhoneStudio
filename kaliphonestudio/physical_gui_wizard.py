@@ -18,6 +18,7 @@ from .physical_gui_bridge import (
     detect_single_fastboot_device,
     ensure_no_persistent_write_verbs,
     inspect_session_state,
+    runtime_bootstrap_script,
     runtime_candidate_root,
     runtime_cli_invocation,
     runtime_extractor,
@@ -59,6 +60,8 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             self._detected_serial: str | None = None
             self._process: QProcess | None = None
             self._pending_stage: str | None = None
+            self._retry_detection_after_bootstrap = False
+            self._bootstrap_attempted_for_detection = False
             self._busy = False
 
             root = QVBoxLayout(self)
@@ -87,8 +90,12 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             self.profile = QComboBox()
             host_form.addRow("Device profile:", self.profile)
 
-            self.fastboot = QLineEdit(suggested_fastboot())
+            self.fastboot = QLineEdit(suggested_fastboot(self._candidate_root))
             host_form.addRow("Reviewed fastboot.exe:", self._file_row(self.fastboot, self._browse_fastboot))
+
+            self.tools_button = QPushButton("Auto-prepare reviewed Platform-Tools")
+            self.tools_button.clicked.connect(self._prepare_reviewed_host_tools)
+            host_form.addRow("", self.tools_button)
 
             self.detect_button = QPushButton("Detect Fastboot phone")
             self.detect_button.clicked.connect(self._detect_phone)
@@ -230,6 +237,7 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             if filename:
                 self.fastboot.setText(filename)
                 self._detected_serial = None
+                self._bootstrap_attempted_for_detection = False
                 self.device_status.setText("Not detected after Fastboot path change")
 
         def _browse_file(self, editor: QLineEdit, title: str) -> None:
@@ -256,7 +264,51 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             if cleaned:
                 self.log.appendPlainText(cleaned)
 
+        def _prepare_reviewed_host_tools(self) -> None:
+            self._start_reviewed_host_tools_bootstrap(retry_detection=False)
+
+        def _start_reviewed_host_tools_bootstrap(self, *, retry_detection: bool) -> bool:
+            if self._process is not None:
+                QMessageBox.warning(self, "Operation already running", "Finish the current stage first.")
+                return False
+            bootstrap = runtime_bootstrap_script(self._candidate_root)
+            if bootstrap is None:
+                QMessageBox.warning(
+                    self,
+                    "Host bootstrap unavailable",
+                    "This candidate does not contain operator-pack\\bootstrap-first-test.ps1.",
+                )
+                return False
+            process = QProcess(self)
+            process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            process.setProgram("powershell.exe")
+            process.setArguments([
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", str(bootstrap),
+                "-CandidateRoot", str(self._candidate_root),
+                "-DownloadOnly",
+            ])
+            process.readyReadStandardOutput.connect(
+                lambda: self._append_log(bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace"))
+            )
+            process.finished.connect(self._process_finished)
+            process.errorOccurred.connect(lambda error: self._append_log(f"PROCESS ERROR: {error}"))
+            self._process = process
+            self._pending_stage = "reviewed host-tool bootstrap"
+            self._retry_detection_after_bootstrap = retry_detection
+            self._set_busy(True)
+            self._append_log("START: automatic pinned Platform-Tools bootstrap (host-only, no phone I/O)")
+            process.start()
+            return True
+
         def _detect_phone(self) -> None:
+            preferred = suggested_fastboot(self._candidate_root, allow_path_fallback=False)
+            if preferred and self.fastboot.text().strip() != preferred:
+                self.fastboot.setText(preferred)
+                self._detected_serial = None
+                self.device_status.setText("Using candidate-local reviewed Fastboot")
+
             try:
                 detection = detect_single_fastboot_device(
                     self.fastboot.text(),
@@ -264,8 +316,26 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
                 )
             except PhysicalGuiBridgeError as exc:
                 self._detected_serial = None
-                self.device_status.setText(f"Detection refused: {exc}")
-                QMessageBox.warning(self, "Fastboot detection refused", str(exc))
+                message = str(exc)
+                bootstrap_eligible = (
+                    not self._bootstrap_attempted_for_detection
+                    and runtime_bootstrap_script(self._candidate_root) is not None
+                    and (
+                        "not the reviewed Platform-Tools version" in message
+                        or "Fastboot executable" in message
+                        or "not found" in message.lower()
+                    )
+                )
+                if bootstrap_eligible:
+                    self._bootstrap_attempted_for_detection = True
+                    self.device_status.setText("Preparing reviewed Platform-Tools automatically…")
+                    self._append_log(
+                        f"UNREVIEWED/MISSING FASTBOOT: {message}; starting pinned download-only bootstrap"
+                    )
+                    if self._start_reviewed_host_tools_bootstrap(retry_detection=True):
+                        return
+                self.device_status.setText(f"Detection refused: {message}")
+                QMessageBox.warning(self, "Fastboot detection refused", message)
                 return
             self._detected_serial = detection.serial
             self.fastboot.setText(str(detection.executable))
@@ -385,6 +455,7 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
 
         def _process_finished(self, exit_code: int, _exit_status) -> None:
             stage = self._pending_stage or "operation"
+            retry_detection = self._retry_detection_after_bootstrap
             process = self._process
             if process is not None:
                 remaining = bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace")
@@ -392,9 +463,27 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
                 process.deleteLater()
             self._process = None
             self._pending_stage = None
+            self._retry_detection_after_bootstrap = False
             self._set_busy(False)
             if exit_code == 0:
                 self._append_log(f"PASS: {stage}")
+                if stage == "reviewed host-tool bootstrap":
+                    preferred = suggested_fastboot(self._candidate_root, allow_path_fallback=False)
+                    if not preferred:
+                        self.device_status.setText("Bootstrap passed but reviewed Fastboot was not found")
+                        QMessageBox.warning(
+                            self,
+                            "Reviewed Fastboot missing",
+                            "Bootstrap completed, but the pinned Fastboot executable is not present at the reviewed runtime path.",
+                        )
+                        return
+                    self.fastboot.setText(preferred)
+                    self._detected_serial = None
+                    self.device_status.setText("Reviewed Platform-Tools ready")
+                    self._append_log(f"REVIEWED FASTBOOT READY: {preferred}")
+                    if retry_detection:
+                        self._detect_phone()
+                    return
                 self._refresh_state()
             else:
                 self._append_log(f"REFUSED/FAILED: {stage} exit={exit_code}")
@@ -409,6 +498,7 @@ def create_physical_test_dialog(parent, devices_root: Path, initial_profile_id: 
             self._update_action_states()
 
         def _update_action_states(self) -> None:
+            self.tools_button.setEnabled(not self._busy)
             self.detect_button.setEnabled(not self._busy)
             baseline_ready = False
             candidate_ready = False
