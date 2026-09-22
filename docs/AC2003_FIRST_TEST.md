@@ -39,7 +39,7 @@ Keep all evidence from one phone/firmware attempt under fresh create-only paths;
 Stop immediately if any of these are true:
 
 - the phone is not the expected AC2003 / `avicii` profile;
-- the exact OxygenOS build or firmware fingerprint cannot be captured or independently checked;
+- the exact OxygenOS build or full firmware fingerprint cannot be captured or independently checked;
 - ADB sees anything other than exactly one authorized device during the stock-Android identity phase;
 - Fastboot reports an unexpected serial, product, slot count or security state;
 - the exact OTA matching the phone firmware is unavailable;
