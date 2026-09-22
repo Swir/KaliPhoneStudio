@@ -51,6 +51,10 @@ def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -
         'Host/Fastboot preflight failed before any phone interaction',
         'Captured ADB identity is not bound to the wizard-start ADB executable',
         'Android Platform-Tools executable changed between wizard phases',
+        'Captured Fastboot tool evidence is missing executable SHA-256',
+        "if ($CapturedFastbootSha -notmatch '^[0-9a-f]{64}$')",
+        'Captured Fastboot tool evidence contains an invalid executable SHA-256',
+        'Captured Fastboot evidence is not bound to the wizard-start Fastboot executable',
         'Shared Platform-Tools directory',
     ):
         assert needle in text
@@ -58,6 +62,11 @@ def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -
     first_preflight = text.index('& pwsh -NoProfile -File $Preflight')
     first_phone_capture = text.index('-CaptureAndroidIdentityOnly')
     assert first_preflight < first_phone_capture
+
+    missing_digest_guard = text.index('if ($null -eq $CapturedFastbootSha)')
+    digest_match_guard = text.index('if ($CapturedFastbootSha -ne $FastbootShaAtStart)')
+    success_banner = text.index('KaliPhoneStudio AC2003 FIRST TEST READ-ONLY BASELINE: PASS')
+    assert missing_digest_guard < digest_match_guard < success_banner
 
 
 def test_windows_candidate_rebuilds_when_wizard_changes() -> None:
