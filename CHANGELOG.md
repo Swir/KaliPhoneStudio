@@ -4,6 +4,8 @@ Active development changes are listed here. Older detailed entries remain in [`C
 
 ## 0.6.67-dev — distinct-capture fresh-device rootfs target revalidation
 
+- Added an automatic Windows host bootstrap for the AC2003 FIRST TEST candidate: one launcher downloads exact pinned PowerShell 7.6.6 x64 portable and Android Platform-Tools 37.0.1, verifies locked SHA-256 values before extraction, verifies runtime/tool versions and records a no-phone-I/O bootstrap manifest before starting the existing guarded read-only wizard.
+- The bootstrap intentionally does not guess or pre-download OxygenOS firmware; exact OTA acquisition remains gated on the real phone's captured OxygenOS build/fingerprint so stock `boot.img` provenance cannot silently drift.
 - Added `kaliphonestudio.rootfs_handoff_fresh_revalidation` as a schema-v1 fail-closed boundary after an accepted logical target-binding review. It requires a **distinct new read-only** physical-storage discovery/report chain instead of reusing the original reviewed discovery.
 - Fresh revalidation cross-checks the exact profile, serial, firmware build/fingerprint, rootfs artifact SHA-256/size, recovery-plan SHA-256 and reviewed logical partition role/kernel/filesystem/encryption/capacity identity. Reuse, report detachment, firmware/identity drift, removable storage, filesystem/encryption drift or insufficient current free space fail closed.
 - Successful evidence only records `fresh_device_revalidated=true` and `ready_for_separate_manual_trial_authorization=true`; raw `/dev` path binding, mount targets, trial execution, persistent writes, storage/recovery verification, hardware verification and Beta authorization/credit remain forced false.

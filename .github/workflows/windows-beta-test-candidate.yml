@@ -30,7 +30,10 @@ on:
       - "scripts/preflight_ac2003_first_test.ps1"
       - "scripts/start_ac2003_readonly_baseline.ps1"
       - "scripts/start_ac2003_first_test_wizard.ps1"
+      - "scripts/bootstrap_ac2003_first_test.ps1"
+      - "scripts/start_ac2003_first_test.cmd"
       - "scripts/overlay_ac2003_first_test_wizard.ps1"
+      - "tools/ac2003-bootstrap-lock.json"
       - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
@@ -63,7 +66,10 @@ on:
       - "scripts/preflight_ac2003_first_test.ps1"
       - "scripts/start_ac2003_readonly_baseline.ps1"
       - "scripts/start_ac2003_first_test_wizard.ps1"
+      - "scripts/bootstrap_ac2003_first_test.ps1"
+      - "scripts/start_ac2003_first_test.cmd"
       - "scripts/overlay_ac2003_first_test_wizard.ps1"
+      - "tools/ac2003-bootstrap-lock.json"
       - "scripts/verify_windows_beta_test_candidate.ps1"
       - "build/windows-requirements.txt"
       - "requirements.txt"
@@ -143,6 +149,16 @@ jobs:
           tests/test_physical_recovery_operator.py
           tests/test_physical_recovery_readiness.py
           tests/test_temporary_boot_execution.py
+
+      - name: Smoke pinned automatic AC2003 host bootstrap without phone I/O
+        shell: pwsh
+        run: |
+          ./scripts/bootstrap_ac2003_first_test.ps1 -CandidateRoot "." -RuntimeRoot "build/bootstrap-smoke" -EvidenceRoot "build/bootstrap-evidence-smoke" -LockPath "tools/ac2003-bootstrap-lock.json" -DownloadOnly
+          if ($LASTEXITCODE -ne 0) { throw "Automatic AC2003 host bootstrap smoke failed: $LASTEXITCODE" }
+          $Runtime = Get-Content -Raw -Encoding UTF8 "build/bootstrap-smoke/bootstrap-runtime.json" | ConvertFrom-Json
+          if ($Runtime.phone_interaction_performed -ne $false -or $Runtime.persistent_write_authorized -ne $false -or $Runtime.beta_gate_credit -ne $false) {
+            throw "Automatic host bootstrap smoke produced unsafe metadata"
+          }
 
       - name: Build frozen Windows GUI and CLI
         shell: pwsh

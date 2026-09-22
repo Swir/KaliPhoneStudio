@@ -13,6 +13,8 @@ Keep the extracted package together. It should contain:
 - `operator-tools/payload-dumper-go.exe` plus its exact side-by-side runtime DLL closure;
 - `operator-tools/operator-extractor-manifest.json` and `operator-extractor-runtime.json`;
 - `operator-pack/START_HERE.txt`;
+- `operator-pack/START_FIRST_TEST.cmd` — one-click automatic host prerequisite bootstrap + guarded first-test launcher;
+- `operator-pack/bootstrap-first-test.ps1` and `operator-pack/bootstrap-lock.json` — exact pinned downloader/checksum contract;
 - `operator-pack/AC2003_FIRST_TEST.md` — this file;
 - `operator-pack/BETA_RELEASE_OPERATOR_WORKSPACE.md`;
 - `operator-pack/WINDOWS_OPERATOR_EXTRACTOR.md`;
@@ -50,20 +52,34 @@ Stop immediately if any of these are true:
 
 The first physical sequence below uses read-only ADB property capture, read-only Fastboot capture and offline binding first. The only physical boot command later in the chain is the explicitly gated one-shot temporary `fastboot boot` path.
 
-## 0. Prepare the Windows host once
+## 0. Prepare the Windows host automatically
 
-Open PowerShell in the extracted candidate directory and define the exact packaged tools once for the whole session:
+Recommended path: from the extracted candidate, run:
+
+```text
+.\operator-pack\START_FIRST_TEST.cmd
+```
+
+That launcher uses built-in Windows PowerShell only for bootstrap. Before any phone interaction it automatically downloads the exact pinned **PowerShell 7.6.6 x64 portable** and **Android Platform-Tools 37.0.1** archives, requires HTTPS, verifies their locked SHA-256 values before extraction, verifies the resulting runtime/tool versions, records executable/archive hashes in `operator-runtime/bootstrap-runtime.json`, and then starts the guarded read-only first-test wizard with that exact ADB/Fastboot pair.
+
+To prepare everything ahead of time without touching the phone, use download-only mode:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\operator-pack\bootstrap-first-test.ps1 -CandidateRoot . -DownloadOnly
+```
+
+The exact OxygenOS OTA is deliberately **not** guessed or downloaded at bootstrap time because the correct package depends on the real phone's captured build/fingerprint. After the read-only identity/baseline succeeds, only an exact matching OTA may be used.
+
+The candidate already bundles the reviewed `payload-dumper-go.exe`; do **not** search for another extractor. The advanced/manual path remains available below if the automatic bootstrap is intentionally bypassed.
+
+For the manual path only, define:
 
 ```powershell
 $Cli = (Resolve-Path ".\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe").Path
 $Extractor = (Resolve-Path ".\operator-tools\payload-dumper-go.exe").Path
-$Adb = (Resolve-Path "<PATH_TO_REVIEWED_ADB_EXE>").Path
-$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path
+$Adb = (Resolve-Path ".\operator-runtime\platform-tools-37.0.1\platform-tools\adb.exe").Path
+$Fastboot = (Resolve-Path ".\operator-runtime\platform-tools-37.0.1\platform-tools\fastboot.exe").Path
 ```
-
-`$Extractor` is already the exact reviewed `payload-dumper-go.exe` bundled in the candidate. Do **not** download or search for another extractor. Keep its runtime DLLs beside it exactly as packaged.
-
-ADB and Fastboot must come from the same reviewed Android Platform-Tools version accepted by `operator-pack/fastboot-tool-policy.json`. The guarded capture re-checks the executable/version identity; do not substitute another tool binary after evidence capture starts.
 
 Run the packaged host checks before connecting the phone:
 
