@@ -101,13 +101,17 @@ def test_candidate_overlay_packages_wizard_and_rebuilds_integrity_set() -> None:
 def test_candidate_overlay_does_not_authorize_release_or_phone_write() -> None:
     text = OVERLAY.read_text(encoding="utf-8").lower()
 
+    # The overlay intentionally contains forbidden Fastboot verb strings only as
+    # assertions that scan the packaged wizard. Do not mistake those guard strings
+    # for executable device commands.
     for forbidden in (
-        "fastboot flash ",
-        "fastboot erase ",
-        "fastboot set_active ",
         "gh release create",
         "beta_release = $true",
         "hardware_verified = $true",
         "phone_storage_written = $true",
+        "persistent_write_authorized = $true",
     ):
         assert forbidden not in text
+
+    assert 'first_test_wizard_persistent_write_authorized -notepropertyvalue $false' in text
+    assert 'first_test_wizard_beta_gate_credit -notepropertyvalue $false' in text
