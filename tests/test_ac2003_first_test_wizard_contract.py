@@ -97,7 +97,7 @@ def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> Non
 
     assert 'invoke-readonlytool $fastbootpath @("devices")' in text
     assert '"reboot" "bootloader"' in text
-    assert 'REBOOT-BOOTLOADER AC2003' in text
+    assert 'reboot-bootloader ac2003' in text
     assert 'explicit-adb-reboot-bootloader' in text
     assert 'adb_reboot_bootloader_performed' in text
     for forbidden_promotion in (
