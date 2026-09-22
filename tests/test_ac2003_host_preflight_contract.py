@@ -52,6 +52,7 @@ def test_readonly_baseline_launcher_runs_only_guarded_first_session_path() -> No
     for needle in (
         "operator-pack\\host-preflight.ps1",
         "operator-pack\\fastboot-tool-policy.json",
+        "operator-pack\\profile.json",
         "KaliPhoneStudioCLI\\KaliPhoneStudioCLI.exe",
         "begin-physical-test-session",
         '"--profile-id", "oneplus/avicii"',
@@ -83,9 +84,60 @@ def test_readonly_baseline_launcher_runs_only_guarded_first_session_path() -> No
         "fastboot erase ",
         "fastboot set_active ",
         "fastboot flashing ",
-        "adb ",
         "invoke-webrequest",
         "invoke-restmethod",
+    ):
+        assert forbidden not in lowered
+
+
+def test_stock_android_identity_capture_is_profile_bound_readonly_and_exact() -> None:
+    text = READONLY_BASELINE.read_text(encoding="utf-8")
+
+    for needle in (
+        "[switch]$CaptureAndroidIdentityOnly",
+        "[string]$AdbExecutable",
+        "[string]$AndroidIdentityEvidence",
+        '"devices", "-l"',
+        '"shell", "getprop", $Key',
+        '"ro.product.device"',
+        '"ro.product.model"',
+        '"ro.build.fingerprint"',
+        '"ro.build.version.ota"',
+        '"ro.build.display.id"',
+        '"ro.boot.slot_suffix"',
+        "identity_signals.product.values",
+        "identity_signals.model.values",
+        'kind = "kaliphonestudio-readonly-stock-android-identity"',
+        "read_only_stock_android_capture = $true",
+        "adb_reboot_performed = $false",
+        "persistent_write_authorized = $false",
+        "phone_storage_written = $false",
+        "hardware_verified = $false",
+        "beta_release_authorized = $false",
+        "beta_gate_credit = $false",
+        "stock Android identity capture: PASS",
+        "firmware build conflicts with Android identity evidence",
+        "firmware fingerprint conflicts with Android identity evidence",
+        "stock-android-identity-link.json",
+        "Firmware build/fingerprint source: read-only ADB evidence",
+    ):
+        assert needle in text
+
+    lowered = text.lower()
+    for forbidden in (
+        '@("reboot"',
+        '"reboot",',
+        '@("push"',
+        '"push",',
+        '@("install"',
+        '"install",',
+        '@("remount"',
+        '"remount",',
+        '@("root"',
+        '"root",',
+        '"shell", "dd"',
+        '"shell", "mount"',
+        '"shell", "mkfs',
     ):
         assert forbidden not in lowered
 
@@ -147,3 +199,7 @@ def test_windows_candidate_ci_tracks_and_runs_host_preflight_contract() -> None:
     assert text.count('"scripts/start_ac2003_readonly_baseline.ps1"') == 2
     assert "tests/test_ac2003_host_preflight_contract.py" in text
     assert "Package, host-preflight, read-only baseline launcher and self-verify integrated AC2003 host test candidate" in text
+    assert "Smoke read-only stock Android identity capture without a phone" in text
+    assert "-CaptureAndroidIdentityOnly" in text
+    assert "read_only_stock_android_capture" in text
+    assert "adb_reboot_performed" in text

@@ -158,6 +158,64 @@ jobs:
           -SourceCommit "${{ github.event.pull_request.head.sha || github.sha }}"
           -DistRoot "dist"
 
+      - name: Smoke read-only stock Android identity capture without a phone
+        shell: pwsh
+        run: |
+          $Policy = Get-Content -Raw -Encoding UTF8 "dist/operator-pack/fastboot-tool-policy.json" | ConvertFrom-Json
+          $Scratch = Join-Path $env:RUNNER_TEMP ("kps-adb-identity-smoke-" + [Guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $Scratch | Out-Null
+          try {
+            $FakeAdb = Join-Path $Scratch "adb.ps1"
+            @'
+          param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
+          if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "--version") {
+              Write-Output "Android Debug Bridge version 1.0.41"
+              Write-Output "Version __KPS_PLATFORM_TOOLS_VERSION__-kps-smoke"
+              exit 0
+          }
+          if ($Remaining.Count -ge 1 -and $Remaining[0] -eq "devices") {
+              Write-Output "List of devices attached"
+              Write-Output "KPSADB0001 device product:avicii model:AC2003 device:avicii transport_id:1"
+              exit 0
+          }
+          if ($Remaining.Count -eq 5 -and $Remaining[0] -eq "-s" -and $Remaining[1] -eq "KPSADB0001" -and $Remaining[2] -eq "shell" -and $Remaining[3] -eq "getprop") {
+              switch ($Remaining[4]) {
+                  "ro.product.device" { Write-Output "avicii"; exit 0 }
+                  "ro.product.model" { Write-Output "AC2003"; exit 0 }
+                  "ro.product.board" { Write-Output "lito"; exit 0 }
+                  "ro.build.fingerprint" { Write-Output "OnePlus/avicii/avicii:12/RKQ1/KPS:user/release-keys"; exit 0 }
+                  "ro.build.version.ota" { Write-Output "AC2003_11_F.99_KPS"; exit 0 }
+                  "ro.build.display.id" { Write-Output "AC2003_11_F.99_KPS"; exit 0 }
+                  "ro.build.id" { Write-Output "RKQ1"; exit 0 }
+                  "ro.build.version.incremental" { Write-Output "KPS"; exit 0 }
+                  "ro.boot.slot_suffix" { Write-Output "_a"; exit 0 }
+                  "ro.boot.bootloader" { Write-Output "KPS-BOOT"; exit 0 }
+                  "gsm.version.baseband" { Write-Output "KPS-BASEBAND"; exit 0 }
+              }
+          }
+          Write-Error "Unexpected fake ADB invocation: $($Remaining -join ' ')"
+          exit 19
+          '@.Replace("__KPS_PLATFORM_TOOLS_VERSION__", [string]$Policy.platform_tools_version) | Set-Content -Encoding UTF8 $FakeAdb
+
+            $Evidence = Join-Path $Scratch "stock-android-identity.json"
+            & pwsh -NoProfile -File "dist/operator-pack/readonly-baseline.ps1" `
+              -CandidateRoot "dist" `
+              -AdbExecutable $FakeAdb `
+              -AndroidIdentityEvidence $Evidence `
+              -CaptureAndroidIdentityOnly
+            if ($LASTEXITCODE -ne 0) { throw "Stock Android identity capture smoke failed: $LASTEXITCODE" }
+
+            $Record = Get-Content -Raw -Encoding UTF8 $Evidence | ConvertFrom-Json
+            if ($Record.profile_id -ne "oneplus/avicii") { throw "Stock Android identity smoke profile drift" }
+            if ($Record.product_strong_match -ne $true -or $Record.model_strong_match -ne $true) { throw "Stock Android identity smoke strong-match failure" }
+            if ($Record.firmware_build -ne "AC2003_11_F.99_KPS") { throw "Stock Android identity smoke firmware build drift" }
+            if ($Record.read_only_stock_android_capture -ne $true -or $Record.adb_reboot_performed -ne $false) { throw "Stock Android identity smoke read-only policy failure" }
+            if ($Record.persistent_write_authorized -ne $false -or $Record.phone_storage_written -ne $false -or $Record.beta_gate_credit -ne $false) { throw "Stock Android identity smoke unsafe promotion" }
+          }
+          finally {
+            Remove-Item -LiteralPath $Scratch -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Upload unsigned integrated AC2003 Beta test candidate
         uses: actions/upload-artifact@v4
         with:
