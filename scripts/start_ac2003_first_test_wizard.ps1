@@ -204,7 +204,13 @@ foreach ($CandidateField in @("executable_sha256", "fastboot_executable_sha256",
         break
     }
 }
-if ($null -ne $CapturedFastbootSha -and $CapturedFastbootSha -ne $FastbootShaAtStart) {
+if ($null -eq $CapturedFastbootSha) {
+    throw "Captured Fastboot tool evidence is missing executable SHA-256"
+}
+if ($CapturedFastbootSha -notmatch '^[0-9a-f]{64}$') {
+    throw "Captured Fastboot tool evidence contains an invalid executable SHA-256"
+}
+if ($CapturedFastbootSha -ne $FastbootShaAtStart) {
     throw "Captured Fastboot evidence is not bound to the wizard-start Fastboot executable"
 }
 
