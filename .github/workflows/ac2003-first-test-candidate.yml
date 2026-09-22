@@ -84,6 +84,9 @@ jobs:
         shell: pwsh
         run: |
           $Errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "scripts/start_ac2003_readonly_baseline.ps1"), [ref]$null, [ref]$Errors)
+          if ($Errors.Count -ne 0) { $Errors | Format-List | Out-String | Write-Error; throw "Read-only baseline PowerShell parse failed" }
+          $Errors = $null
           [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "scripts/start_ac2003_first_test_wizard.ps1"), [ref]$null, [ref]$Errors)
           if ($Errors.Count -ne 0) { $Errors | Format-List | Out-String | Write-Error; throw "First-test wizard PowerShell parse failed" }
           $Errors = $null
@@ -121,8 +124,7 @@ jobs:
             @'
           param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
           if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "--version") {
-              Write-Output "Android Debug Bridge version 1.0.41"
-              Write-Output "Version __KPS_PLATFORM_TOOLS_VERSION__-kps-wizard-smoke"
+              Write-Output ("Android Debug Bridge version 1.0.41`r`nVersion __KPS_PLATFORM_TOOLS_VERSION__-15733141`r`nInstalled as C:\\kps\\platform-tools\\adb.exe`r`nRunning on Windows 10.0.26200")
               exit 0
           }
           if ($Remaining.Count -ge 1 -and $Remaining[0] -eq "devices") {
@@ -185,6 +187,11 @@ jobs:
               -SessionLabel "ci-smoke" `
               -FastbootAlreadyReady
             if ($LASTEXITCODE -ne 0) { throw "Packaged first-test wizard smoke failed: $LASTEXITCODE" }
+
+            $IdentityRecord = Get-Content -Raw -Encoding UTF8 (Join-Path $EvidenceRoot "ac2003-stock-android-identity-ci-smoke.json") | ConvertFrom-Json
+            if ($IdentityRecord.adb_version_line -ne "Version $($Policy.platform_tools_version)-15733141") {
+              throw "Wizard smoke ADB Version-line parser drift"
+            }
 
             $Session = Join-Path $EvidenceRoot "ac2003-first-test-ci-smoke"
             foreach ($Expected in @(

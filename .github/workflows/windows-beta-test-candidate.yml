@@ -150,6 +150,23 @@ jobs:
           tests/test_physical_recovery_readiness.py
           tests/test_temporary_boot_execution.py
 
+      - name: Parse AC2003 PowerShell launchers before packaging
+        shell: pwsh
+        run: |
+          foreach ($Script in @(
+            "scripts/start_ac2003_readonly_baseline.ps1",
+            "scripts/start_ac2003_first_test_wizard.ps1",
+            "scripts/bootstrap_ac2003_first_test.ps1",
+            "scripts/overlay_ac2003_first_test_wizard.ps1"
+          )) {
+            $Errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $Script), [ref]$null, [ref]$Errors)
+            if ($Errors.Count -ne 0) {
+              $Errors | Format-List | Out-String | Write-Error
+              throw "PowerShell parse failed: $Script"
+            }
+          }
+
       - name: Smoke pinned automatic AC2003 host bootstrap without phone I/O
         shell: pwsh
         run: |
