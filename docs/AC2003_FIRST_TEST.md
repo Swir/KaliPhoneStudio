@@ -22,6 +22,7 @@ Keep the extracted package together. It should contain:
 - `operator-pack/fastboot-tool-policy.json`;
 - `operator-pack/extractor-locks.json`;
 - `operator-pack/verify-candidate.ps1`;
+- `operator-pack/readonly-baseline.ps1`;
 - `BETA_TEST_CANDIDATE_SHA256.txt`;
 - `BETA_TEST_CANDIDATE_INFO.json`.
 
@@ -31,14 +32,15 @@ Verify the ZIP SHA-256 before using the package. Then verify the extracted packa
 pwsh -NoProfile -File .\operator-pack\verify-candidate.ps1 -CandidateRoot .
 ```
 
-Keep all evidence from one phone/firmware attempt under one fresh session directory; do not overwrite or recycle files from an older attempt.
+Keep all evidence from one phone/firmware attempt under fresh create-only paths; do not overwrite or recycle files from an older attempt.
 
 ## Safety stop conditions
 
 Stop immediately if any of these are true:
 
 - the phone is not the expected AC2003 / `avicii` profile;
-- the exact OxygenOS build or firmware fingerprint is unknown;
+- the exact OxygenOS build or firmware fingerprint cannot be captured or independently checked;
+- ADB sees anything other than exactly one authorized device during the stock-Android identity phase;
 - Fastboot reports an unexpected serial, product, slot count or security state;
 - the exact OTA matching the phone firmware is unavailable;
 - extracted `boot.img` does not validate against the selected profile;
@@ -46,7 +48,7 @@ Stop immediately if any of these are true:
 - recovery/rollback is not understood before temporary boot;
 - a command requests a persistent `flash`, `erase`, `set_active`, `flashing` or other write action that is not part of the reviewed runbook.
 
-The first physical sequence below uses read-only capture and offline binding first. The only physical boot command later in the chain is the explicitly gated one-shot temporary `fastboot boot` path.
+The first physical sequence below uses read-only ADB property capture, read-only Fastboot capture and offline binding first. The only physical boot command later in the chain is the explicitly gated one-shot temporary `fastboot boot` path.
 
 ## 0. Prepare the Windows host once
 
@@ -55,12 +57,13 @@ Open PowerShell in the extracted candidate directory and define the exact packag
 ```powershell
 $Cli = (Resolve-Path ".\KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe").Path
 $Extractor = (Resolve-Path ".\operator-tools\payload-dumper-go.exe").Path
+$Adb = (Resolve-Path "<PATH_TO_REVIEWED_ADB_EXE>").Path
 $Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path
 ```
 
 `$Extractor` is already the exact reviewed `payload-dumper-go.exe` bundled in the candidate. Do **not** download or search for another extractor. Keep its runtime DLLs beside it exactly as packaged.
 
-Android Platform-Tools/Fastboot remains a separate operator dependency. Use one exact Fastboot executable accepted by `operator-pack/fastboot-tool-policy.json` for the whole evidence session; do not substitute another Fastboot binary after capture starts.
+ADB and Fastboot must come from the same reviewed Android Platform-Tools version accepted by `operator-pack/fastboot-tool-policy.json`. The guarded capture re-checks the executable/version identity; do not substitute another tool binary after evidence capture starts.
 
 Run the packaged host checks before connecting the phone:
 
@@ -70,53 +73,66 @@ Run the packaged host checks before connecting the phone:
 & $Cli --recovery-guide --profile-id oneplus/avicii --json
 ```
 
-## 1. Record the exact phone firmware before Fastboot capture
+## 1. Capture exact stock-Android identity read-only
 
-Before moving the phone into Fastboot mode, record the exact OxygenOS build and full firmware fingerprint from the device/system information available on the phone. These two strings are operator inputs to the guarded baseline capture; do not guess or shorten them.
+While the phone is still booted into stock OxygenOS and USB debugging is explicitly authorized, capture the exact identity/build/fingerprint with the packaged read-only launcher. This phase uses only `adb devices -l`, `adb --version` and read-only `getprop` calls; it does **not** issue `adb reboot`, push/install/remount/root commands, mount storage or authorize a persistent write.
 
-Choose a new session path, but **do not create it**. The guarded first-test command creates it itself and refuses any existing file, directory or symlink so evidence from different attempts cannot be mixed:
+Choose a fresh create-only identity-evidence path:
+
+```powershell
+$Identity = Join-Path $PWD "evidence\ac2003-stock-android-identity-01.json"
+if (Test-Path $Identity) { throw "Choose a new identity-evidence path; this one already exists." }
+
+pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 `
+  -CandidateRoot . `
+  -AdbExecutable "$Adb" `
+  -AndroidIdentityEvidence "$Identity" `
+  -CaptureAndroidIdentityOnly
+```
+
+The launcher requires exactly one authorized ADB device, requires a strong `oneplus/avicii` product/model match and records the exact OxygenOS build/fingerprint plus ADB executable SHA-256/version identity. The evidence keeps temporary boot, persistent writes, hardware verification and Beta credit false.
+
+Do not continue if the capture refuses the phone, reports tool/version drift, or the displayed build/fingerprint does not match what the phone shows in stock system information.
+
+Choose a fresh physical-session directory, but **do not create it**. The guarded Fastboot phase creates it itself and refuses any existing file, directory or symlink so evidence from different attempts cannot be mixed:
 
 ```powershell
 $Session = Join-Path $PWD "evidence\ac2003-first-test-01"
 if (Test-Path $Session) { throw "Choose a new session path; this one already exists." }
 ```
 
-Do not reuse this path after a failed or changed-firmware attempt. Choose a new session name instead.
+Do not reuse either evidence path after a failed or changed-firmware attempt.
 
-## 2. One-command read-only Fastboot first-test session
+## 2. Bind that exact identity into one-command read-only Fastboot capture
 
-Put the phone in Fastboot/bootloader mode using the normal device controls. Confirm the exact serial shown by the reviewed Fastboot executable, then run the guarded first-test session command.
-
-Replace the angle-bracket values with the exact observations from this phone:
+Manually put the phone in Fastboot/bootloader mode using the normal device controls. Confirm the exact serial shown by the reviewed Fastboot executable, then run the packaged launcher against the **same** `$Identity` captured in section 1:
 
 ```powershell
-& $Cli begin-physical-test-session `
-  --profile-id oneplus/avicii `
-  --serial "<EXACT_FASTBOOT_SERIAL>" `
-  --firmware-build "<EXACT_OXYGENOS_BUILD>" `
-  --firmware-fingerprint "<EXACT_FIRMWARE_FINGERPRINT>" `
-  --confirm-token "AC2003" `
-  --fastboot "$Fastboot" `
-  --session-dir "$Session"
+pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 `
+  -CandidateRoot . `
+  -FastbootExecutable "$Fastboot" `
+  -Serial "<EXACT_FASTBOOT_SERIAL>" `
+  -AndroidIdentityEvidence "$Identity" `
+  -SessionDir "$Session"
 ```
 
-The command checks the profile confirmation token before creating the session or reaching Fastboot, refuses an existing session path, then reuses the guarded Fastboot version/device/getvar-only capture. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
+The launcher re-runs host preflight, takes the firmware build/fingerprint from the exact ADB evidence instead of requiring retyping, executes only the frozen `begin-physical-test-session` Fastboot version/devices/getvar capture, copies the exact ADB identity record into the new session and creates a SHA-256 binding link. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
 
-`begin-physical-test-session` is the recovery-first wrapper around the existing `capture-fastboot-baseline` primitive. Do not run both against the same session: the wrapper deliberately owns the fresh session directory and exact baseline capture so evidence cannot be duplicated or mixed.
-
-A successful command creates the exact baseline set under `$Session\fastboot` plus the create-only session manifest:
+A successful command creates the exact baseline set under `$Session\fastboot` plus the create-only session and stock-Android identity binding:
 
 ```text
 <session>/physical-first-test-session.json
+<session>/stock-android-identity.json
+<session>/stock-android-identity-link.json
 <session>/fastboot/fastboot-getvar-all.txt
 <session>/fastboot/fastboot-baseline.json
 <session>/fastboot/fastboot-tool.json
 <session>/fastboot/fastboot-capture-bundle.json
 ```
 
-The session manifest binds the selected profile, exact serial, exact firmware strings and Fastboot evidence/tool digests while explicitly keeping temporary boot, phone-storage writes, hardware verification and Beta credit false.
+The session manifest binds the selected profile, exact Fastboot serial, exact firmware strings and Fastboot evidence/tool digests while the stock-Android link binds the original ADB identity bytes by SHA-256. Temporary boot, phone-storage writes, hardware verification and Beta credit remain false.
 
-Do not continue if the observed product/serial/A-B/security state is unexpected or the command refuses the session.
+Do not continue if the observed product/serial/A/B/security state is unexpected, if the ADB and Fastboot firmware context conflicts, or if the command refuses the session.
 
 ## 3. Obtain the exact matching OxygenOS OTA
 
