@@ -118,6 +118,10 @@ if ($LASTEXITCODE -ne 0) { throw "Candidate verifier failed after first-test wiz
 
 $UpdatedInfo = Get-Content -Raw -Encoding UTF8 $InfoPath | ConvertFrom-Json
 if ($UpdatedInfo.first_test_wizard_included -ne $true) { throw "First-test wizard metadata missing" }
+if ($UpdatedInfo.automatic_host_bootstrap_included -ne $true) { throw "Automatic host bootstrap metadata missing" }
+if ($UpdatedInfo.automatic_host_bootstrap_pinned_sha256 -ne $true) { throw "Automatic host bootstrap lost pinned SHA-256 marker" }
+if ($UpdatedInfo.automatic_host_bootstrap_phone_interaction -ne $false) { throw "Automatic host bootstrap unexpectedly claims phone interaction" }
+if ($UpdatedInfo.automatic_ota_download_before_identity -ne $false) { throw "Candidate unexpectedly permits OTA download before physical identity" }
 if ($UpdatedInfo.first_test_wizard_manual_fastboot_transition_required -ne $true) { throw "Wizard lost manual Fastboot transition gate" }
 foreach ($Field in @("first_test_wizard_automatic_reboot", "first_test_wizard_temporary_boot_performed", "first_test_wizard_persistent_write_authorized", "first_test_wizard_beta_gate_credit")) {
     if ($UpdatedInfo.$Field -ne $false) { throw "Unsafe first-test wizard metadata field: $Field" }
@@ -125,12 +129,22 @@ foreach ($Field in @("first_test_wizard_automatic_reboot", "first_test_wizard_te
 foreach ($Path in @($WizardTarget, $BootstrapTarget, $BootstrapCmdTarget, $BootstrapLockTarget)) {
     if (-not (Test-Path $Path -PathType Leaf)) { throw "Packaged first-test bootstrap/wizard file disappeared before ZIP creation: $Path" }
 }
+
 $BootstrapLock = Get-Content -Raw -Encoding UTF8 $BootstrapLockTarget | ConvertFrom-Json
-if ([int]$BootstrapLock.schema_version -ne 1 -or [string]$BootstrapLock.platform_tools.version -ne "37.0.1") {
-    throw "Packaged bootstrap lock drift"
+if ([int]$BootstrapLock.schema_version -ne 1 -or [string]$BootstrapLock.kind -ne "kaliphonestudio-ac2003-host-bootstrap-lock") {
+    throw "Packaged bootstrap lock schema/kind drift"
+}
+if ([string]$BootstrapLock.platform_tools.version -ne "37.0.1") {
+    throw "Packaged Platform-Tools bootstrap version drift"
 }
 foreach ($Digest in @([string]$BootstrapLock.powershell.sha256, [string]$BootstrapLock.platform_tools.sha256)) {
-    if ($Digest -notmatch '^[0-9a-fA-F]{64}
+    if ($Digest -notmatch '^[0-9a-fA-F]{64}$') { throw "Packaged bootstrap lock SHA-256 is invalid" }
+}
+
+$BootstrapText = (Get-Content -Raw -Encoding UTF8 $BootstrapTarget).ToLowerInvariant()
+if (-not $BootstrapText.Contains('get-filehash -algorithm sha256')) { throw "Packaged bootstrap lost SHA-256 verification" }
+if (-not $BootstrapText.Contains('invoke-webrequest')) { throw "Packaged bootstrap lost automatic download path" }
+
 $WizardText = (Get-Content -Raw -Encoding UTF8 $WizardTarget).ToLowerInvariant()
 if (-not $WizardText.Contains('invoke-readonlytool $fastbootpath @("devices")')) {
     throw "Packaged first-test wizard lost the expected read-only Fastboot devices invocation"
@@ -151,34 +165,6 @@ Write-Host "KaliPhoneStudio AC2003 one-command read-only first-test candidate ov
 Write-Host "Wizard packaged: operator-pack/first-test-wizard.ps1"
 Write-Host "Automatic host bootstrap: operator-pack/START_FIRST_TEST.cmd"
 Write-Host "Pinned PowerShell + Platform-Tools download/checksum verification: true"
-Write-Host "Manual Fastboot transition required: true"
-Write-Host "Automatic reboot: false"
-Write-Host "Temporary boot performed: false"
-Write-Host "Persistent phone write authorized: false"
-Write-Host "Beta gate credit: false"
-) { throw "Packaged bootstrap lock SHA-256 is invalid" }
-}
-$BootstrapText = (Get-Content -Raw -Encoding UTF8 $BootstrapTarget).ToLowerInvariant()
-if (-not $BootstrapText.Contains('get-filehash -algorithm sha256')) { throw "Packaged bootstrap lost SHA-256 verification" }
-if (-not $BootstrapText.Contains('invoke-webrequest')) { throw "Packaged bootstrap lost automatic download path" }
-$WizardText = (Get-Content -Raw -Encoding UTF8 $WizardTarget).ToLowerInvariant()
-if (-not $WizardText.Contains('invoke-readonlytool $fastbootpath @("devices")')) {
-    throw "Packaged first-test wizard lost the expected read-only Fastboot devices invocation"
-}
-# Reject executable argv-shaped state-changing verbs while allowing safety prose that
-# names those verbs to tell the operator what the wizard deliberately does not do.
-foreach ($ForbiddenArgv in @('@("reboot")', '@("boot")', '@("flash")', '@("erase")', '@("set_active")', '@("flashing")')) {
-    if ($WizardText.Contains($ForbiddenArgv)) {
-        throw "Packaged first-test wizard contains forbidden state-changing argv: $ForbiddenArgv"
-    }
-}
-
-Compress-Archive -Path $GuiRoot, $CliRoot, $ToolsRoot, $OperatorPack, $ManifestPath, $InfoPath -DestinationPath $ZipPath -CompressionLevel Optimal
-$ZipHash = (Get-FileHash -Algorithm SHA256 -Path $ZipPath).Hash.ToLowerInvariant()
-"$ZipHash  KaliPhoneStudio-AC2003-beta-test-candidate.zip" | Set-Content -Encoding ASCII $ZipShaPath
-
-Write-Host "KaliPhoneStudio AC2003 one-command read-only first-test candidate overlay: PASS"
-Write-Host "Wizard packaged: operator-pack/first-test-wizard.ps1"
 Write-Host "Manual Fastboot transition required: true"
 Write-Host "Automatic reboot: false"
 Write-Host "Temporary boot performed: false"

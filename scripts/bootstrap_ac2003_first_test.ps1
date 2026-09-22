@@ -33,8 +33,13 @@ function Resolve-CandidatePath([string]$Root, [string]$Value) {
 }
 
 function Assert-Https([string]$Url, [string]$Label) {
-    $Uri = New-Object System.Uri($Url)
-    if ($Uri.Scheme -ne "https") {
+    try {
+        $Uri = [Uri]$Url
+    }
+    catch {
+        throw "$Label is not a valid absolute URL: $Url"
+    }
+    if (-not $Uri.IsAbsoluteUri -or $Uri.Scheme -ne [Uri]::UriSchemeHttps) {
         throw "$Label must use HTTPS: $Url"
     }
 }
