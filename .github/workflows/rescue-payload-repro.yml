@@ -211,3 +211,16 @@ jobs:
             build/evidence/rescue-candidate.json
             build/evidence/rescue.cpio.lz4.sha256
           if-no-files-found: error
+
+      - name: Upload exact rescue payload for the physical bring-up candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: rescue-payload-physical-candidate-${{ github.sha }}
+          path: |
+            build/rescue.cpio.lz4
+            build/evidence/rescue-payload-repro.json
+            build/evidence/rescue-candidate.json
+            build/evidence/rescue.cpio.lz4.sha256
+            tools/rescue-payload-lock.json
+          if-no-files-found: error
+          retention-days: 30
