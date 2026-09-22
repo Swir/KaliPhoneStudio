@@ -213,8 +213,18 @@ jobs:
               exit 0
           }
           if ($Remaining.Count -ge 1 -and $Remaining[0] -eq "devices") {
+              $Counter = Join-Path $PSScriptRoot "adb-device-poll-count.txt"
+              $Count = 0
+              if (Test-Path $Counter) { $Count = [int](Get-Content -Raw $Counter) }
+              $Count++
+              Set-Content -Encoding ASCII -NoNewline $Counter $Count
               Write-Output "List of devices attached"
-              Write-Output "KPSADB0001 device product:avicii model:AC2003 device:avicii transport_id:1"
+              if ($Count -eq 1) {
+                  Write-Output "KPSADB0001 unauthorized transport_id:1"
+              }
+              else {
+                  Write-Output "KPSADB0001 device product:avicii model:AC2003 device:avicii transport_id:1"
+              }
               exit 0
           }
           if ($Remaining.Count -eq 5 -and $Remaining[0] -eq "-s" -and $Remaining[1] -eq "KPSADB0001" -and $Remaining[2] -eq "shell" -and $Remaining[3] -eq "getprop") {

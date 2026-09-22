@@ -99,16 +99,58 @@ if ($CaptureAndroidIdentityOnly) {
     $AdbVersionBefore = Invoke-AdbRead $AdbPath @("--version") "adb --version"
     $AdbVersionLine = Get-ReviewedAdbVersionLine $AdbVersionBefore $ExpectedPlatformToolsVersion
 
-    $Devices = Invoke-AdbRead $AdbPath @("devices", "-l") "adb devices -l"
-    $DeviceLines = @(
-        $Devices -split "`r?`n" |
-            Where-Object { $_ -match '^\S+\s+device(?:\s|$)' }
-    )
-    if ($DeviceLines.Count -ne 1) {
-        throw "Stock Android identity capture requires exactly one authorized ADB device; got $($DeviceLines.Count)"
-    }
-    $AdbSerial = (($DeviceLines[0] -split '\s+')[0]).Trim()
+    $AdbSerial = $null
+    $AuthorizationDeadline = [DateTime]::UtcNow.AddSeconds(120)
+    $LastAdbStateSummary = "none"
+    do {
+        $Devices = Invoke-AdbRead $AdbPath @("devices", "-l") "adb devices -l"
+        $Rows = @(
+            $Devices -split "[\r\n]+" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object {
+                    -not [string]::IsNullOrWhiteSpace($_) -and
+                    -not $_.StartsWith("List of devices attached", [StringComparison]::OrdinalIgnoreCase)
+                }
+        )
+
+        $Authorized = @($Rows | Where-Object { $_ -match '^\S+\s+device(?:\s|$)' })
+        $Unauthorized = @($Rows | Where-Object { $_ -match '^\S+\s+unauthorized(?:\s|$)' })
+        $Offline = @($Rows | Where-Object { $_ -match '^\S+\s+offline(?:\s|$)' })
+        $RecognizedRows = @($Authorized + $Unauthorized + $Offline)
+
+        if ($RecognizedRows.Count -gt 1) {
+            throw "Stock Android identity capture requires exactly one physical ADB target; detected multiple entries: $($Rows -join ' | ')"
+        }
+        if ($Authorized.Count -eq 1) {
+            $AdbSerial = (($Authorized[0] -split '\s+')[0]).Trim()
+            break
+        }
+
+        if ($Unauthorized.Count -eq 1) {
+            $LastAdbStateSummary = "unauthorized"
+            Write-Host "ADB DEVICE FOUND BUT NOT AUTHORIZED."
+            Write-Host "Unlock the AC2003 and tap 'Allow USB debugging' / 'Zezwalaj na debugowanie USB'."
+            Write-Host "Keep this window open — KaliPhoneStudio will retry automatically."
+        }
+        elseif ($Offline.Count -eq 1) {
+            $LastAdbStateSummary = "offline"
+            Write-Host "ADB device is offline. Keep the phone unlocked and reconnect the USB data cable if needed."
+            Write-Host "KaliPhoneStudio will retry automatically."
+        }
+        else {
+            $LastAdbStateSummary = "not-detected"
+            Write-Host "Waiting for one authorized ADB device..."
+            Write-Host "Phone must be booted into OxygenOS, unlocked, USB debugging enabled, and connected with a data-capable USB cable."
+        }
+
+        if ([DateTime]::UtcNow -ge $AuthorizationDeadline) {
+            throw "Timed out waiting 120 seconds for one authorized ADB device; last state=$LastAdbStateSummary. Enable USB debugging, unlock the phone and accept the RSA authorization prompt, then retry."
+        }
+        Start-Sleep -Seconds 2
+    } while ($true)
+
     Require-NonEmpty $AdbSerial "authorized ADB serial"
+    Write-Host "ADB authorization: PASS ($AdbSerial)"
 
     $PropertyKeys = @(
         "ro.product.device",
