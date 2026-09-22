@@ -196,7 +196,9 @@ def test_integrity_verifier_fail_closes_host_preflight_and_fastboot_policy() -> 
 def test_windows_candidate_ci_tracks_and_runs_host_preflight_contract() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert text.count('"scripts/preflight_ac2003_first_test.ps1"') == 2
-    assert text.count('"scripts/start_ac2003_readonly_baseline.ps1"') == 2
+    assert text.count('"scripts/start_ac2003_readonly_baseline.ps1"') >= 2
+    assert "Parse AC2003 PowerShell launchers before packaging" in text
+    assert '[System.Management.Automation.Language.Parser]::ParseFile' in text
     assert "tests/test_ac2003_host_preflight_contract.py" in text
     assert "Package, host-preflight, read-only baseline launcher and self-verify integrated AC2003 host test candidate" in text
     assert "Smoke read-only stock Android identity capture without a phone" in text
