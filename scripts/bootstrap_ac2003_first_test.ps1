@@ -21,7 +21,7 @@ function Require-Directory([string]$Path, [string]$Label) {
     }
     $Item = Get-Item -LiteralPath $Path -Force
     if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "Refusing reparse-point $Label: $Path"
+        throw "Refusing reparse-point ${Label}: $Path"
     }
 }
 
