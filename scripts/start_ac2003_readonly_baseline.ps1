@@ -13,6 +13,15 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$CurrentPwsh = Join-Path $PSHOME "pwsh.exe"
+if (-not (Test-Path -LiteralPath $CurrentPwsh -PathType Leaf)) {
+    throw "Current PowerShell host executable missing from PSHOME: $CurrentPwsh"
+}
+$CurrentPwshVersion = (& $CurrentPwsh -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()' 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($CurrentPwshVersion)) {
+    throw "Current PSHOME PowerShell host self-check failed"
+}
+
 function Require-NonEmpty([string]$Value, [string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         throw "AC2003 read-only baseline launcher requires $Name"
@@ -297,7 +306,7 @@ if (Test-Path $SessionPath) {
 }
 
 $FastbootPath = (Resolve-Path $FastbootExecutable).Path
-& pwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
+& $CurrentPwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
 if ($LASTEXITCODE -ne 0) {
     throw "AC2003 host preflight failed before physical read-only capture: $LASTEXITCODE"
 }

@@ -7,6 +7,15 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$CurrentPwsh = Join-Path $PSHOME "pwsh.exe"
+if (-not (Test-Path -LiteralPath $CurrentPwsh -PathType Leaf)) {
+    throw "Current PowerShell host executable missing from PSHOME: $CurrentPwsh"
+}
+$CurrentPwshVersion = (& $CurrentPwsh -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()' 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($CurrentPwshVersion)) {
+    throw "Current PSHOME PowerShell host self-check failed"
+}
+
 $Root = (Resolve-Path $CandidateRoot).Path
 $Verifier = Join-Path $Root "operator-pack\verify-candidate.ps1"
 $PolicyPath = Join-Path $Root "operator-pack\fastboot-tool-policy.json"
@@ -19,7 +28,7 @@ foreach ($Path in @($Verifier, $PolicyPath, $Cli, $Extractor)) {
     }
 }
 
-& pwsh -NoProfile -File $Verifier -CandidateRoot $Root
+& $CurrentPwsh -NoProfile -File $Verifier -CandidateRoot $Root
 if ($LASTEXITCODE -ne 0) {
     throw "Integrated candidate integrity verification failed: $LASTEXITCODE"
 }

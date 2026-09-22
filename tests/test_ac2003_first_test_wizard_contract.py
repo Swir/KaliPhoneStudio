@@ -38,6 +38,18 @@ def test_first_test_wizard_reuses_reviewed_readonly_boundaries() -> None:
         assert needle in text
 
 
+def test_physical_script_chain_reuses_current_pshome_pwsh() -> None:
+    critical = (
+        ROOT / "scripts" / "start_ac2003_first_test_wizard.ps1",
+        ROOT / "scripts" / "start_ac2003_readonly_baseline.ps1",
+        ROOT / "scripts" / "preflight_ac2003_first_test.ps1",
+    )
+    for script in critical:
+        text = script.read_text(encoding="utf-8")
+        assert '$CurrentPwsh = Join-Path $PSHOME "pwsh.exe"' in text
+        assert "Current PSHOME PowerShell host self-check failed" in text
+        assert "& pwsh -NoProfile -File" not in text
+
 def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -> None:
     text = WIZARD.read_text(encoding="utf-8")
 
@@ -59,7 +71,7 @@ def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -
     ):
         assert needle in text
 
-    first_preflight = text.index('& pwsh -NoProfile -File $Preflight')
+    first_preflight = text.index('& $CurrentPwsh -NoProfile -File $Preflight')
     first_phone_capture = text.index('-CaptureAndroidIdentityOnly')
     assert first_preflight < first_phone_capture
 

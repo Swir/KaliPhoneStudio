@@ -12,6 +12,15 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$CurrentPwsh = Join-Path $PSHOME "pwsh.exe"
+if (-not (Test-Path -LiteralPath $CurrentPwsh -PathType Leaf)) {
+    throw "Current PowerShell host executable missing from PSHOME: $CurrentPwsh"
+}
+$CurrentPwshVersion = (& $CurrentPwsh -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()' 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($CurrentPwshVersion)) {
+    throw "Current PSHOME PowerShell host self-check failed"
+}
+
 function Require-Leaf([string]$Path, [string]$Label) {
     if (-not (Test-Path $Path -PathType Leaf)) {
         throw "$Label not found: $Path"
@@ -185,7 +194,7 @@ $AdbShaAtStart = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInv
 $FastbootShaAtStart = (Get-FileHash -Algorithm SHA256 -Path $FastbootPath).Hash.ToLowerInvariant()
 
 Write-Host "KaliPhoneStudio AC2003 FIRST TEST — host Platform-Tools pairing preflight"
-& pwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
+& $CurrentPwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
 if ($LASTEXITCODE -ne 0) {
     throw "Host/Fastboot preflight failed before any phone interaction: $LASTEXITCODE"
 }
@@ -226,7 +235,7 @@ foreach ($Path in @($IdentityPath, $SessionPath)) {
 
 Write-Host "KaliPhoneStudio AC2003 FIRST TEST — phase 1/2: stock OxygenOS read-only identity"
 Write-Host "No reboot/boot/flash/erase/slot-change/storage-write command is issued by this wizard."
-& pwsh -NoProfile -File $BaselineLauncher `
+& $CurrentPwsh -NoProfile -File $BaselineLauncher `
     -CandidateRoot $Root `
     -AdbExecutable $AdbPath `
     -AndroidIdentityEvidence $IdentityPath `
@@ -323,7 +332,7 @@ if ($AdbShaBeforeFastboot -ne $AdbShaAtStart -or $FastbootShaBeforeFastboot -ne 
 }
 
 Write-Host "KaliPhoneStudio AC2003 FIRST TEST — phase 2/2: read-only Fastboot baseline"
-& pwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
+& $CurrentPwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
 if ($LASTEXITCODE -ne 0) {
     throw "Host/Fastboot preflight failed before device discovery: $LASTEXITCODE"
 }
@@ -351,7 +360,7 @@ if (Test-Path $TransitionPath) {
 } | ConvertTo-Json | Set-Content -Encoding UTF8 -NoNewline $TransitionPath
 $TransitionSha = (Get-FileHash -Algorithm SHA256 -Path $TransitionPath).Hash.ToLowerInvariant()
 
-& pwsh -NoProfile -File $BaselineLauncher `
+& $CurrentPwsh -NoProfile -File $BaselineLauncher `
     -CandidateRoot $Root `
     -FastbootExecutable $FastbootPath `
     -Serial $FastbootSerial `
