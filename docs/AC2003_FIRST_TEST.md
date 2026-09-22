@@ -116,7 +116,7 @@ pwsh -NoProfile -File .\operator-pack\readonly-baseline.ps1 `
   -SessionDir "$Session"
 ```
 
-The launcher re-runs host preflight, takes the firmware build/fingerprint from the exact ADB evidence instead of requiring retyping, executes only the frozen `begin-physical-test-session` Fastboot version/devices/getvar capture, copies the exact ADB identity record into the new session and creates a SHA-256 binding link. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
+The launcher re-runs host preflight, takes the firmware build/fingerprint from the exact ADB evidence instead of requiring retyping, executes only the frozen `begin-physical-test-session` Fastboot version/devices/getvar capture, copies the exact ADB identity record into the new session and creates a SHA-256 binding link. The frozen wrapper passes the packaged profile token internally as `--confirm-token "AC2003"`. It does **not** boot, reboot, flash, erase, change slots, mount storage or authorize a persistent phone write.
 
 `begin-physical-test-session` remains the recovery-first wrapper around the lower-level `capture-fastboot-baseline` primitive. Do not invoke both against the same session; the wrapper owns the fresh session directory and exact baseline capture so evidence cannot be duplicated or mixed.
 
