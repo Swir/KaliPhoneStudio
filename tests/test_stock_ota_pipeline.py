@@ -14,6 +14,7 @@ from kaliphonestudio.stock_ota_pipeline import (
 
 ROOT = Path(__file__).resolve().parents[1]
 DEVICES = ROOT / "devices"
+EXACT_FINGERPRINT = "OnePlus/avicii/AC2003:13/RKQ1/test:user/release-keys"
 
 
 def _payload() -> bytes:
@@ -28,7 +29,7 @@ def _write_ota(path: Path) -> bytes:
         zf.writestr(
             "META-INF/com/android/metadata",
             "pre-device=avicii\n"
-            "post-build=OnePlus/avicii/AC2003:13/RKQ1/test:user/release-keys\n"
+            f"post-build={EXACT_FINGERPRINT}\n"
             "post-build-incremental=AC2003_TEST\n",
         )
     return payload
@@ -109,12 +110,14 @@ def test_extracts_exact_ota_payload_boot_and_provenance_in_one_bundle(tmp_path: 
         extractor_manifest_path=manifest,
         extractor_platform="test-amd64",
         output_dir=out,
+        expected_firmware_fingerprint=EXACT_FINGERPRINT,
     )
 
     assert (out / "payload.bin").read_bytes() == expected_payload
     assert (out / "partitions" / "boot.img").is_file()
     assert (out / "stock-provenance.json").is_file()
     evidence = json.loads((out / "stock-extraction-report.json").read_text(encoding="utf-8"))
+    assert evidence["schema_version"] == 2
     assert evidence["payload_sha256"] == sha256(expected_payload).hexdigest()
     assert evidence["boot_sha256"] == provenance.boot_sha256
     assert evidence["extractor_sha256"] == tool_sha
@@ -122,12 +125,39 @@ def test_extracts_exact_ota_payload_boot_and_provenance_in_one_bundle(tmp_path: 
     assert evidence["extractor_source_commit"] == "a" * 40
     assert evidence["extractor_source_url"] == "https://github.com/example/payload-dumper-go"
     assert evidence["stock_provenance_sha256"] == provenance.evidence_sha256()
+    assert evidence["expected_firmware_fingerprint"] == EXACT_FINGERPRINT
+    assert evidence["ota_post_build_fingerprint"] == EXACT_FINGERPRINT
+    assert evidence["exact_firmware_fingerprint_match"] is True
     assert evidence["phone_queried"] is False
     assert evidence["phone_storage_written"] is False
     assert evidence["temporary_boot_authorized"] is False
     assert evidence["hardware_verified"] is False
     assert evidence["beta_gate_credit"] is False
     assert report.stock_provenance_sha256 == provenance.evidence_sha256()
+
+
+@pytest.mark.skipif(__import__("os").name == "nt", reason="fake executable test uses a POSIX shebang")
+def test_exact_physical_fingerprint_mismatch_refuses_before_output(tmp_path: Path):
+    ota = tmp_path / "oxygenos.zip"
+    _write_ota(ota)
+    tool = tmp_path / "payload-dumper-go"
+    tool_sha = _write_fake_extractor(tool)
+    manifest = tmp_path / "extractor-locks.json"
+    _write_manifest(manifest, tool_sha)
+    out = tmp_path / "stock-bundle"
+
+    with pytest.raises(StockOTAPipelineError, match="does not match"):
+        prepare_stock_from_ota(
+            devices_root=DEVICES,
+            profile_id="oneplus/avicii",
+            ota_path=ota,
+            extractor_path=tool,
+            extractor_manifest_path=manifest,
+            extractor_platform="test-amd64",
+            output_dir=out,
+            expected_firmware_fingerprint="OnePlus/avicii/AC2003:13/RKQ1/other:user/release-keys",
+        )
+    assert not out.exists()
 
 
 @pytest.mark.skipif(__import__("os").name == "nt", reason="fake executable test uses a POSIX shebang")

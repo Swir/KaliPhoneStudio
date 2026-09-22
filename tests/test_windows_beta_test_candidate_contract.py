@@ -199,7 +199,7 @@ def test_runbook_is_recovery_first_and_uses_packaged_candidate_contract() -> Non
     for needle in (
         'pwsh -NoProfile -File .\\operator-pack\\verify-candidate.ps1 -CandidateRoot .',
         '$Extractor = (Resolve-Path ".\\operator-tools\\payload-dumper-go.exe").Path',
-        '$Fastboot = (Resolve-Path "<PATH_TO_REVIEWED_FASTBOOT_EXE>").Path',
+        '$Fastboot = (Resolve-Path ".\\operator-runtime\\platform-tools-37.0.1\\platform-tools\\fastboot.exe").Path',
         '--extractor "$Extractor"',
         '--fastboot-executable "$Fastboot"',
         '--confirm-token "AC2003"',

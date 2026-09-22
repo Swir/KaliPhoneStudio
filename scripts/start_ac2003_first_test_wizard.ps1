@@ -38,6 +38,27 @@ $FastbootPath = (Resolve-Path $FastbootExecutable).Path
 Require-Leaf $AdbPath "ADB executable"
 Require-Leaf $FastbootPath "Fastboot executable"
 
+# The physical campaign must use one reviewed Android Platform-Tools installation for
+# both phases. Merely reporting the same version from unrelated directories is not
+# sufficient for the one-command evidence path.
+$AdbDirectory = [IO.Path]::GetFullPath((Split-Path -Parent $AdbPath)).TrimEnd('\')
+$FastbootDirectory = [IO.Path]::GetFullPath((Split-Path -Parent $FastbootPath)).TrimEnd('\')
+if (-not $AdbDirectory.Equals($FastbootDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "ADB and Fastboot must come from the same Android Platform-Tools directory: adb=$AdbDirectory fastboot=$FastbootDirectory"
+}
+
+$AdbShaAtStart = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInvariant()
+$FastbootShaAtStart = (Get-FileHash -Algorithm SHA256 -Path $FastbootPath).Hash.ToLowerInvariant()
+
+Write-Host "KaliPhoneStudio AC2003 FIRST TEST — host Platform-Tools pairing preflight"
+& pwsh -NoProfile -File $Preflight -CandidateRoot $Root -FastbootExecutable $FastbootPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Host/Fastboot preflight failed before any phone interaction: $LASTEXITCODE"
+}
+Write-Host "  Shared Platform-Tools directory: $AdbDirectory"
+Write-Host "  ADB SHA-256: $AdbShaAtStart"
+Write-Host "  Fastboot SHA-256: $FastbootShaAtStart"
+
 $EvidenceRootPath = [IO.Path]::GetFullPath($EvidenceRoot)
 if (Test-Path $EvidenceRootPath) {
     $EvidenceRootItem = Get-Item -LiteralPath $EvidenceRootPath -Force
@@ -93,6 +114,9 @@ foreach ($Field in @("persistent_write_authorized", "phone_storage_written", "ha
         throw "Unsafe captured stock Android identity field: $Field"
     }
 }
+if ([string]$Identity.adb_executable_sha256 -ne $AdbShaAtStart) {
+    throw "Captured ADB identity is not bound to the wizard-start ADB executable"
+}
 
 Write-Host ""
 Write-Host "Captured physical stock identity:"
@@ -107,6 +131,14 @@ if (-not $FastbootAlreadyReady) {
     Write-Host "Put the same AC2003 into Fastboot/bootloader using the phone controls."
     Write-Host "Do not use an ADB reboot command for this evidence campaign."
     [void](Read-Host "When the phone is visibly in Fastboot/bootloader, press ENTER")
+}
+
+# Fail closed if either executable changed while the operator moved the same phone
+# from stock OxygenOS into the bootloader.
+$AdbShaBeforeFastboot = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInvariant()
+$FastbootShaBeforeFastboot = (Get-FileHash -Algorithm SHA256 -Path $FastbootPath).Hash.ToLowerInvariant()
+if ($AdbShaBeforeFastboot -ne $AdbShaAtStart -or $FastbootShaBeforeFastboot -ne $FastbootShaAtStart) {
+    throw "Android Platform-Tools executable changed between wizard phases"
 }
 
 Write-Host "KaliPhoneStudio AC2003 FIRST TEST — phase 2/2: read-only Fastboot baseline"
@@ -152,6 +184,7 @@ foreach ($Path in $ExpectedOutputs) {
 }
 
 $Session = Get-Content -Raw -Encoding UTF8 (Join-Path $SessionPath "physical-first-test-session.json") | ConvertFrom-Json
+if ([int]$Session.schema_version -ne 1) { throw "Unexpected first-test session schema" }
 if ([string]$Session.profile_id -ne "oneplus/avicii") { throw "First-test session profile drift" }
 if ([string]$Session.device_serial -ne $FastbootSerial) { throw "First-test session Fastboot serial drift" }
 if ([string]$Session.firmware_build -ne [string]$Identity.firmware_build) { throw "First-test firmware build drift" }
@@ -163,11 +196,32 @@ foreach ($Field in @("temporary_boot_performed", "persistent_write_authorized", 
     }
 }
 
+$FastbootToolRecord = Get-Content -Raw -Encoding UTF8 (Join-Path $SessionPath "fastboot\fastboot-tool.json") | ConvertFrom-Json
+$CapturedFastbootSha = $null
+foreach ($CandidateField in @("executable_sha256", "fastboot_executable_sha256", "sha256")) {
+    if ($null -ne $FastbootToolRecord.$CandidateField -and -not [string]::IsNullOrWhiteSpace([string]$FastbootToolRecord.$CandidateField)) {
+        $CapturedFastbootSha = ([string]$FastbootToolRecord.$CandidateField).ToLowerInvariant()
+        break
+    }
+}
+if ($null -eq $CapturedFastbootSha) {
+    throw "Captured Fastboot tool evidence is missing executable SHA-256"
+}
+if ($CapturedFastbootSha -notmatch '^[0-9a-f]{64}$') {
+    throw "Captured Fastboot tool evidence contains an invalid executable SHA-256"
+}
+if ($CapturedFastbootSha -ne $FastbootShaAtStart) {
+    throw "Captured Fastboot evidence is not bound to the wizard-start Fastboot executable"
+}
+
 Write-Host ""
 Write-Host "KaliPhoneStudio AC2003 FIRST TEST READ-ONLY BASELINE: PASS"
 Write-Host "Identity evidence: $IdentityPath"
 Write-Host "Physical session: $SessionPath"
 Write-Host "Fastboot serial: $FastbootSerial"
+Write-Host "Shared Platform-Tools directory: $AdbDirectory"
+Write-Host "ADB SHA-256: $AdbShaAtStart"
+Write-Host "Fastboot SHA-256: $FastbootShaAtStart"
 Write-Host "Persistent phone write authorized: false"
 Write-Host "Temporary boot performed: false"
 Write-Host "Hardware verified: false"
