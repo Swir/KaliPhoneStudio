@@ -213,13 +213,10 @@ jobs:
               exit 0
           }
           if ($Remaining.Count -ge 1 -and $Remaining[0] -eq "devices") {
-              $Counter = Join-Path $PSScriptRoot "adb-device-poll-count.txt"
-              $Count = 0
-              if (Test-Path $Counter) { $Count = [int](Get-Content -Raw $Counter) }
-              $Count++
-              Set-Content -Encoding ASCII -NoNewline $Counter $Count
+              $Marker = Join-Path (Split-Path -Parent $PSCommandPath) "adb-unauthorized-seen.marker"
               Write-Output "List of devices attached"
-              if ($Count -eq 1) {
+              if (-not (Test-Path -LiteralPath $Marker)) {
+                  New-Item -ItemType File -Path $Marker -Force | Out-Null
                   Write-Output "KPSADB0001 unauthorized transport_id:1"
               }
               else {
