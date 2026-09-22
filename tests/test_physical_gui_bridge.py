@@ -10,6 +10,9 @@ from kaliphonestudio.physical_gui_bridge import (
     detect_single_fastboot_device,
     ensure_no_persistent_write_verbs,
     inspect_session_state,
+    runtime_bootstrap_script,
+    runtime_reviewed_fastboot,
+    suggested_fastboot,
 )
 
 
@@ -20,6 +23,27 @@ def _file(path: Path, data: bytes = b"x") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return path
+
+
+def test_gui_prefers_candidate_local_reviewed_fastboot_over_path(tmp_path: Path, monkeypatch) -> None:
+    policy = tmp_path / "operator-pack" / "fastboot-tool-policy.json"
+    policy.parent.mkdir(parents=True)
+    policy.write_text((ROOT / "tools" / "fastboot-tool-policy.json").read_text(encoding="utf-8"), encoding="utf-8")
+    reviewed = _file(
+        tmp_path / "operator-runtime" / "platform-tools-37.0.1" / "platform-tools" / "fastboot.exe",
+        b"reviewed-fastboot",
+    )
+    stale = _file(tmp_path / "legacy" / "fastboot.exe", b"legacy-fastboot")
+    monkeypatch.setattr("kaliphonestudio.physical_gui_bridge.shutil.which", lambda _name: str(stale))
+
+    assert runtime_reviewed_fastboot(tmp_path) == reviewed.resolve()
+    assert suggested_fastboot(tmp_path) == str(reviewed.resolve())
+    assert suggested_fastboot(tmp_path, allow_path_fallback=False) == str(reviewed.resolve())
+
+
+def test_gui_bootstrap_script_is_candidate_local_and_regular(tmp_path: Path) -> None:
+    script = _file(tmp_path / "operator-pack" / "bootstrap-first-test.ps1", b"Write-Host PASS")
+    assert runtime_bootstrap_script(tmp_path) == script.resolve()
 
 
 def test_gui_detects_one_exact_fastboot_device_with_readonly_commands(tmp_path: Path) -> None:
@@ -166,6 +190,7 @@ def test_gui_surface_exposes_gated_physical_flow_and_keeps_flash_locked() -> Non
     assert "DEFAULT SAFE MODE" in app
     assert "this window never executes adb/fastboot" not in app
     for label in (
+        "Auto-prepare reviewed Platform-Tools",
         "Detect Fastboot phone",
         "Create read-only baseline",
         "Prepare exact offline candidate + recovery readiness",
@@ -175,6 +200,11 @@ def test_gui_surface_exposes_gated_physical_flow_and_keeps_flash_locked() -> Non
         assert label in wizard
 
     assert "QProcess" in wizard
+    assert "runtime_bootstrap_script" in wizard
+    assert "suggested_fastboot(self._candidate_root)" in wizard
+    assert '"-DownloadOnly"' in wizard
+    assert "not the reviewed Platform-Tools version" in wizard
+    assert "powershell.exe" in wizard
     assert "begin-physical-test-session" not in wizard
     assert "prepare-physical-candidate-offline" not in wizard
     assert "execute-temporary-boot-once" not in wizard

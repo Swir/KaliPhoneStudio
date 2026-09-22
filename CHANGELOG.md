@@ -4,6 +4,7 @@ Active development changes are listed here. Older detailed entries remain in [`C
 
 ## 0.6.67-dev — distinct-capture fresh-device rootfs target revalidation
 
+- Fixed the Windows physical-test GUI selecting an older system/PATH Fastboot over the candidate-local reviewed runtime. The GUI physical-test wizard now prefers the pinned candidate-local Platform-Tools runtime; if detection sees a missing or unreviewed Fastboot, it runs the packaged SHA-256-verified download-only bootstrap and retries with the reviewed tool. The exact 37.0.1 policy remains fail-closed rather than accepting 36.x.
 - Added an automatic Windows host bootstrap for the AC2003 FIRST TEST candidate: one launcher downloads exact pinned PowerShell 7.6.6 x64 portable and Android Platform-Tools 37.0.1, verifies locked SHA-256 values before extraction, verifies runtime/tool versions and records a no-phone-I/O bootstrap manifest before starting the existing guarded read-only wizard.
 - The bootstrap intentionally does not guess or pre-download OxygenOS firmware; exact OTA acquisition remains gated on the real phone's captured OxygenOS build/fingerprint so stock `boot.img` provenance cannot silently drift.
 - Added `kaliphonestudio.rootfs_handoff_fresh_revalidation` as a schema-v1 fail-closed boundary after an accepted logical target-binding review. It requires a **distinct new read-only** physical-storage discovery/report chain instead of reusing the original reviewed discovery.
