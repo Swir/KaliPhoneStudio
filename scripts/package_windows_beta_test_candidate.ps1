@@ -51,6 +51,12 @@ New-Item -ItemType Directory -Path $OperatorPack | Out-Null
 $StageMap = [ordered]@{
     "docs/AC2003_FIRST_TEST.md" = "AC2003_FIRST_TEST.md"
     "docs/AC2003_OFFLINE_CANDIDATE_PREPARATION.md" = "AC2003_OFFLINE_CANDIDATE_PREPARATION.md"
+    "docs/AC2003_PHOSH_HANDOFF.md" = "AC2003_PHOSH_HANDOFF.md"
+    "docs/PHOSH_FIRST_BOOT_BINDING.md" = "PHOSH_FIRST_BOOT_BINDING.md"
+    "docs/PHOSH_SUCCESSOR_CANDIDATE.md" = "PHOSH_SUCCESSOR_CANDIDATE.md"
+    "docs/PHOSH_PHYSICAL_CANDIDATE_ADAPTER.md" = "PHOSH_PHYSICAL_CANDIDATE_ADAPTER.md"
+    "evidence/authorities/phosh-arm64-rootfs-2026-09-21.json" = "phosh-rootfs-authority.json"
+    "evidence/authorities/phosh-arm64-rootfs-2026-09-21-review-packet.json" = "phosh-rootfs-review-packet.json"
     "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md" = "BETA_RELEASE_OPERATOR_WORKSPACE.md"
     "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md" = "BETA_RELEASE_ARTIFACT_INVENTORY.md"
     "docs/BETA_RELEASE_REVIEW_MANIFEST.md" = "BETA_RELEASE_REVIEW_MANIFEST.md"
@@ -97,13 +103,21 @@ KaliPhoneStudio AC2003 host test candidate
 5. Exact bundled OTA extractor (no separate download/search required):
    .\operator-tools\payload-dumper-go.exe
 
-6. Continue the physical campaign with:
+6. Continue the recovery-first physical campaign with:
    .\operator-pack\AC2003_FIRST_TEST.md
 
 7. For the one-command host-only OTA/candidate preparation details:
    .\operator-pack\AC2003_OFFLINE_CANDIDATE_PREPARATION.md
 
-8. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
+8. After the exact physical-candidate gate exists, bind the reviewed Phosh successor with
+   the frozen CLI and packaged reviewed authority records:
+   .\operator-pack\AC2003_PHOSH_HANDOFF.md
+   .\operator-pack\phosh-rootfs-authority.json
+   .\operator-pack\phosh-rootfs-review-packet.json
+
+   This handoff is host-only. It does not stage rootfs bytes or authorize a phone write.
+
+9. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
    .\operator-pack\BETA_RELEASE_OPERATOR_WORKSPACE.md
    .\operator-pack\BETA_RELEASE_ARTIFACT_INVENTORY.md
    .\operator-pack\BETA_RELEASE_REVIEW_MANIFEST.md
@@ -138,6 +152,9 @@ foreach ($Path in @($InfoPath, $ManifestPath, $ZipPath, $ZipShaPath)) {
     readonly_baseline_launcher_included = $true
     readonly_baseline_device_interaction = $true
     readonly_baseline_persistent_write_authorized = $false
+    phosh_handoff_included = $true
+    phosh_reviewed_authority_included = $true
+    phosh_rootfs_bytes_included = $false
     signed = $false
     physical_gate_passed = $false
     hardware_verified = $false
@@ -188,5 +205,6 @@ Write-Host "Source commit: $SourceCommit"
 Write-Host "Bundled extractor SHA-256: $ExpectedExtractorSha"
 Write-Host "Host-only AC2003 preflight: PASS"
 Write-Host "One-command AC2003 read-only baseline launcher: INCLUDED"
+Write-Host "Reviewed Phosh handoff: INCLUDED (authority records only; rootfs bytes excluded)"
 Write-Host "Physical gate passed: false"
 Write-Host "Beta release: false"

@@ -71,10 +71,15 @@ foreach ($Command in @(
     "build-physical-recovery-readiness",
     "prepare-physical-candidate-offline",
     "prepare-temporary-boot-offer",
-    "execute-temporary-boot-once"
+    "execute-temporary-boot-once",
+    "phosh"
 )) {
     & $Cli $Command --help | Set-Content -Encoding utf8 (Join-Path $Root ("help-" + $Command + ".txt"))
     if ($LASTEXITCODE -ne 0) { throw "Frozen help failed for $Command : $LASTEXITCODE" }
+}
+foreach ($Command in @("build-first-boot-binding", "build-successor-candidate", "bind-physical-candidate")) {
+    & $Cli phosh $Command --help | Set-Content -Encoding utf8 (Join-Path $Root ("help-phosh-" + $Command + ".txt"))
+    if ($LASTEXITCODE -ne 0) { throw "Frozen Phosh help failed for $Command : $LASTEXITCODE" }
 }
 foreach ($Command in @("build-beta-artifact-inventory", "build-beta-review-manifest")) {
     & $Cli evidence $Command --help | Set-Content -Encoding utf8 (Join-Path $Root ("help-evidence-" + $Command + ".txt"))
@@ -106,6 +111,11 @@ $RefusedRecovery = Join-Path $Root "should-not-recovery-readiness.json"
 if ($LASTEXITCODE -ne 2) { throw "Frozen recovery-readiness command did not fail closed: $LASTEXITCODE" }
 if (Test-Path $RefusedRecovery) { throw "Refused recovery command created output" }
 
+$RefusedPhosh = Join-Path $Root "should-not-phosh-adapter.json"
+& $Cli phosh bind-physical-candidate --phosh-successor-candidate (Join-Path $Root "missing-phosh-successor.json") --physical-candidate-gate (Join-Path $Root "missing-gate.json") --out $RefusedPhosh 2> (Join-Path $Root "refusal-phosh-adapter.txt")
+if ($LASTEXITCODE -ne 2) { throw "Frozen Phosh physical adapter did not fail closed: $LASTEXITCODE" }
+if (Test-Path $RefusedPhosh) { throw "Refused Phosh adapter created output" }
+
 $RefusedProbe = Join-Path $Root "should-not-probe.json"
 $RefusedExecution = Join-Path $Root "should-not-execute.json"
 & $Cli execute-temporary-boot-once --profile-id $ProfileId --physical-candidate-gate (Join-Path $Root "missing-gate.json") --boot-identity-binding (Join-Path $Root "missing-binding.json") --physical-baseline (Join-Path $Root "missing-physical.json") --recovery-readiness (Join-Path $Root "missing-recovery.json") --stock-boot (Join-Path $Root "missing-stock-boot.img") --capture-bundle (Join-Path $Root "missing-capture.json") --baseline-evidence (Join-Path $Root "missing-baseline.json") --fastboot-tool-evidence (Join-Path $Root "missing-tool.json") --fastboot-executable (Join-Path $Root "missing-fastboot.exe") --boot-image (Join-Path $Root "missing-candidate-boot.img") --confirmation AC2003 --probe-out $RefusedProbe --execution-out $RefusedExecution 2> (Join-Path $Root "refusal-execution.txt")
@@ -131,5 +141,6 @@ if ($GuiProcess.ExitCode -ne 0) { throw "Frozen GUI bootstrap/version path faile
 $global:LASTEXITCODE = 0
 Write-Host "KaliPhoneStudio frozen Windows Beta-test-candidate smoke: PASS"
 Write-Host "Bundled payload-dumper-go.exe SHA-256: $ExpectedExtractorSha"
+Write-Host "Frozen reviewed Phosh handoff CLI: PASS"
 Write-Host "Physical interaction performed: false"
 exit 0

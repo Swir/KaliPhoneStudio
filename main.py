@@ -5,6 +5,7 @@ from typing import Sequence
 
 from kaliphonestudio.app import main as app_main
 from kaliphonestudio.operator_evidence_workspace import main as operator_evidence_main
+from kaliphonestudio.phosh_operator import main as phosh_operator_main
 from kaliphonestudio.physical_boot_identity_operator import main as physical_boot_identity_main
 from kaliphonestudio.physical_candidate_operator import (
     bind_physical_candidate_main,
@@ -34,6 +35,7 @@ BUILD_PHYSICAL_RECOVERY_READINESS_COMMAND = "build-physical-recovery-readiness"
 PREPARE_TEMPORARY_BOOT_OFFER_COMMAND = "prepare-temporary-boot-offer"
 EXECUTE_TEMPORARY_BOOT_ONCE_COMMAND = "execute-temporary-boot-once"
 EVIDENCE_WORKSPACE_COMMAND = "evidence"
+PHOSH_OPERATOR_COMMAND = "phosh"
 PROFILE_REGISTRY_AUDIT_COMMAND = "audit-profile-registry"
 
 
@@ -63,6 +65,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return execute_temporary_boot_once_main(args[1:])
     if args and args[0] == EVIDENCE_WORKSPACE_COMMAND:
         return operator_evidence_main(args[1:])
+    if args and args[0] == PHOSH_OPERATOR_COMMAND:
+        return phosh_operator_main(args[1:])
     if args and args[0] == PROFILE_REGISTRY_AUDIT_COMMAND:
         return profile_registry_audit_main(args[1:])
     return app_main(args)
