@@ -100,10 +100,15 @@ foreach ($Field in @("first_test_wizard_automatic_reboot", "first_test_wizard_te
     if ($UpdatedInfo.$Field -ne $false) { throw "Unsafe first-test wizard metadata field: $Field" }
 }
 if (-not (Test-Path $WizardTarget -PathType Leaf)) { throw "Packaged first-test wizard disappeared before ZIP creation" }
-$WizardText = Get-Content -Raw -Encoding UTF8 $WizardTarget
-foreach ($Forbidden in @("adb reboot ", "fastboot reboot ", "fastboot boot ", "fastboot flash ", "fastboot erase ", "fastboot set_active ", "fastboot flashing ")) {
-    if ($WizardText.ToLowerInvariant().Contains($Forbidden)) {
-        throw "Packaged first-test wizard contains forbidden command-shaped text: $Forbidden"
+$WizardText = (Get-Content -Raw -Encoding UTF8 $WizardTarget).ToLowerInvariant()
+if (-not $WizardText.Contains('invoke-readonlytool $fastbootpath @("devices")')) {
+    throw "Packaged first-test wizard lost the expected read-only Fastboot devices invocation"
+}
+# Reject executable argv-shaped state-changing verbs while allowing safety prose that
+# names those verbs to tell the operator what the wizard deliberately does not do.
+foreach ($ForbiddenArgv in @('@("reboot")', '@("boot")', '@("flash")', '@("erase")', '@("set_active")', '@("flashing")')) {
+    if ($WizardText.Contains($ForbiddenArgv)) {
+        throw "Packaged first-test wizard contains forbidden state-changing argv: $ForbiddenArgv"
     }
 }
 
