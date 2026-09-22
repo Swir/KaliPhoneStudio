@@ -149,32 +149,32 @@ jobs:
           exit 19
           '@.Replace("__KPS_PLATFORM_TOOLS_VERSION__", [string]$Policy.platform_tools_version) | Set-Content -Encoding UTF8 $FakeAdb
 
-            $FakeFastboot = Join-Path $Scratch "fastboot.ps1"
-            @'
-          param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
-          if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "--version") {
-              Write-Output "fastboot version __KPS_PLATFORM_TOOLS_VERSION__-kps-wizard-smoke"
-              exit 0
-          }
-          if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "devices") {
-              Write-Output "KPSFAST0001 fastboot"
-              exit 0
-          }
-          if ($Remaining.Count -eq 5 -and $Remaining[0] -eq "-s" -and $Remaining[1] -eq "KPSFAST0001" -and $Remaining[2] -eq "getvar" -and $Remaining[3] -eq "all") {
-              Write-Output "(bootloader) product: avicii"
-              Write-Output "(bootloader) serialno: KPSFAST0001"
-              Write-Output "(bootloader) current-slot: a"
-              Write-Output "(bootloader) slot-count: 2"
-              Write-Output "(bootloader) unlocked: yes"
-              Write-Output "(bootloader) secure: yes"
-              Write-Output "(bootloader) version-bootloader: KPS-BOOT"
-              Write-Output "(bootloader) version-baseband: KPS-BASEBAND"
-              Write-Output "Finished. Total time: 0.001s"
-              exit 0
-          }
-          Write-Error "Unexpected fake Fastboot invocation: $($Remaining -join ' ')"
-          exit 23
-          '@.Replace("__KPS_PLATFORM_TOOLS_VERSION__", [string]$Policy.platform_tools_version) | Set-Content -Encoding UTF8 $FakeFastboot
+            $FakeFastboot = Join-Path $Scratch "fastboot.cmd"
+            @(
+              '@echo off',
+              'if "%~1"=="--version" (',
+              '  echo fastboot version __KPS_PLATFORM_TOOLS_VERSION__-kps-wizard-smoke',
+              '  exit /b 0',
+              ')',
+              'if "%~1"=="devices" (',
+              '  echo KPSFAST0001 fastboot',
+              '  exit /b 0',
+              ')',
+              'if "%~1"=="-s" if "%~2"=="KPSFAST0001" if "%~3"=="getvar" if "%~4"=="all" (',
+              '  echo ^(bootloader^) product: avicii',
+              '  echo ^(bootloader^) serialno: KPSFAST0001',
+              '  echo ^(bootloader^) current-slot: a',
+              '  echo ^(bootloader^) slot-count: 2',
+              '  echo ^(bootloader^) unlocked: yes',
+              '  echo ^(bootloader^) secure: yes',
+              '  echo ^(bootloader^) version-bootloader: KPS-BOOT',
+              '  echo ^(bootloader^) version-baseband: KPS-BASEBAND',
+              '  echo Finished. Total time: 0.001s',
+              '  exit /b 0',
+              ')',
+              'echo Unexpected fake Fastboot invocation 1^>^&2',
+              'exit /b 23'
+            ) -replace '__KPS_PLATFORM_TOOLS_VERSION__', [string]$Policy.platform_tools_version | Set-Content -Encoding ASCII $FakeFastboot
 
             $EvidenceRoot = Join-Path $Scratch "evidence"
             & pwsh -NoProfile -File "dist/operator-pack/first-test-wizard.ps1" `
