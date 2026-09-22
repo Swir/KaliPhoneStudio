@@ -57,6 +57,19 @@ $StageMap = [ordered]@{
     "docs/PHOSH_PHYSICAL_CANDIDATE_ADAPTER.md" = "PHOSH_PHYSICAL_CANDIDATE_ADAPTER.md"
     "evidence/authorities/phosh-arm64-rootfs-2026-09-21.json" = "phosh-rootfs-authority.json"
     "evidence/authorities/phosh-arm64-rootfs-2026-09-21-review-packet.json" = "phosh-rootfs-review-packet.json"
+    "docs/OPERATOR_WORKSPACE.md" = "OPERATOR_WORKSPACE.md"
+    "docs/KALI_EARLY_USERSPACE_PROOF.md" = "KALI_EARLY_USERSPACE_PROOF.md"
+    "docs/ROOTFS_HANDOFF_STRATEGY_REVIEW.md" = "ROOTFS_HANDOFF_STRATEGY_REVIEW.md"
+    "docs/ROOTFS_HANDOFF_TARGET_BINDING.md" = "ROOTFS_HANDOFF_TARGET_BINDING.md"
+    "docs/ROOTFS_HANDOFF_FRESH_REVALIDATION.md" = "ROOTFS_HANDOFF_FRESH_REVALIDATION.md"
+    "docs/ROOTFS_HANDOFF_TRIAL_PLAN.md" = "ROOTFS_HANDOFF_TRIAL_PLAN.md"
+    "docs/ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md" = "ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md"
+    "docs/ROOTFS_HANDOFF_TRIAL_AUTHORIZATION.md" = "ROOTFS_HANDOFF_TRIAL_AUTHORIZATION.md"
+    "docs/ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md" = "ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md"
+    "docs/ROOTFS_HANDOFF_TRIAL_METADATA_MANIFEST.md" = "ROOTFS_HANDOFF_TRIAL_METADATA_MANIFEST.md"
+    "docs/ROOTFS_HANDOFF_TRIAL_PAYLOAD_MANIFEST.md" = "ROOTFS_HANDOFF_TRIAL_PAYLOAD_MANIFEST.md"
+    "docs/ROOTFS_HANDOFF_INTERACTIVE_EXECUTOR.md" = "ROOTFS_HANDOFF_INTERACTIVE_EXECUTOR.md"
+    "docs/ROOTFS_TRIAL_CHAIN_AUDIT.md" = "ROOTFS_TRIAL_CHAIN_AUDIT.md"
     "docs/BETA_RELEASE_OPERATOR_WORKSPACE.md" = "BETA_RELEASE_OPERATOR_WORKSPACE.md"
     "docs/BETA_RELEASE_ARTIFACT_INVENTORY.md" = "BETA_RELEASE_ARTIFACT_INVENTORY.md"
     "docs/BETA_RELEASE_REVIEW_MANIFEST.md" = "BETA_RELEASE_REVIEW_MANIFEST.md"
@@ -117,7 +130,27 @@ KaliPhoneStudio AC2003 host test candidate
 
    This handoff is host-only. It does not stage rootfs bytes or authorize a phone write.
 
-9. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
+9. After temporary boot, keep the whole physical/evidence/rootfs chain offline and use the
+   packaged operator references instead of searching the repository or Internet:
+   .\operator-pack\OPERATOR_WORKSPACE.md
+   .\operator-pack\KALI_EARLY_USERSPACE_PROOF.md
+   .\operator-pack\ROOTFS_HANDOFF_STRATEGY_REVIEW.md
+   .\operator-pack\ROOTFS_HANDOFF_TARGET_BINDING.md
+   .\operator-pack\ROOTFS_HANDOFF_FRESH_REVALIDATION.md
+   .\operator-pack\ROOTFS_HANDOFF_TRIAL_PLAN.md
+   .\operator-pack\ROOTFS_HANDOFF_TRIAL_PREFLIGHT.md
+   .\operator-pack\ROOTFS_HANDOFF_TRIAL_AUTHORIZATION.md
+   .\operator-pack\ROOTFS_HANDOFF_TRIAL_EXECUTION_GATE.md
+   .\operator-pack\ROOTFS_HANDOFF_TRIAL_METADATA_MANIFEST.md
+   .\operator-pack\ROOTFS_HANDOFF_TRIAL_PAYLOAD_MANIFEST.md
+   .\operator-pack\ROOTFS_HANDOFF_INTERACTIVE_EXECUTOR.md
+   .\operator-pack\ROOTFS_TRIAL_CHAIN_AUDIT.md
+
+   The interactive staging helper is inside the deterministic rescue candidate and is never
+   auto-run. Rootfs staging remains a separately reviewed, local-console, explicit-confirmation
+   boundary and is not authorized by merely possessing this Windows package.
+
+10. After the REAL physical gate evidence is complete, use the offline release-prep chain only:
    .\operator-pack\BETA_RELEASE_OPERATOR_WORKSPACE.md
    .\operator-pack\BETA_RELEASE_ARTIFACT_INVENTORY.md
    .\operator-pack\BETA_RELEASE_REVIEW_MANIFEST.md
@@ -155,6 +188,9 @@ foreach ($Path in @($InfoPath, $ManifestPath, $ZipPath, $ZipShaPath)) {
     phosh_handoff_included = $true
     phosh_reviewed_authority_included = $true
     phosh_rootfs_bytes_included = $false
+    offline_post_boot_operator_chain_included = $true
+    rootfs_interactive_staging_auto_run = $false
+    rootfs_persistent_write_authorized = $false
     signed = $false
     physical_gate_passed = $false
     hardware_verified = $false
@@ -206,5 +242,6 @@ Write-Host "Bundled extractor SHA-256: $ExpectedExtractorSha"
 Write-Host "Host-only AC2003 preflight: PASS"
 Write-Host "One-command AC2003 read-only baseline launcher: INCLUDED"
 Write-Host "Reviewed Phosh handoff: INCLUDED (authority records only; rootfs bytes excluded)"
+Write-Host "Offline post-boot/rootfs operator chain: INCLUDED (documentation and frozen CLI only)"
 Write-Host "Physical gate passed: false"
 Write-Host "Beta release: false"
