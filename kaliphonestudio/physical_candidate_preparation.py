@@ -246,6 +246,7 @@ def prepare_physical_candidate_offline(
             "--ota", str(ota),
             "--extractor", str(extractor),
             "--extractor-platform", extractor_platform,
+            "--expected-firmware-fingerprint", str(session_data["firmware_fingerprint"]),
             "--out-dir", str(stock_dir),
         ],
     )

@@ -55,6 +55,9 @@ class StockOTAExtractionReport:
     payload_relpath: str
     boot_relpath: str
     provenance_relpath: str
+    expected_firmware_fingerprint: str | None
+    ota_post_build_fingerprint: str | None
+    exact_firmware_fingerprint_match: bool
     phone_queried: bool
     phone_storage_written: bool
     temporary_boot_authorized: bool
@@ -89,6 +92,26 @@ def _same_stat(before: object, after: object) -> bool:
         and getattr(before, "st_mtime_ns", None) == getattr(after, "st_mtime_ns", None)
         and getattr(before, "st_ino", None) == getattr(after, "st_ino", None)
     )
+
+
+def _require_exact_firmware_fingerprint(
+    report: OTAPackageReport,
+    expected_firmware_fingerprint: str,
+) -> str:
+    """Bind an OTA to the exact physical ro.build.fingerprint captured earlier."""
+    if not isinstance(expected_firmware_fingerprint, str) or not expected_firmware_fingerprint.strip():
+        raise StockOTAPipelineError("expected physical firmware fingerprint must be non-empty")
+    expected = expected_firmware_fingerprint.strip()
+    actual = report.metadata.get("post-build", "").strip()
+    if not actual:
+        raise StockOTAPipelineError(
+            "OTA metadata lacks post-build; exact physical firmware binding is impossible"
+        )
+    if actual != expected:
+        raise StockOTAPipelineError(
+            "OTA post-build fingerprint does not match the captured physical firmware fingerprint"
+        )
+    return actual
 
 
 def _materialize_exact_payload(
@@ -173,6 +196,7 @@ def prepare_stock_from_ota(
     extractor_manifest_path: Path,
     extractor_platform: str,
     output_dir: Path,
+    expected_firmware_fingerprint: str | None = None,
 ) -> tuple[StockOTAExtractionReport, StockBootProvenance]:
     """Build a create-only local stock evidence bundle from one exact OTA."""
     output_dir = Path(output_dir)
@@ -184,6 +208,17 @@ def prepare_stock_from_ota(
     profile = get_profile(Path(devices_root), profile_id)
     ota_report = inspect_ota_zip(Path(ota_path))
     require_firmware_hint(ota_report, list(profile.data["firmware_hints"]))
+    ota_post_build = ota_report.metadata.get("post-build", "").strip() or None
+    exact_match = False
+    expected_fingerprint: str | None = None
+    if expected_firmware_fingerprint is not None:
+        expected_fingerprint = expected_firmware_fingerprint.strip()
+        ota_post_build = _require_exact_firmware_fingerprint(
+            ota_report,
+            expected_firmware_fingerprint,
+        )
+        exact_match = True
+
     extractor_manifest_sha256 = _hash_regular_file(Path(extractor_manifest_path), "extractor lock manifest")
     lock = lock_from_manifest(Path(extractor_path), Path(extractor_manifest_path), extractor_platform)
     if _hash_regular_file(Path(extractor_manifest_path), "extractor lock manifest") != extractor_manifest_sha256:
@@ -222,7 +257,7 @@ def prepare_stock_from_ota(
         write_immutable_provenance(provenance, provenance_path)
 
         report = StockOTAExtractionReport(
-            schema_version=1,
+            schema_version=2,
             profile_id=profile_id,
             ota_sha256=ota_sha,
             ota_size=ota_size,
@@ -239,6 +274,9 @@ def prepare_stock_from_ota(
             payload_relpath="payload.bin",
             boot_relpath="partitions/boot.img",
             provenance_relpath="stock-provenance.json",
+            expected_firmware_fingerprint=expected_fingerprint,
+            ota_post_build_fingerprint=ota_post_build,
+            exact_firmware_fingerprint_match=exact_match,
             phone_queried=False,
             phone_storage_written=False,
             temporary_boot_authorized=False,
@@ -273,6 +311,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--extractor", type=Path, required=True)
     parser.add_argument("--extractor-manifest", type=Path, default=DEFAULT_EXTRACTOR_MANIFEST)
     parser.add_argument("--extractor-platform", required=True, help="Exact key from tools/extractor-locks.json.")
+    parser.add_argument(
+        "--expected-firmware-fingerprint",
+        help=(
+            "Exact physical ro.build.fingerprint captured before Fastboot. When supplied, "
+            "OTA metadata post-build must match byte-for-byte before extraction can start."
+        ),
+    )
     parser.add_argument("--out-dir", type=Path, required=True)
     return parser
 
@@ -288,6 +333,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             extractor_manifest_path=args.extractor_manifest,
             extractor_platform=args.extractor_platform,
             output_dir=args.out_dir,
+            expected_firmware_fingerprint=args.expected_firmware_fingerprint,
         )
     except (
         StockOTAPipelineError,
