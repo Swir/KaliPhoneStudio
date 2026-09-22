@@ -1,0 +1,120 @@
+name: ac2003-first-test-main-candidate
+
+on:
+  workflow_run:
+    workflows: ["windows-beta-test-candidate"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  overlay-first-test-wizard:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact main candidate source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+
+      - name: Download the exact green Windows host candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: KaliPhoneStudio-AC2003-beta-test-candidate-${{ github.event.workflow_run.head_sha }}
+          path: base-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify and rehydrate the exact source candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $HeadSha = "${{ github.event.workflow_run.head_sha }}".ToLowerInvariant()
+          $Base = (Resolve-Path "base-artifact").Path
+          $Zip = Join-Path $Base "KaliPhoneStudio-AC2003-beta-test-candidate.zip"
+          $ZipSha = "$Zip.sha256"
+          $Info = Join-Path $Base "BETA_TEST_CANDIDATE_INFO.json"
+          foreach ($Path in @($Zip, $ZipSha, $Info)) {
+            if (-not (Test-Path $Path -PathType Leaf)) { throw "Source candidate artifact missing: $Path" }
+          }
+
+          $SourceInfo = Get-Content -Raw -Encoding UTF8 $Info | ConvertFrom-Json
+          if (([string]$SourceInfo.git_commit).ToLowerInvariant() -ne $HeadSha) {
+            throw "Source candidate commit does not match triggering main head"
+          }
+          if ($SourceInfo.beta_release -ne $false -or $SourceInfo.physical_gate_passed -ne $false -or $SourceInfo.hardware_verified -ne $false) {
+            throw "Source host candidate contains an unsafe physical/Beta promotion"
+          }
+
+          $ExpectedLine = (Get-Content -Raw -Encoding ASCII $ZipSha).Trim()
+          $ExpectedHash = ($ExpectedLine -split '\s+')[0].ToLowerInvariant()
+          $ActualHash = (Get-FileHash -Algorithm SHA256 -Path $Zip).Hash.ToLowerInvariant()
+          if ($ActualHash -ne $ExpectedHash) { throw "Source candidate ZIP SHA-256 mismatch" }
+
+          New-Item -ItemType Directory -Path "dist" | Out-Null
+          Expand-Archive -LiteralPath $Zip -DestinationPath "dist"
+          Copy-Item -LiteralPath $Zip -Destination "dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip"
+          Copy-Item -LiteralPath $ZipSha -Destination "dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256"
+
+          $ExpandedInfo = "dist/BETA_TEST_CANDIDATE_INFO.json"
+          if (-not (Test-Path $ExpandedInfo -PathType Leaf)) { throw "Expanded candidate metadata missing" }
+          $BaseInfoHash = (Get-FileHash -Algorithm SHA256 -Path $Info).Hash.ToLowerInvariant()
+          $ExpandedInfoHash = (Get-FileHash -Algorithm SHA256 -Path $ExpandedInfo).Hash.ToLowerInvariant()
+          if ($BaseInfoHash -ne $ExpandedInfoHash) { throw "Expanded candidate metadata drift" }
+
+      - name: Parse the exact wizard overlay before use
+        shell: pwsh
+        run: |
+          foreach ($Path in @(
+            "scripts/start_ac2003_first_test_wizard.ps1",
+            "scripts/overlay_ac2003_first_test_wizard.ps1"
+          )) {
+            $Errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $Path), [ref]$null, [ref]$Errors)
+            if ($Errors.Count -ne 0) {
+              $Errors | Format-List | Out-String | Write-Error
+              throw "PowerShell parse failed: $Path"
+            }
+          }
+
+      - name: Overlay and self-verify the one-command AC2003 first-test wizard
+        shell: pwsh
+        run: ./scripts/overlay_ac2003_first_test_wizard.ps1 -DistRoot "dist"
+
+      - name: Verify final main physical-test candidate metadata
+        shell: pwsh
+        run: |
+          $Info = Get-Content -Raw -Encoding UTF8 "dist/BETA_TEST_CANDIDATE_INFO.json" | ConvertFrom-Json
+          if ($Info.first_test_wizard_included -ne $true) { throw "Final main candidate is missing the first-test wizard" }
+          if ($Info.first_test_wizard_manual_fastboot_transition_required -ne $true) { throw "Final main candidate lost the manual Fastboot transition gate" }
+          foreach ($Field in @(
+            "first_test_wizard_automatic_reboot",
+            "first_test_wizard_temporary_boot_performed",
+            "first_test_wizard_persistent_write_authorized",
+            "first_test_wizard_beta_gate_credit",
+            "physical_gate_passed",
+            "hardware_verified",
+            "beta_release",
+            "beta_gate_credit"
+          )) {
+            if ($Info.$Field -ne $false) { throw "Unsafe final main candidate field: $Field" }
+          }
+          if (-not (Test-Path "dist/operator-pack/first-test-wizard.ps1" -PathType Leaf)) {
+            throw "Final main candidate wizard file is missing"
+          }
+
+      - name: Upload exact main AC2003 physical-test candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaliPhoneStudio-AC2003-first-test-main-candidate-${{ github.event.workflow_run.head_sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip
+            dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256
+            dist/BETA_TEST_CANDIDATE_INFO.json
