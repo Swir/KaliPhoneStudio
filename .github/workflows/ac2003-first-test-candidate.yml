@@ -1,0 +1,215 @@
+name: ac2003-first-test-candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ac2003-first-test-candidate.yml"
+      - "scripts/start_ac2003_first_test_wizard.ps1"
+      - "scripts/overlay_ac2003_first_test_wizard.ps1"
+      - "scripts/package_windows_beta_test_candidate.ps1"
+      - "scripts/start_ac2003_readonly_baseline.ps1"
+      - "scripts/preflight_ac2003_first_test.ps1"
+      - "scripts/build_windows.ps1"
+      - "scripts/build_windows_operator_extractor.ps1"
+      - "scripts/smoke_windows_beta_test_candidate.ps1"
+      - "scripts/verify_windows_beta_test_candidate.ps1"
+      - "main.py"
+      - "kaliphonestudio/**"
+      - "devices/oneplus/avicii/profile.json"
+      - "tools/fastboot-tool-policy.json"
+      - "tools/extractor-locks.json"
+      - "tests/test_ac2003_first_test_wizard_contract.py"
+      - "tests/test_ac2003_host_preflight_contract.py"
+      - "tests/test_physical_first_test_session.py"
+      - "tests/test_physical_fastboot_capture.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-first-test-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.0"
+          cache: false
+
+      - name: Install exact host build and focused test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r build/windows-requirements.txt
+          python -m pip install pytest
+
+      - name: Install reviewed Windows extractor native prerequisites
+        shell: pwsh
+        run: |
+          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-xz'
+          if ($LASTEXITCODE -ne 0) { throw "MSYS2 extractor prerequisites failed: $LASTEXITCODE" }
+          'C:\msys64\mingw64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          'CC=C:\msys64\mingw64\bin\gcc.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CXX=C:\msys64\mingw64\bin\g++.exe' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_ENABLED=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_CFLAGS=-IC:/msys64/mingw64/include' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CGO_LDFLAGS=-LC:/msys64/mingw64/lib' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify one-command wizard and existing read-only physical boundaries
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m pytest -q
+          tests/test_ac2003_first_test_wizard_contract.py
+          tests/test_ac2003_host_preflight_contract.py
+          tests/test_physical_first_test_session.py
+          tests/test_physical_fastboot_capture.py
+          tests/test_windows_beta_operator_pack_contract.py
+          tests/test_windows_beta_test_candidate_contract.py
+
+      - name: Parse PowerShell wizard and overlay before packaging
+        shell: pwsh
+        run: |
+          $Errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "scripts/start_ac2003_first_test_wizard.ps1"), [ref]$null, [ref]$Errors)
+          if ($Errors.Count -ne 0) { $Errors | Format-List | Out-String | Write-Error; throw "First-test wizard PowerShell parse failed" }
+          $Errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "scripts/overlay_ac2003_first_test_wizard.ps1"), [ref]$null, [ref]$Errors)
+          if ($Errors.Count -ne 0) { $Errors | Format-List | Out-String | Write-Error; throw "First-test overlay PowerShell parse failed" }
+
+      - name: Build frozen Windows GUI and CLI
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Build exact bundled OTA extractor and runtime closure
+        shell: pwsh
+        run: ./scripts/build_windows_operator_extractor.ps1 -OutputDir "dist/operator-tools"
+
+      - name: Smoke existing frozen operator surface
+        shell: pwsh
+        run: ./scripts/smoke_windows_beta_test_candidate.ps1 -CandidateRoot "dist"
+
+      - name: Build candidate then overlay one-command FIRST TEST wizard
+        shell: pwsh
+        run: |
+          ./scripts/package_windows_beta_test_candidate.ps1 `
+            -SourceCommit "${{ github.event.pull_request.head.sha || github.sha }}" `
+            -DistRoot "dist"
+          ./scripts/overlay_ac2003_first_test_wizard.ps1 -DistRoot "dist"
+
+      - name: Exercise packaged wizard end-to-end with read-only fake ADB/Fastboot
+        shell: pwsh
+        run: |
+          $Policy = Get-Content -Raw -Encoding UTF8 "dist/operator-pack/fastboot-tool-policy.json" | ConvertFrom-Json
+          $Scratch = Join-Path $env:RUNNER_TEMP ("kps-first-test-wizard-" + [Guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $Scratch | Out-Null
+          try {
+            $FakeAdb = Join-Path $Scratch "adb.ps1"
+            @'
+          param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
+          if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "--version") {
+              Write-Output "Android Debug Bridge version 1.0.41"
+              Write-Output "Version __KPS_PLATFORM_TOOLS_VERSION__-kps-wizard-smoke"
+              exit 0
+          }
+          if ($Remaining.Count -ge 1 -and $Remaining[0] -eq "devices") {
+              Write-Output "List of devices attached"
+              Write-Output "KPSADB0001 device product:avicii model:AC2003 device:avicii transport_id:1"
+              exit 0
+          }
+          if ($Remaining.Count -eq 5 -and $Remaining[0] -eq "-s" -and $Remaining[1] -eq "KPSADB0001" -and $Remaining[2] -eq "shell" -and $Remaining[3] -eq "getprop") {
+              switch ($Remaining[4]) {
+                  "ro.product.device" { Write-Output "avicii"; exit 0 }
+                  "ro.product.model" { Write-Output "AC2003"; exit 0 }
+                  "ro.product.board" { Write-Output "lito"; exit 0 }
+                  "ro.build.fingerprint" { Write-Output "OnePlus/avicii/avicii:12/RKQ1/KPS:user/release-keys"; exit 0 }
+                  "ro.build.version.ota" { Write-Output "AC2003_11_F.99_KPS"; exit 0 }
+                  "ro.build.display.id" { Write-Output "AC2003_11_F.99_KPS"; exit 0 }
+                  "ro.build.id" { Write-Output "RKQ1"; exit 0 }
+                  "ro.build.version.incremental" { Write-Output "KPS"; exit 0 }
+                  "ro.boot.slot_suffix" { Write-Output "_a"; exit 0 }
+                  "ro.boot.bootloader" { Write-Output "KPS-BOOT"; exit 0 }
+                  "gsm.version.baseband" { Write-Output "KPS-BASEBAND"; exit 0 }
+              }
+          }
+          Write-Error "Unexpected fake ADB invocation: $($Remaining -join ' ')"
+          exit 19
+          '@.Replace("__KPS_PLATFORM_TOOLS_VERSION__", [string]$Policy.platform_tools_version) | Set-Content -Encoding UTF8 $FakeAdb
+
+            $FakeFastboot = Join-Path $Scratch "fastboot.ps1"
+            @'
+          param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
+          if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "--version") {
+              Write-Output "fastboot version __KPS_PLATFORM_TOOLS_VERSION__-kps-wizard-smoke"
+              exit 0
+          }
+          if ($Remaining.Count -eq 1 -and $Remaining[0] -eq "devices") {
+              Write-Output "KPSFAST0001 fastboot"
+              exit 0
+          }
+          if ($Remaining.Count -eq 5 -and $Remaining[0] -eq "-s" -and $Remaining[1] -eq "KPSFAST0001" -and $Remaining[2] -eq "getvar" -and $Remaining[3] -eq "all") {
+              Write-Output "(bootloader) product: avicii"
+              Write-Output "(bootloader) serialno: KPSFAST0001"
+              Write-Output "(bootloader) current-slot: a"
+              Write-Output "(bootloader) slot-count: 2"
+              Write-Output "(bootloader) unlocked: yes"
+              Write-Output "(bootloader) secure: yes"
+              Write-Output "(bootloader) version-bootloader: KPS-BOOT"
+              Write-Output "(bootloader) version-baseband: KPS-BASEBAND"
+              Write-Output "Finished. Total time: 0.001s"
+              exit 0
+          }
+          Write-Error "Unexpected fake Fastboot invocation: $($Remaining -join ' ')"
+          exit 23
+          '@.Replace("__KPS_PLATFORM_TOOLS_VERSION__", [string]$Policy.platform_tools_version) | Set-Content -Encoding UTF8 $FakeFastboot
+
+            $EvidenceRoot = Join-Path $Scratch "evidence"
+            & pwsh -NoProfile -File "dist/operator-pack/first-test-wizard.ps1" `
+              -CandidateRoot "dist" `
+              -AdbExecutable $FakeAdb `
+              -FastbootExecutable $FakeFastboot `
+              -EvidenceRoot $EvidenceRoot `
+              -SessionLabel "ci-smoke" `
+              -FastbootAlreadyReady
+            if ($LASTEXITCODE -ne 0) { throw "Packaged first-test wizard smoke failed: $LASTEXITCODE" }
+
+            $Session = Join-Path $EvidenceRoot "ac2003-first-test-ci-smoke"
+            foreach ($Expected in @(
+              "physical-first-test-session.json",
+              "stock-android-identity.json",
+              "stock-android-identity-link.json",
+              "fastboot/fastboot-getvar-all.txt",
+              "fastboot/fastboot-baseline.json",
+              "fastboot/fastboot-tool.json",
+              "fastboot/fastboot-capture-bundle.json"
+            )) {
+              if (-not (Test-Path (Join-Path $Session $Expected) -PathType Leaf)) { throw "Wizard smoke missing evidence: $Expected" }
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $Scratch -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload integrated AC2003 one-command physical test candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaliPhoneStudio-AC2003-first-test-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip
+            dist/KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256
+            dist/BETA_TEST_CANDIDATE_INFO.json
