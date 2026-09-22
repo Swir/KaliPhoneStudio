@@ -23,7 +23,7 @@ function Invoke-AdbRead([string]$AdbPath, [string[]]$Arguments, [string]$Label) 
     $Output = (& $AdbPath @Arguments 2>&1 | Out-String).Trim()
     $Exit = $LASTEXITCODE
     if ($null -eq $Exit -or $Exit -ne 0) {
-        throw "Read-only ADB capture failed for $Label: exit=$Exit output=$Output"
+        throw "Read-only ADB capture failed for ${Label}: exit=$Exit output=$Output"
     }
     return $Output
 }
