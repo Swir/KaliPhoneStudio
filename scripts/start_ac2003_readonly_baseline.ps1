@@ -1,34 +1,226 @@
 param(
-    [Parameter(Mandatory = $true)]
     [string]$FastbootExecutable,
-    [Parameter(Mandatory = $true)]
     [string]$Serial,
-    [Parameter(Mandatory = $true)]
     [string]$FirmwareBuild,
-    [Parameter(Mandatory = $true)]
     [string]$FirmwareFingerprint,
-    [Parameter(Mandatory = $true)]
     [string]$SessionDir,
-    [string]$CandidateRoot = "."
+    [string]$CandidateRoot = ".",
+    [string]$AdbExecutable,
+    [string]$AndroidIdentityEvidence,
+    [switch]$CaptureAndroidIdentityOnly
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-foreach ($Value in @($FastbootExecutable, $Serial, $FirmwareBuild, $FirmwareFingerprint, $SessionDir)) {
-    if ([string]::IsNullOrWhiteSpace([string]$Value)) {
-        throw "AC2003 read-only baseline launcher requires every exact input"
+function Require-NonEmpty([string]$Value, [string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        throw "AC2003 read-only baseline launcher requires $Name"
     }
+}
+
+function Invoke-AdbRead([string]$AdbPath, [string[]]$Arguments, [string]$Label) {
+    $Output = (& $AdbPath @Arguments 2>&1 | Out-String).Trim()
+    $Exit = $LASTEXITCODE
+    if ($null -eq $Exit -or $Exit -ne 0) {
+        throw "Read-only ADB capture failed for $Label: exit=$Exit output=$Output"
+    }
+    return $Output
 }
 
 $Root = (Resolve-Path $CandidateRoot).Path
 $Preflight = Join-Path $Root "operator-pack\host-preflight.ps1"
 $PolicyPath = Join-Path $Root "operator-pack\fastboot-tool-policy.json"
+$ProfilePath = Join-Path $Root "operator-pack\profile.json"
 $Cli = Join-Path $Root "KaliPhoneStudioCLI\KaliPhoneStudioCLI.exe"
-foreach ($Path in @($Preflight, $PolicyPath, $Cli)) {
+foreach ($Path in @($Preflight, $PolicyPath, $ProfilePath, $Cli)) {
     if (-not (Test-Path $Path -PathType Leaf)) {
         throw "Required AC2003 baseline-launcher input missing: $Path"
     }
+}
+
+$Policy = Get-Content -Raw -Encoding UTF8 $PolicyPath | ConvertFrom-Json
+$Profile = Get-Content -Raw -Encoding UTF8 $ProfilePath | ConvertFrom-Json
+if ([string]$Profile.profile_id -ne "oneplus/avicii") { throw "Packaged profile identity drift" }
+if ([string]$Profile.confirmation_text -ne "AC2003") { throw "Packaged confirmation token drift" }
+if ([string]$Policy.tool -ne "fastboot" -or [string]$Policy.version_policy -ne "exact") {
+    throw "Packaged Android platform-tools policy drift"
+}
+$ExpectedPlatformToolsVersion = [string]$Policy.platform_tools_version
+if ([string]::IsNullOrWhiteSpace($ExpectedPlatformToolsVersion)) {
+    throw "Packaged Android platform-tools policy has no exact version"
+}
+
+if ($CaptureAndroidIdentityOnly) {
+    Require-NonEmpty $AdbExecutable "AdbExecutable in -CaptureAndroidIdentityOnly mode"
+    Require-NonEmpty $AndroidIdentityEvidence "AndroidIdentityEvidence in -CaptureAndroidIdentityOnly mode"
+
+    $EvidencePath = [IO.Path]::GetFullPath($AndroidIdentityEvidence)
+    if (Test-Path $EvidencePath) {
+        throw "Refusing to overwrite existing stock Android identity evidence: $EvidencePath"
+    }
+    $EvidenceParent = Split-Path -Parent $EvidencePath
+    if ([string]::IsNullOrWhiteSpace($EvidenceParent)) {
+        throw "Android identity evidence path must have a parent directory"
+    }
+    New-Item -ItemType Directory -Path $EvidenceParent -Force | Out-Null
+
+    $AdbPath = (Resolve-Path $AdbExecutable).Path
+    if (-not (Test-Path $AdbPath -PathType Leaf)) { throw "ADB executable not found: $AdbPath" }
+    $AdbShaBefore = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInvariant()
+    $AdbVersionBefore = Invoke-AdbRead $AdbPath @("--version") "adb --version"
+    $VersionPattern = "(?im)^Version\s+" + [Regex]::Escape($ExpectedPlatformToolsVersion) + "(?:[-+][^\s]+)?$"
+    if ($AdbVersionBefore -notmatch $VersionPattern) {
+        throw "ADB version drift: policy requires $ExpectedPlatformToolsVersion; reported: $AdbVersionBefore"
+    }
+
+    $Devices = Invoke-AdbRead $AdbPath @("devices", "-l") "adb devices -l"
+    $DeviceLines = @(
+        $Devices -split "`r?`n" |
+            Where-Object { $_ -match '^\S+\s+device(?:\s|$)' }
+    )
+    if ($DeviceLines.Count -ne 1) {
+        throw "Stock Android identity capture requires exactly one authorized ADB device; got $($DeviceLines.Count)"
+    }
+    $AdbSerial = (($DeviceLines[0] -split '\s+')[0]).Trim()
+    Require-NonEmpty $AdbSerial "authorized ADB serial"
+
+    $PropertyKeys = @(
+        "ro.product.device",
+        "ro.product.model",
+        "ro.product.board",
+        "ro.build.fingerprint",
+        "ro.build.version.ota",
+        "ro.build.display.id",
+        "ro.build.id",
+        "ro.build.version.incremental",
+        "ro.boot.slot_suffix",
+        "ro.boot.bootloader",
+        "gsm.version.baseband"
+    )
+    $Properties = [ordered]@{}
+    foreach ($Key in $PropertyKeys) {
+        $Value = Invoke-AdbRead $AdbPath @("-s", $AdbSerial, "shell", "getprop", $Key) "getprop $Key"
+        $Properties[$Key] = $Value.Trim()
+    }
+
+    $Product = [string]$Properties["ro.product.device"]
+    $Model = [string]$Properties["ro.product.model"]
+    $Board = [string]$Properties["ro.product.board"]
+    $Fingerprint = [string]$Properties["ro.build.fingerprint"]
+    $BuildCandidates = @(
+        [string]$Properties["ro.build.version.ota"],
+        [string]$Properties["ro.build.display.id"],
+        [string]$Properties["ro.build.id"]
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    if ($BuildCandidates.Count -eq 0) { throw "ADB stock identity capture returned no usable firmware build" }
+    $CapturedFirmwareBuild = [string]$BuildCandidates[0]
+    Require-NonEmpty $Fingerprint "ro.build.fingerprint"
+
+    $StrongProductValues = @($Profile.identity_signals.product.values) | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() }
+    $StrongModelValues = @($Profile.identity_signals.model.values) | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() }
+    $ProductStrongMatch = $StrongProductValues -contains $Product.Trim().ToLowerInvariant()
+    $ModelStrongMatch = $StrongModelValues -contains $Model.Trim().ToLowerInvariant()
+    if (-not ($ProductStrongMatch -or $ModelStrongMatch)) {
+        throw "ADB stock identity does not match a strong oneplus/avicii product/model signal: product=$Product model=$Model"
+    }
+
+    $AdbShaAfter = (Get-FileHash -Algorithm SHA256 -Path $AdbPath).Hash.ToLowerInvariant()
+    $AdbVersionAfter = Invoke-AdbRead $AdbPath @("--version") "final adb --version"
+    if ($AdbShaAfter -ne $AdbShaBefore) { throw "ADB executable changed during stock identity capture" }
+    if ($AdbVersionAfter -ne $AdbVersionBefore) { throw "ADB version output changed during stock identity capture" }
+
+    $Evidence = [ordered]@{
+        schema_version = 1
+        kind = "kaliphonestudio-readonly-stock-android-identity"
+        profile_id = "oneplus/avicii"
+        profile_confirmation_text = "AC2003"
+        adb_serial = $AdbSerial
+        product = $Product
+        model = $Model
+        board = $Board
+        product_strong_match = [bool]$ProductStrongMatch
+        model_strong_match = [bool]$ModelStrongMatch
+        firmware_build = $CapturedFirmwareBuild
+        firmware_fingerprint = $Fingerprint
+        build_display_id = [string]$Properties["ro.build.display.id"]
+        build_id = [string]$Properties["ro.build.id"]
+        build_incremental = [string]$Properties["ro.build.version.incremental"]
+        ota_build = [string]$Properties["ro.build.version.ota"]
+        slot_suffix = [string]$Properties["ro.boot.slot_suffix"]
+        bootloader_version = [string]$Properties["ro.boot.bootloader"]
+        baseband_version = [string]$Properties["gsm.version.baseband"]
+        platform_tools_version = $ExpectedPlatformToolsVersion
+        adb_executable_sha256 = $AdbShaBefore
+        adb_version_output = $AdbVersionBefore
+        read_only_stock_android_capture = $true
+        device_interaction_performed = $true
+        adb_reboot_performed = $false
+        fastboot_interaction_performed = $false
+        temporary_boot_performed = $false
+        persistent_write_authorized = $false
+        phone_storage_written = $false
+        hardware_verified = $false
+        beta_release_authorized = $false
+        beta_gate_credit = $false
+    }
+    $Evidence | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -NoNewline $EvidencePath
+    $EvidenceSha = (Get-FileHash -Algorithm SHA256 -Path $EvidencePath).Hash.ToLowerInvariant()
+
+    Write-Host "KaliPhoneStudio AC2003 stock Android identity capture: PASS"
+    Write-Host "Evidence: $EvidencePath"
+    Write-Host "Evidence SHA-256: $EvidenceSha"
+    Write-Host "ADB serial: $AdbSerial"
+    Write-Host "Product/model: $Product / $Model"
+    Write-Host "Firmware build: $CapturedFirmwareBuild"
+    Write-Host "Firmware fingerprint: $Fingerprint"
+    Write-Host "Read-only Android property capture: true"
+    Write-Host "ADB reboot performed: false"
+    Write-Host "Persistent phone write authorized: false"
+    Write-Host "Hardware verified: false"
+    Write-Host "Beta gate credit: false"
+    Write-Host "Next: manually put the phone in Fastboot, then rerun readonly-baseline.ps1 with -AndroidIdentityEvidence."
+    exit 0
+}
+
+Require-NonEmpty $FastbootExecutable "FastbootExecutable"
+Require-NonEmpty $Serial "Serial"
+Require-NonEmpty $SessionDir "SessionDir"
+
+$Identity = $null
+$IdentityEvidenceSha = $null
+if (-not [string]::IsNullOrWhiteSpace($AndroidIdentityEvidence)) {
+    $IdentityPath = (Resolve-Path $AndroidIdentityEvidence).Path
+    $Identity = Get-Content -Raw -Encoding UTF8 $IdentityPath | ConvertFrom-Json
+    if ([int]$Identity.schema_version -ne 1) { throw "Unexpected stock Android identity evidence schema" }
+    if ([string]$Identity.kind -ne "kaliphonestudio-readonly-stock-android-identity") { throw "Unexpected stock Android identity evidence kind" }
+    if ([string]$Identity.profile_id -ne "oneplus/avicii") { throw "Stock Android identity profile drift" }
+    if ($Identity.read_only_stock_android_capture -ne $true) { throw "Stock Android identity is not marked read-only" }
+    if ($Identity.device_interaction_performed -ne $true) { throw "Stock Android identity did not capture a physical device" }
+    if ($Identity.adb_reboot_performed -ne $false) { throw "Stock Android identity unexpectedly claims adb reboot" }
+    foreach ($Field in @("temporary_boot_performed", "persistent_write_authorized", "phone_storage_written", "hardware_verified", "beta_release_authorized", "beta_gate_credit")) {
+        if ($Identity.$Field -ne $false) { throw "Unsafe stock Android identity field: $Field" }
+    }
+    if (-not ($Identity.product_strong_match -eq $true -or $Identity.model_strong_match -eq $true)) {
+        throw "Stock Android identity evidence has no strong profile match"
+    }
+    $EvidenceBuild = [string]$Identity.firmware_build
+    $EvidenceFingerprint = [string]$Identity.firmware_fingerprint
+    Require-NonEmpty $EvidenceBuild "firmware_build in AndroidIdentityEvidence"
+    Require-NonEmpty $EvidenceFingerprint "firmware_fingerprint in AndroidIdentityEvidence"
+    if (-not [string]::IsNullOrWhiteSpace($FirmwareBuild) -and $FirmwareBuild -ne $EvidenceBuild) {
+        throw "Explicit firmware build conflicts with Android identity evidence"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($FirmwareFingerprint) -and $FirmwareFingerprint -ne $EvidenceFingerprint) {
+        throw "Explicit firmware fingerprint conflicts with Android identity evidence"
+    }
+    $FirmwareBuild = $EvidenceBuild
+    $FirmwareFingerprint = $EvidenceFingerprint
+    $IdentityEvidenceSha = (Get-FileHash -Algorithm SHA256 -Path $IdentityPath).Hash.ToLowerInvariant()
+}
+else {
+    Require-NonEmpty $FirmwareBuild "FirmwareBuild when AndroidIdentityEvidence is not supplied"
+    Require-NonEmpty $FirmwareFingerprint "FirmwareFingerprint when AndroidIdentityEvidence is not supplied"
 }
 
 $SessionPath = [IO.Path]::GetFullPath($SessionDir)
@@ -85,6 +277,31 @@ if ($Manifest.phone_storage_written -ne $false) { throw "Unexpected phone-storag
 if ($Manifest.hardware_verified -ne $false) { throw "Unexpected hardware-verification claim in baseline session" }
 if ($Manifest.beta_gate_credit -ne $false) { throw "Unexpected Beta-gate credit in baseline session" }
 
+if ($null -ne $Identity) {
+    $BoundIdentityPath = Join-Path $SessionPath "stock-android-identity.json"
+    if (Test-Path $BoundIdentityPath) { throw "Refusing to overwrite bound stock Android identity evidence" }
+    Copy-Item -LiteralPath $IdentityPath -Destination $BoundIdentityPath
+    $BoundSha = (Get-FileHash -Algorithm SHA256 -Path $BoundIdentityPath).Hash.ToLowerInvariant()
+    if ($BoundSha -ne $IdentityEvidenceSha) { throw "Stock Android identity evidence drifted while binding session" }
+
+    $LinkPath = Join-Path $SessionPath "stock-android-identity-link.json"
+    [ordered]@{
+        schema_version = 1
+        kind = "kaliphonestudio-stock-android-identity-link"
+        profile_id = "oneplus/avicii"
+        fastboot_device_serial = $Serial
+        adb_device_serial = [string]$Identity.adb_serial
+        firmware_build = $FirmwareBuild
+        firmware_fingerprint = $FirmwareFingerprint
+        stock_android_identity_sha256 = $BoundSha
+        physical_first_test_session_sha256 = (Get-FileHash -Algorithm SHA256 -Path $ManifestPath).Hash.ToLowerInvariant()
+        read_only_identity_bound = $true
+        persistent_write_authorized = $false
+        hardware_verified = $false
+        beta_gate_credit = $false
+    } | ConvertTo-Json | Set-Content -Encoding UTF8 -NoNewline $LinkPath
+}
+
 $Policy = Get-Content -Raw -Encoding UTF8 $PolicyPath | ConvertFrom-Json
 if ([string]$Manifest.fastboot_platform_tools_version -ne [string]$Policy.platform_tools_version) {
     throw "Fastboot version drift between packaged policy and captured session"
@@ -113,6 +330,13 @@ Write-Host "Profile: oneplus/avicii"
 Write-Host "Serial: $Serial"
 Write-Host "Firmware build: $FirmwareBuild"
 Write-Host "Fastboot SHA-256: $FastbootSha"
+if ($null -ne $Identity) {
+    Write-Host "Stock Android identity evidence SHA-256: $IdentityEvidenceSha"
+    Write-Host "Firmware build/fingerprint source: read-only ADB evidence"
+}
+else {
+    Write-Host "Firmware build/fingerprint source: explicit operator input"
+}
 Write-Host "Physical interaction performed: true (read-only Fastboot baseline only)"
 Write-Host "Temporary boot performed: false"
 Write-Host "Persistent phone write authorized: false"
