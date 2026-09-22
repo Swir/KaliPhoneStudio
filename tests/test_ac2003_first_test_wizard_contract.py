@@ -35,19 +35,19 @@ def test_first_test_wizard_reuses_reviewed_readonly_boundaries() -> None:
 def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> None:
     text = WIZARD.read_text(encoding="utf-8").lower()
 
-    # Command-shaped fragments include a trailing space so explanatory prose such as
-    # "do not use an ADB reboot command" is not confused with an invocation.
-    for forbidden in (
-        "adb reboot ",
-        "fastboot reboot ",
-        "fastboot boot ",
-        "fastboot flash ",
-        "fastboot erase ",
-        "fastboot set_active ",
-        "fastboot flashing ",
+    # Explanatory prose deliberately says that adb reboot / fastboot boot are forbidden.
+    # Test actual argv-shaped calls instead of rejecting those safety sentences.
+    for forbidden_argv in (
+        '@("reboot")',
+        '@("boot")',
+        '@("flash")',
+        '@("erase")',
+        '@("set_active")',
+        '@("flashing")',
     ):
-        assert forbidden not in text
+        assert forbidden_argv not in text
 
+    assert 'invoke-readonlytool $fastbootpath @("devices")' in text
     for forbidden_promotion in (
         "persistent_write_authorized = $true",
         "phone_storage_written = $true",
@@ -83,7 +83,7 @@ def test_candidate_overlay_packages_wizard_and_rebuilds_integrity_set() -> None:
         'verify-candidate.ps1',
         'Get-FileHash -Algorithm SHA256',
         'Compress-Archive',
-        'KaliPhoneStudio-AC2003-beta-test-candidate.zip.sha256',
+        '$ZipShaPath = "$ZipPath.sha256"',
     ):
         assert needle in text
 
