@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WIZARD = ROOT / "scripts" / "start_ac2003_first_test_wizard.ps1"
 OVERLAY = ROOT / "scripts" / "overlay_ac2003_first_test_wizard.ps1"
+WINDOWS_CANDIDATE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-beta-test-candidate.yml"
 
 
 def test_first_test_wizard_reuses_reviewed_readonly_boundaries() -> None:
@@ -30,6 +31,36 @@ def test_first_test_wizard_reuses_reviewed_readonly_boundaries() -> None:
         'beta_gate_credit',
     ):
         assert needle in text
+
+
+def test_first_test_wizard_binds_adb_and_fastboot_to_one_unchanged_toolchain() -> None:
+    text = WIZARD.read_text(encoding="utf-8")
+
+    for needle in (
+        'Split-Path -Parent $AdbPath',
+        'Split-Path -Parent $FastbootPath',
+        '[StringComparison]::OrdinalIgnoreCase',
+        'same Android Platform-Tools directory',
+        '$AdbShaAtStart = (Get-FileHash -Algorithm SHA256 -Path $AdbPath)',
+        '$FastbootShaAtStart = (Get-FileHash -Algorithm SHA256 -Path $FastbootPath)',
+        'Host/Fastboot preflight failed before any phone interaction',
+        'Captured ADB identity is not bound to the wizard-start ADB executable',
+        'Android Platform-Tools executable changed between wizard phases',
+        'Shared Platform-Tools directory',
+    ):
+        assert needle in text
+
+    first_preflight = text.index('& pwsh -NoProfile -File $Preflight')
+    first_phone_capture = text.index('-CaptureAndroidIdentityOnly')
+    assert first_preflight < first_phone_capture
+
+
+def test_windows_candidate_rebuilds_when_wizard_changes() -> None:
+    text = WINDOWS_CANDIDATE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert text.count('"scripts/start_ac2003_first_test_wizard.ps1"') >= 2
+    assert text.count('"scripts/overlay_ac2003_first_test_wizard.ps1"') >= 2
+    assert 'tests/test_ac2003_first_test_wizard_contract.py' in text
 
 
 def test_first_test_wizard_has_no_automatic_destructive_or_boot_command() -> None:
