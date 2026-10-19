@@ -3,6 +3,12 @@
   <img src="assets/readme/hero.svg" alt="KaliPhoneStudio — safe multi-device Kali Linux phone porting toolkit" width="100%" />
 </div>
 
+## 📸 Screenshot
+
+![KaliPhoneStudio application screenshot](docs/screenshots/application.jpg)
+
+Offline Safe Operator Workspace on Windows, displaying a bundled device profile. No phone operation has been run.
+
 <div align="center">
   <img src="https://img.shields.io/badge/version-0.6.67--dev-62E5FF?style=for-the-badge&labelColor=02050A" alt="Version 0.6.67-dev" />
   <img src="https://img.shields.io/badge/project%20progress-58%25-0088FF?style=for-the-badge&labelColor=02050A" alt="Project progress 58 percent" />
